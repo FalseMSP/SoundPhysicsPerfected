@@ -83,7 +83,7 @@ public class SoundSystemMixin {
         // Only check every CHECK_INTERVAL ticks to avoid performance issues
         if (tickCounter >= CHECK_INTERVAL) {
             tickCounter = 0;
-            checkPlayingSounds(CallbackInfo ci);
+            checkPlayingSounds(ci);
         }
     }
 
