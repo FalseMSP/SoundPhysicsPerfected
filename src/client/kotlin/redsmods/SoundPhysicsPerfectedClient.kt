@@ -1,9 +1,11 @@
 package redsmods
 
 import net.fabricmc.api.ClientModInitializer
+import org.slf4j.LoggerFactory
 
 object SoundPhysicsPerfectedClient : ClientModInitializer {
-	override fun onInitializeClient() {
-		// This entrypoint is suitable for setting up client-specific logic, such as rendering.
-	}
+    private val logger = LoggerFactory.getLogger("soundphysicsperfectedClient")
+    override fun onInitializeClient() {
+        logger.info("Client Test!")
+    }
 }

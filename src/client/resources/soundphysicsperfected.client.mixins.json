@@ -3,7 +3,7 @@
 	"package": "redsmods.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"ExampleClientMixin"
+		"SoundSystemMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

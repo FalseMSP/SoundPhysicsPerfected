@@ -3,7 +3,7 @@
 	"package": "redsmods.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"SoundSystemMixin"
+
 	],
 	"injectors": {
 		"defaultRequire": 1
