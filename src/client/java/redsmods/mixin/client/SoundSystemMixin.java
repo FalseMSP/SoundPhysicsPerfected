@@ -11,68 +11,95 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import redsmods.SoundAttenuation;
+import redsmods.SoundData;
+import redsmods.VolumeAdjustedSFX;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Mixin(SoundSystem.class)
 public class SoundSystemMixin {
-    private int speedOfSound = 343; //blocks per second
+    private static final float BLOCKED_VOLUME_MULTIPLIER = 0.1f;
 
-    // Track playing sounds with their positions
-    private final Map<SoundInstance, Vec3d> playingSounds = new ConcurrentHashMap<>();
+    private final Map<SoundInstance, SoundData> playingSounds = new ConcurrentHashMap<>();
     private int tickCounter = 0;
-    private static final int CHECK_INTERVAL = 5; // Check every 5 ticks (0.25 seconds)
+    private static final int CHECK_INTERVAL = 5;
 
-//    @Shadow
-//    public abstract void stop(SoundInstance sound);
-
-    @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
-    private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
+    @ModifyVariable(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), argsOnly = true)
+    private SoundInstance modifySound(SoundInstance sound) {
         MinecraftClient client = MinecraftClient.getInstance();
 
-        // Check if client, player, and world exist
-        if (client != null && client.player != null && client.world != null) {
-            // Get the sound identifier
-            String soundId = sound.getId().toString();
+        // Add null checks to prevent crashes
+        if (client == null || client.player == null || client.world == null) {
+            return sound;
+        }
 
+        try {
             // Get sound coordinates
             double soundX = sound.getX();
             double soundY = sound.getY();
             double soundZ = sound.getZ();
             Vec3d soundPos = new Vec3d(soundX, soundY, soundZ);
 
-            // Get player position (eye position for better accuracy)
+            // Get player position
             Vec3d playerPos = client.player.getEyePos();
 
-            // Check initial line of sight
+            // Check line of sight immediately
             boolean hasLineOfSight = checkLineOfSight(client.world, soundPos, playerPos, client.player);
 
-            // Format coordinates to 2 decimal places
-            String coordinates = String.format("(%.2f, %.2f, %.2f)", soundX, soundY, soundZ);
+            // If blocked, return modified sound
+            if (!hasLineOfSight) {
+                return new VolumeAdjustedSFX(sound, sound.getVolume() * BLOCKED_VOLUME_MULTIPLIER);
+            }
+        } catch (Exception e) {
+            // Log error but don't crash - return original sound
+            System.err.println("Error in sound modification: " + e.getMessage());
+        }
 
-            // Calculate distance
+        return sound;
+    }
+
+    @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("TAIL"))
+    private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
+        MinecraftClient client = MinecraftClient.getInstance();
+
+        // Add null checks
+        if (client == null || client.player == null || client.world == null) {
+            return;
+        }
+
+        try {
+            // Get sound coordinates
+            double soundX = sound.getX();
+            double soundY = sound.getY();
+            double soundZ = sound.getZ();
+            Vec3d soundPos = new Vec3d(soundX, soundY, soundZ);
+
+            // Get player position
+            Vec3d playerPos = client.player.getEyePos();
+
+            // Check line of sight
+            boolean hasLineOfSight = checkLineOfSight(client.world, soundPos, playerPos, client.player);
+
+            // Store sound data for tracking
+            playingSounds.put(sound, new SoundData(soundPos, hasLineOfSight, sound.getVolume()));
+
+            // Send debug message (consider making this optional/configurable)
+            String soundId = sound.getId().toString();
+            String coordinates = String.format("(%.2f, %.2f, %.2f)", soundX, soundY, soundZ);
             double distance = playerPos.distanceTo(soundPos);
             String distanceStr = String.format("%.2fm", distance);
-
-            // Create and send chat message with coordinates, distance, and line of sight
             String lineOfSightStr = hasLineOfSight ? "Clear" : "Blocked";
             String message = String.format("Sound: %s at %s [%s] [%s]",
                     soundId, coordinates, distanceStr, lineOfSightStr);
-            client.player.sendMessage(Text.literal(message), false);
-
-            // If initially blocked, cancel the sound
-            if (!hasLineOfSight) {
-                ci.cancel();
-            } else {
-                // If sound has line of sight, track it for continuous monitoring
-                playingSounds.put(sound, soundPos);
-            }
+//            client.player.sendMessage(Text.literal(message), false);
+        } catch (Exception e) {
+            // Log error but don't crash
+            System.err.println("Error tracking sound: " + e.getMessage());
         }
     }
 
@@ -80,74 +107,83 @@ public class SoundSystemMixin {
     private void onTick(CallbackInfo ci) {
         tickCounter++;
 
-        // Only check every CHECK_INTERVAL ticks to avoid performance issues
         if (tickCounter >= CHECK_INTERVAL) {
             tickCounter = 0;
-            checkPlayingSounds(ci);
+            checkPlayingSounds();
         }
     }
 
     @Inject(method = "stop(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"))
     private void onSoundStop(SoundInstance sound, CallbackInfo ci) {
-        // Remove from tracking when sound stops
         playingSounds.remove(sound);
     }
 
-    private void checkPlayingSounds(CallbackInfo ci) {
+    // Add method to clean up orphaned sounds
+    @Inject(method = "stopAll()V", at = @At("HEAD"))
+    private void onStopAll(CallbackInfo ci) {
+        playingSounds.clear();
+    }
+
+    private void checkPlayingSounds() {
         MinecraftClient client = MinecraftClient.getInstance();
 
         if (client == null || client.player == null || client.world == null) {
             return;
         }
 
-        Vec3d playerPos = client.player.getEyePos();
+        try {
+            Vec3d playerPos = client.player.getEyePos();
 
-        // Check each playing sound
-        playingSounds.entrySet().removeIf(entry -> {
-            SoundInstance sound = entry.getKey();
-            Vec3d soundPos = entry.getValue();
+            playingSounds.entrySet().removeIf(entry -> {
+                try {
+                    SoundInstance sound = entry.getKey();
+                    SoundData soundData = entry.getValue();
 
-            // Check if sound still has line of sight
-            boolean hasLineOfSight = checkLineOfSight(client.world, soundPos, playerPos, client.player);
+                    boolean currentLineOfSight = checkLineOfSight(client.world, soundData.position, playerPos, client.player);
 
-            if (!hasLineOfSight) {
-                // Stop the sound if line of sight is lost
-                ci.cancel();
+                    if (currentLineOfSight != soundData.hasLineOfSight) {
+                        soundData.hasLineOfSight = currentLineOfSight;
 
-                // Send notification (optional - you might want to remove this to avoid spam)
-                String soundId = sound.getId().toString();
-                String message = String.format("Sound blocked: %s", soundId);
-                client.player.sendMessage(Text.literal(message), true); // Send as overlay to avoid chat spam
+                        String soundId = sound.getId().toString();
+                        String status = currentLineOfSight ? "unblocked" : "blocked";
+                        String message = String.format("Sound %s: %s", status, soundId);
+                        client.player.sendMessage(Text.literal(message), true);
+                    }
 
-                return true; // Remove from map
-            }
-
-            return false; // Keep in map
-        });
+                    return false;
+                } catch (Exception e) {
+                    // Remove problematic entries
+                    System.err.println("Error checking sound: " + e.getMessage());
+                    return true;
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("Error in checkPlayingSounds: " + e.getMessage());
+        }
     }
 
     private boolean checkLineOfSight(World world, Vec3d soundPos, Vec3d playerPos, net.minecraft.entity.player.PlayerEntity player) {
-        // Perform raycast between sound source and player
-        RaycastContext raycastContext = new RaycastContext(
-                soundPos,
-                playerPos,
-                RaycastContext.ShapeType.COLLIDER,
-                RaycastContext.FluidHandling.NONE,
-                player
-        );
+        try {
+            RaycastContext raycastContext = new RaycastContext(
+                    soundPos,
+                    playerPos,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
 
-        BlockHitResult hitResult = world.raycast(raycastContext);
+            BlockHitResult hitResult = world.raycast(raycastContext);
 
-        // Check if we hit something
-        if (hitResult.getType() == HitResult.Type.BLOCK) {
-            BlockPos hitPos = hitResult.getBlockPos();
-            BlockPos soundBlockPos = new BlockPos((int)Math.floor(soundPos.x), (int)Math.floor(soundPos.y), (int)Math.floor(soundPos.z));
+            if (hitResult.getType() == HitResult.Type.BLOCK) {
+                BlockPos hitPos = hitResult.getBlockPos();
+                BlockPos soundBlockPos = new BlockPos((int)Math.floor(soundPos.x), (int)Math.floor(soundPos.y), (int)Math.floor(soundPos.z));
+                return hitPos.equals(soundBlockPos);
+            }
 
-            // If the hit block is the same as the sound source block, consider it clear
-            // This handles block breaking/placing sounds where the raycast hits the block being interacted with
-            return hitPos.equals(soundBlockPos);
+            return true;
+        } catch (Exception e) {
+            System.err.println("Error in line of sight check: " + e.getMessage());
+            return true; // Default to clear line of sight on error
         }
-
-        return true; // No block hit, line of sight is clear
     }
 }
