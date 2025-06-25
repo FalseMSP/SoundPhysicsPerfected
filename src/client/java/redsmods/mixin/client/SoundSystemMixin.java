@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(SoundSystem.class)
 public class SoundSystemMixin {
 
-    @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"))
+    @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
     private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
 
@@ -21,9 +21,19 @@ public class SoundSystemMixin {
             // Get the sound identifier
             String soundId = sound.getId().toString();
 
-            // Create and send chat message
-            String message = "Sound played: " + soundId;
+            // Get sound coordinates
+            double x = sound.getX();
+            double y = sound.getY();
+            double z = sound.getZ();
+
+            // Format coordinates to 2 decimal places
+            String coordinates = String.format("(%.2f, %.2f, %.2f)", x, y, z);
+
+            // Create and send chat message with coordinates
+            String message = "Sound played: " + soundId + " at " + coordinates;
             client.player.sendMessage(Text.literal(message), false);
+
+            ci.cancel();
         }
     }
 }
