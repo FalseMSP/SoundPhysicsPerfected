@@ -48,7 +48,7 @@ public class RedSoundInstance implements SoundInstance {
         this.x = original.getX();
         this.y = original.getY();
         this.z = original.getZ();
-        this.attenuationType = original.getAttenuationType();
+        this.attenuationType = AttenuationType.NONE;
 
         // Handle potentially null sound-related properties
         this.sound = original.getSound();

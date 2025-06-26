@@ -45,7 +45,7 @@ public class SoundSystemMixin {
             return;
         }
         try {
-            if (!(sound instanceof RedPositionedSoundInstance)) { // !replayList.contains(redSoundData)
+            if (!(sound instanceof RedPositionedSoundInstance) || sound.getAttenuationType() != SoundInstance.AttenuationType.NONE) { // !replayList.contains(redSoundData)
                 // Get sound coordinates
                 double soundX = sound.getX();
                 double soundY = sound.getY();

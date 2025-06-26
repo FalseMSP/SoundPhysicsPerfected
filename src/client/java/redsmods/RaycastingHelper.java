@@ -3,8 +3,6 @@ package redsmods;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.sound.SoundInstance;
-import net.minecraft.client.sound.SoundSystem;
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
@@ -13,19 +11,20 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.random.Random;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
-import redsmods.mixin.client.SoundSystemMixin;
 
 import java.util.*;
 
 public class RaycastingHelper {
-    private static final int RAYS_CAST = 64000; // 64000 is production number
-    private static final int MAX_BOUNCES = 7;
+    private static final int RAYS_CAST = 2048; // 64000 is production number
+    private static final int MAX_BOUNCES = 4;
     private static final double RAY_SEGMENT_LENGTH = 64.0;
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
+    private static final double SPEED_OF_SOUND_TICKS = 17.15*2; // 17.15 blocks per gametick
+    private static final Map<Integer,ArrayList<RedPositionedSoundInstance>> soundPlayingWaiting = new HashMap<>();
+    private static int ticksSinceWorld;
 
     // PLAYER "enviornment scanning" raycasting
     public static void castSphereFromPlayer(World world, net.minecraft.entity.player.PlayerEntity player, double maxDistance, boolean drawRays) {
@@ -128,23 +127,9 @@ public class RaycastingHelper {
 
         System.out.println("Processing " + averagedResults.size() + " detected sounds:");
 
-        // Option 1: Play all sounds
-        // playAllAveragedSounds(client, averagedResults, playerEyePos);
-
-        // Option 2: Play only high-confidence sounds
-        playFilteredAveragedSounds(client, averagedResults, playerEyePos, 0.01, 2); // min weight 0.01, min 2 rays
-
-        // Option 3: Play only the most significant sound
-        // playMostSignificantSound(client, averagedResults, playerEyePos);
-
-        // Option 4: Play with volume/pitch adjustments based on confidence
-    /*
-    for (AveragedSoundData avgData : averagedResults.values()) {
-        if (avgData.totalWeight > 0.01 && avgData.rayCount >= 2) {
-            playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 0.8f, 1.0f);
+        for (AveragedSoundData avgData : averagedResults.values()) {
+            playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.8f, 1.0f);
         }
-    }
-    */
     }
 
     // Method to play a single sound at averaged position
@@ -191,42 +176,6 @@ public class RaycastingHelper {
         }
     }
 
-    // Method to play all sounds from averaged results
-    public static void playAllAveragedSounds(MinecraftClient client, Map<SoundData, AveragedSoundData> averagedResults, Vec3d playerPos) {
-        for (AveragedSoundData avgData : averagedResults.values()) {
-            playSoundAtAveragedPosition(client, avgData, playerPos);
-        }
-    }
-
-    // Method to play only sounds above a certain confidence threshold
-    public static void playFilteredAveragedSounds(MinecraftClient client, Map<SoundData, AveragedSoundData> averagedResults,
-                                                  Vec3d playerPos, double minWeight, int minRayCount) {
-        List<AveragedSoundData> filteredSounds = getSoundsAboveThreshold(averagedResults, minWeight, minRayCount);
-
-        for (AveragedSoundData avgData : filteredSounds) {
-            playSoundAtAveragedPosition(client, avgData, playerPos);
-        }
-
-        System.out.println("Played " + filteredSounds.size() + " filtered averaged sounds");
-    }
-
-    // Utility method to get sounds above a certain confidence threshold
-    public static List<AveragedSoundData> getSoundsAboveThreshold(Map<SoundData, AveragedSoundData> averagedResults,
-                                                                  double minWeight, int minRayCount) {
-        List<AveragedSoundData> filteredSounds = new ArrayList<>();
-
-        for (AveragedSoundData avgData : averagedResults.values()) {
-            if (avgData.totalWeight >= minWeight && avgData.rayCount >= minRayCount) {
-                filteredSounds.add(avgData);
-            }
-        }
-
-        // Sort by weight descending (most significant first)
-        filteredSounds.sort((a, b) -> Double.compare(b.totalWeight, a.totalWeight));
-
-        return filteredSounds;
-    }
-
     // Advanced method with volume and pitch adjustment based on confidence
     public static void playAveragedSoundWithAdjustments(MinecraftClient client, AveragedSoundData avgData, Vec3d playerPos,
                                                         float volumeMultiplier, float pitchMultiplier) {
@@ -252,10 +201,10 @@ public class RaycastingHelper {
             float adjustedPitch = basePitch * pitchMultiplier;
 
             // Create positioned sound with adjustments
-            PositionedSoundInstance newSound = new PositionedSoundInstance(
+            RedPositionedSoundInstance newSound = new RedPositionedSoundInstance(
                     soundId,                                    // Sound identifier
                     originalSound.getCategory(),                // Sound category
-                    Math.max(0.0f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
+                    Math.max(0.01f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
                     Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
                     SoundInstance.createRandom(),                           // Random instance
                     originalSound.isRepeatable(),
@@ -267,17 +216,23 @@ public class RaycastingHelper {
                     originalSound.isRelative()                  // Relative positioning
             );
 
-            client.getSoundManager().play(newSound);
+            queueSound(newSound,avgData.soundEntity.getDistance());
 
             // Debug output
             System.out.println("Playing adjusted averaged sound: " + soundId.toString());
             System.out.println("  Volume: " + String.format("%.3f", adjustedVolume) + " (original: " + String.format("%.3f", baseVolume) + ")");
             System.out.println("  Pitch: " + String.format("%.3f", adjustedPitch) + " (original: " + String.format("%.3f", basePitch) + ")");
             System.out.println("  Confidence: " + String.format("%.3f", confidenceMultiplier));
+            System.out.println("  Distance: " + avgData.soundEntity.getDistance() + " ");
+            System.out.println("  x: " + targetPosition.getX() + "  y: " + targetPosition.getY() + "  z: " + targetPosition.getZ());
 
         } catch (Exception e) {
             System.err.println("Error playing adjusted averaged sound: " + e.getMessage());
         }
+    }
+
+    private static void queueSound(RedPositionedSoundInstance newSound, int distance) {
+        soundPlayingWaiting.computeIfAbsent(distance*2+ticksSinceWorld+2,k -> new ArrayList<>()).add(newSound);
     }
 
     // Main method to process rays and calculate averages
@@ -295,7 +250,9 @@ public class RaycastingHelper {
                 // Calculate weight using inverse square law (1/d²)
                 // Add small epsilon to prevent division by zero
                 double distance = Math.max(res.totalDistance, 0.1);
-                double weight = 1.0 / (distance * distance);
+                double weight = 1.0 / (distance); // made it linear: * distance
+
+                res.hitEntity.setDistance((int) Math.floor(distance/SPEED_OF_SOUND_TICKS)); // messy asf casting lol
 
                 RayHitData hitData = new RayHitData(res, direction, weight);
 
@@ -396,8 +353,8 @@ public class RaycastingHelper {
                 entityRayHitCounts.put(entityHit, entityRayHitCounts.getOrDefault(entityHit, 0) + 1);
 
                 // Draw line to the detected entity and stop this ray
-                drawEntityDetectionLine(world, currentPos, entityCenter);
-                drawBouncingRaySegment(world, currentPos, entityCenter, bounce);
+//                drawEntityDetectionLine(world, currentPos, entityCenter);
+//                drawBouncingRaySegment(world, currentPos, entityCenter, bounce);
 
                 hitEntity = entityHit;
                 rayCompleted = true;
@@ -635,7 +592,7 @@ public class RaycastingHelper {
 
         // Draw the ray using debug renderer
         if (world.isClient) {
-            drawPlayerDebugLine(rayStart, actualEnd, color, world);
+//            drawPlayerDebugLine(rayStart, actualEnd, color, world);
         }
     }
 
@@ -873,5 +830,17 @@ public class RaycastingHelper {
 
         // Fallback: just move a bit in the direction
         return soundPos.add(direction.multiply(0.6));
+    }
+
+    public static void playQueuedObjects(int tsw) {
+        ticksSinceWorld = tsw;
+        if (!soundPlayingWaiting.containsKey((Integer) ticksSinceWorld))
+            return;
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        ArrayList<RedPositionedSoundInstance> sound = soundPlayingWaiting.get((Integer) ticksSinceWorld);
+        for (RedPositionedSoundInstance newSound : sound)
+            client.getSoundManager().play(newSound);
+        soundPlayingWaiting.remove(tsw);
     }
 }
