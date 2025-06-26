@@ -1,22 +1,31 @@
 package redsmods;
 
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.sound.PositionedSoundInstance;
+import net.minecraft.client.sound.SoundInstance;
+import net.minecraft.client.sound.SoundSystem;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.random.Random;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
+import redsmods.mixin.client.SoundSystemMixin;
 
-import java.util.List;
+import java.util.*;
 
 public class RaycastingHelper {
-    private static final int RAYS_CAST = 1000;
+    private static final int RAYS_CAST = 1000; // 64000 is production number
     private static final int MAX_BOUNCES = 3;
     private static final double RAY_SEGMENT_LENGTH = 16.0;
+    private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
+    public static final Queue<SoundData> soundQueue = new LinkedList<>();
 
     // PLAYER "enviornment scanning" raycasting
     public static void castSphereFromPlayer(World world, net.minecraft.entity.player.PlayerEntity player, double maxDistance, boolean drawRays) {
@@ -53,10 +62,13 @@ public class RaycastingHelper {
         }
     }
 
-    public static void castBouncingRaysAndDetectEntities(World world, PlayerEntity player) {
+    public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
         try {
             Vec3d playerEyePos = player.getEyePos();
             double maxTotalDistance = 64.0; // Max total distance after all bounces
+
+            // Clear previous ray hit counts
+            entityRayHitCounts.clear();
 
             // Get all entities within expanded range
             Box searchBox = new Box(
@@ -64,24 +76,284 @@ public class RaycastingHelper {
                     playerEyePos.add(maxTotalDistance, maxTotalDistance, maxTotalDistance)
             );
 
-            List<Entity> nearbyEntities = world.getOtherEntities(player, searchBox);
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client == null || client.getSoundManager() == null) {
+                return;
+            }
+
+            Queue<SoundData> nearbyEntities = new LinkedList<>(soundQueue);
 
             // Generate ray directions
             Vec3d[] rayDirections = RaycastingHelper.generateRayDirections();
+            Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
 
             for (Vec3d direction : rayDirections) {
-                castBouncingRay(world, player, playerEyePos, direction, nearbyEntities, maxTotalDistance);
-            }
+                RaycastResult res = castBouncingRay(world, player, playerEyePos, direction, nearbyEntities, maxTotalDistance);
+                if (res.hitEntity != null) {
+                    // Calculate weight using inverse square law (1/d²)
+                    // Add small epsilon to prevent division by zero
+                    double distance = Math.max(res.totalDistance, 0.1);
+                    double weight = 1.0 / (distance * distance);
 
+                    RayHitData hitData = new RayHitData(res, direction, weight);
+
+                    // Group by entity
+                    rayHitsByEntity.computeIfAbsent(res.hitEntity, k -> new ArrayList<>()).add(hitData);
+                }
+            }
+            processAndPlayAveragedSounds(world,player,playerEyePos,new ArrayList<>(Arrays.asList(rayDirections)),nearbyEntities,maxTotalDistance,client);
+            // Display ray hit counts for detected sfx
+            displayEntityRayHitCounts(world, player);
+
+            while (!soundQueue.isEmpty()) { // iterate through soundQueue
+                soundQueue.poll();
+            }
         } catch (Exception e) {
             System.err.println("Error in player bouncing ray entity detection: " + e.getMessage());
         }
     }
 
-    public static void castBouncingRay(World world, PlayerEntity player, Vec3d startPos, Vec3d direction, List<Entity> entities, double maxTotalDistance) {
+    public static void processAndPlayAveragedSounds(World world, PlayerEntity player, Vec3d playerEyePos,
+                                                    List<Vec3d> rayDirections, Queue<SoundData> nearbyEntities,
+                                                    double maxTotalDistance, MinecraftClient client) {
+
+        // Process rays and get averaged results
+        Map<SoundData, AveragedSoundData> averagedResults = processRaysWithAveraging(
+                world, player, playerEyePos, rayDirections, nearbyEntities, maxTotalDistance);
+
+        if (averagedResults.isEmpty()) {
+//            System.out.println("No sounds detected by raycasting");
+            return;
+        }
+
+        System.out.println("Processing " + averagedResults.size() + " detected sounds:");
+
+        // Option 1: Play all sounds
+        // playAllAveragedSounds(client, averagedResults, playerEyePos);
+
+        // Option 2: Play only high-confidence sounds
+        playFilteredAveragedSounds(client, averagedResults, playerEyePos, 0.01, 2); // min weight 0.01, min 2 rays
+
+        // Option 3: Play only the most significant sound
+        // playMostSignificantSound(client, averagedResults, playerEyePos);
+
+        // Option 4: Play with volume/pitch adjustments based on confidence
+    /*
+    for (AveragedSoundData avgData : averagedResults.values()) {
+        if (avgData.totalWeight > 0.01 && avgData.rayCount >= 2) {
+            playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 0.8f, 1.0f);
+        }
+    }
+    */
+    }
+
+    // Method to play a single sound at averaged position
+    public static void playSoundAtAveragedPosition(MinecraftClient client, AveragedSoundData avgData, Vec3d playerPos) {
+        if (client == null || client.world == null || avgData == null) {
+            return;
+        }
+
+        try {
+            // Calculate the target position based on average direction and distance
+            Vec3d targetPosition = playerPos.add(avgData.averageDirection.multiply(avgData.averageDistance));
+
+            // Get the original sound identifier
+            RedSoundInstance originalSound = avgData.soundEntity.sound;
+            Identifier soundId = originalSound.getId();
+
+            // Create a new positioned sound instance at the averaged location
+            PositionedSoundInstance newSound = new RedPositionedSoundInstance(
+                    soundId,                                    // Sound identifier
+                    originalSound.getCategory(),                // Sound category
+                    originalSound.getVolume(),                  // Volume
+                    originalSound.getPitch(),                   // Pitch
+                    SoundInstance.createRandom(),                           // Random instance
+                    originalSound.isRepeatable(),
+                    originalSound.getRepeatDelay(),              // Repeat delay
+                    originalSound.getAttenuationType(),
+                    (float) targetPosition.x,                   // X position
+                    (float) targetPosition.y,                   // Y position
+                    (float) targetPosition.z,                   // Z position
+                    originalSound.isRelative()                  // Relative positioning
+            );
+
+            // Play the sound
+            client.getSoundManager().play(newSound);
+
+            // Debug output
+            System.out.println("Playing averaged sound: " + soundId.toString());
+            System.out.println("  Original position: " + avgData.soundEntity.position.toString());
+            System.out.println("  Averaged position: " + targetPosition.toString());
+            System.out.println("  Distance from player: " + String.format("%.2f", avgData.averageDistance));
+
+        } catch (Exception e) {
+            System.err.println("Error playing averaged sound: " + e.getMessage());
+        }
+    }
+
+    // Method to play all sounds from averaged results
+    public static void playAllAveragedSounds(MinecraftClient client, Map<SoundData, AveragedSoundData> averagedResults, Vec3d playerPos) {
+        for (AveragedSoundData avgData : averagedResults.values()) {
+            playSoundAtAveragedPosition(client, avgData, playerPos);
+        }
+    }
+
+    // Method to play only sounds above a certain confidence threshold
+    public static void playFilteredAveragedSounds(MinecraftClient client, Map<SoundData, AveragedSoundData> averagedResults,
+                                                  Vec3d playerPos, double minWeight, int minRayCount) {
+        List<AveragedSoundData> filteredSounds = getSoundsAboveThreshold(averagedResults, minWeight, minRayCount);
+
+        for (AveragedSoundData avgData : filteredSounds) {
+            playSoundAtAveragedPosition(client, avgData, playerPos);
+        }
+
+        System.out.println("Played " + filteredSounds.size() + " filtered averaged sounds");
+    }
+
+    // Utility method to get sounds above a certain confidence threshold
+    public static List<AveragedSoundData> getSoundsAboveThreshold(Map<SoundData, AveragedSoundData> averagedResults,
+                                                                  double minWeight, int minRayCount) {
+        List<AveragedSoundData> filteredSounds = new ArrayList<>();
+
+        for (AveragedSoundData avgData : averagedResults.values()) {
+            if (avgData.totalWeight >= minWeight && avgData.rayCount >= minRayCount) {
+                filteredSounds.add(avgData);
+            }
+        }
+
+        // Sort by weight descending (most significant first)
+        filteredSounds.sort((a, b) -> Double.compare(b.totalWeight, a.totalWeight));
+
+        return filteredSounds;
+    }
+
+    // Advanced method with volume and pitch adjustment based on confidence
+    public static void playAveragedSoundWithAdjustments(MinecraftClient client, AveragedSoundData avgData, Vec3d playerPos,
+                                                        float volumeMultiplier, float pitchMultiplier) {
+        if (client == null || client.world == null || avgData == null) {
+            return;
+        }
+
+        try {
+            // Calculate the target position
+            Vec3d targetPosition = playerPos.add(avgData.averageDirection.multiply(avgData.averageDistance));
+
+            // Get original sound properties
+            RedSoundInstance originalSound = avgData.soundEntity.sound;
+            Identifier soundId = originalSound.getId();
+
+            // Calculate adjusted volume based on ray count and weight (confidence-based)
+            float baseVolume = originalSound.getVolume();
+            float confidenceMultiplier = (float) Math.min(1.0, Math.log10(avgData.totalWeight + 1.0));
+            float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier;
+
+            // Calculate adjusted pitch
+            float basePitch = originalSound.getPitch();
+            float adjustedPitch = basePitch * pitchMultiplier;
+
+            // Create positioned sound with adjustments
+            PositionedSoundInstance newSound = new PositionedSoundInstance(
+                    soundId,                                    // Sound identifier
+                    originalSound.getCategory(),                // Sound category
+                    Math.max(0.0f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
+                    Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
+                    SoundInstance.createRandom(),                           // Random instance
+                    originalSound.isRepeatable(),
+                    originalSound.getRepeatDelay(),              // Repeat delay
+                    originalSound.getAttenuationType(),
+                    (float) targetPosition.x,                   // X position
+                    (float) targetPosition.y,                   // Y position
+                    (float) targetPosition.z,                   // Z position
+                    originalSound.isRelative()                  // Relative positioning
+            );
+
+            client.getSoundManager().play(newSound);
+
+            // Debug output
+            System.out.println("Playing adjusted averaged sound: " + soundId.toString());
+            System.out.println("  Volume: " + String.format("%.3f", adjustedVolume) + " (original: " + String.format("%.3f", baseVolume) + ")");
+            System.out.println("  Pitch: " + String.format("%.3f", adjustedPitch) + " (original: " + String.format("%.3f", basePitch) + ")");
+            System.out.println("  Confidence: " + String.format("%.3f", confidenceMultiplier));
+
+        } catch (Exception e) {
+            System.err.println("Error playing adjusted averaged sound: " + e.getMessage());
+        }
+    }
+
+    // Main method to process rays and calculate averages
+    public static Map<SoundData, AveragedSoundData> processRaysWithAveraging(World world, PlayerEntity player,
+                                                                             Vec3d playerEyePos, List<Vec3d> rayDirections,
+                                                                             Queue<SoundData> nearbyEntities, double maxTotalDistance) {
+
+        // Map to store ray hits grouped by sound entity
+        Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
+
+        // Cast all rays and collect hit data
+        for (Vec3d direction : rayDirections) {
+            RaycastResult res = castBouncingRay(world, player, playerEyePos, direction, nearbyEntities, maxTotalDistance);
+            if (res.hitEntity != null) {
+                // Calculate weight using inverse square law (1/d²)
+                // Add small epsilon to prevent division by zero
+                double distance = Math.max(res.totalDistance, 0.1);
+                double weight = 1.0 / (distance * distance);
+
+                RayHitData hitData = new RayHitData(res, direction, weight);
+
+                // Group by entity
+                rayHitsByEntity.computeIfAbsent(res.hitEntity, k -> new ArrayList<>()).add(hitData);
+            }
+        }
+
+        // Calculate averages for each entity
+        Map<SoundData, AveragedSoundData> averagedResults = new HashMap<>();
+
+        for (Map.Entry<SoundData, List<RayHitData>> entry : rayHitsByEntity.entrySet()) {
+            SoundData entity = entry.getKey();
+            List<RayHitData> rayHits = entry.getValue();
+
+            AveragedSoundData averagedData = calculateWeightedAverages(entity, rayHits);
+            averagedResults.put(entity, averagedData);
+        }
+
+        return averagedResults;
+    }
+
+    // Helper method to calculate weighted averages for a single entity
+    private static AveragedSoundData calculateWeightedAverages(SoundData entity, List<RayHitData> rayHits) {
+        double totalWeight = 0.0;
+        double weightedDistanceSum = 0.0;
+        Vec3d weightedDirectionSum = Vec3d.ZERO;
+
+        // Calculate weighted sums
+        for (RayHitData rayHit : rayHits) {
+            double weight = rayHit.weight;
+            totalWeight += weight;
+
+            // Weighted distance
+            weightedDistanceSum += rayHit.rayResult.totalDistance * weight;
+
+            // Weighted direction (using initial ray direction)
+            Vec3d weightedDirection = rayHit.rayResult.initialDirection.multiply(weight);
+            weightedDirectionSum = weightedDirectionSum.add(weightedDirection);
+        }
+
+        // Calculate averages
+        double averageDistance = weightedDistanceSum / totalWeight;
+        Vec3d averageDirection = weightedDirectionSum.multiply(1.0 / totalWeight).normalize();
+
+        return new AveragedSoundData(entity, averageDirection, averageDistance,
+                totalWeight, rayHits.size(), rayHits);
+    }
+
+    public static RaycastResult castBouncingRay(World world, PlayerEntity player, Vec3d startPos, Vec3d direction, Queue<SoundData> entities, double maxTotalDistance) {
         Vec3d currentPos = startPos;
         Vec3d currentDirection = direction.normalize();
+        Vec3d initialDirection = currentDirection.normalize(); // Store the initial direction as unit vector
         double remainingDistance = maxTotalDistance;
+        double totalDistanceTraveled = 0.0;
+
+        SoundData hitEntity = null;
+        boolean rayCompleted = false;
 
         for (int bounce = 0; bounce <= MAX_BOUNCES && remainingDistance > 0; bounce++) {
             double segmentDistance = Math.min(RAY_SEGMENT_LENGTH, remainingDistance);
@@ -107,19 +379,33 @@ public class RaycastingHelper {
                 hitBlock = true;
             }
 
-            // Check for entity intersections along this segment
-            Entity hitEntity = checkRayEntityIntersection(currentPos, currentDirection, entities, actualEnd);
+            // Calculate distance traveled in this segment
+            double segmentTraveled = currentPos.distanceTo(actualEnd);
+            totalDistanceTraveled += segmentTraveled;
 
-            if (hitEntity != null) {
+            // Check for entity intersections along this segment
+            SoundData entityHit = checkRayEntityIntersection(currentPos, currentDirection, entities, actualEnd);
+
+            if (entityHit != null) {
+                // Calculate precise distance to entity
+                Vec3d entityCenter = entityHit.boundingBox.getCenter();
+                double distanceToEntity = currentPos.distanceTo(entityCenter);
+                totalDistanceTraveled = totalDistanceTraveled - segmentTraveled + distanceToEntity;
+
+                // Increment ray hit count for this entity
+                entityRayHitCounts.put(entityHit, entityRayHitCounts.getOrDefault(entityHit, 0) + 1);
+
                 // Draw line to the detected entity and stop this ray
-                Vec3d entityCenter = hitEntity.getBoundingBox().getCenter();
                 drawEntityDetectionLine(world, currentPos, entityCenter);
                 drawBouncingRaySegment(world, currentPos, entityCenter, bounce);
+
+                hitEntity = entityHit;
+                rayCompleted = true;
                 break;
             }
 
-            // Draw this segment of the bouncing ray
-            drawBouncingRaySegment(world, currentPos, actualEnd, bounce);
+            // Draw this segment
+//            drawBouncingRaySegment(world, currentPos, actualEnd, bounce);
 
             // If we hit a block, calculate bounce
             if (hitBlock) {
@@ -134,13 +420,27 @@ public class RaycastingHelper {
                 currentDirection = reflectedDirection;
 
                 // Reduce remaining distance
-                double segmentTraveled = currentPos.distanceTo(hitPos);
                 remainingDistance -= segmentTraveled;
             } else {
-                // Ray didn't hit anything, we're done
+                // Ray reached maximum segment length without hitting anything
+                rayCompleted = true;
                 break;
             }
         }
+
+        // Return comprehensive result
+        return new RaycastResult(totalDistanceTraveled, initialDirection, hitEntity, currentPos, rayCompleted);
+    }
+
+    // Helper method to get just the total distance (for backward compatibility)
+    public static double getTotalRayDistance(World world, PlayerEntity player, Vec3d startPos, Vec3d direction, Queue<SoundData> entities, double maxTotalDistance) {
+        RaycastResult result = castBouncingRay(world, player, startPos, direction, entities, maxTotalDistance);
+        return result.totalDistance;
+    }
+
+    // Helper method to get just the initial direction (for backward compatibility)
+    public static Vec3d getInitialRayDirection(Vec3d direction) {
+        return direction.normalize();
     }
 
     public static Vec3d calculateReflection(Vec3d incident, Direction hitSide) {
@@ -152,13 +452,13 @@ public class RaycastingHelper {
         return incident.subtract(normal.multiply(2 * dotProduct));
     }
 
-    public static Entity checkRayEntityIntersection(Vec3d rayStart, Vec3d rayDirection, List<Entity> entities, Vec3d rayEnd) {
-        Entity closestEntity = null;
+    public static SoundData checkRayEntityIntersection(Vec3d rayStart, Vec3d rayDirection, Queue<SoundData> entities, Vec3d rayEnd) {
+        SoundData closestEntity = null;
         double closestDistance = Double.MAX_VALUE;
         double maxDistance = rayStart.distanceTo(rayEnd);
 
-        for (Entity entity : entities) {
-            Box entityBounds = entity.getBoundingBox();
+        for (SoundData entity : entities) {
+            Box entityBounds = entity.boundingBox;
 
             // Calculate intersection with entity's bounding box
             double[] tValues = new double[6];
@@ -255,6 +555,67 @@ public class RaycastingHelper {
                 world.addParticle(net.minecraft.particle.ParticleTypes.ENCHANT,
                         particlePos.x, particlePos.y, particlePos.z,
                         0, 0.02, 0); // Small upward velocity for visual effect
+            }
+        }
+    }
+
+    public static void displayEntityRayHitCounts(World world, PlayerEntity player) {
+        if (world.isClient && !entityRayHitCounts.isEmpty()) {
+            for (java.util.Map.Entry<SoundData, Integer> entry : entityRayHitCounts.entrySet()) {
+                SoundData entity = entry.getKey();
+                int rayCount = entry.getValue();
+
+                // Display the count above the entity
+                Vec3d entityPos = entity.boundingBox.getCenter();
+                Vec3d displayPos = entityPos.add(0, entity.boundingBox.getLengthY() / 2 + 0.5, 0);
+
+                // Create floating text effect with particles
+                displayRayCountText(world, displayPos, rayCount);
+
+                // Print to console for debugging
+                String entityName = entity.soundId;
+                System.out.println("SFX: " + entityName + " hit by " + rayCount + " rays");
+            }
+        }
+    }
+
+    public static void displayRayCountText(World world, Vec3d pos, int count) {
+        if (world.isClient) {
+            // Create a visual representation of the count using particles
+            // Spawn particles in a pattern that represents the number
+
+            // Base particles for visibility
+            for (int i = 0; i < 5; i++) {
+                world.addParticle(net.minecraft.particle.ParticleTypes.ENCHANT,
+                        pos.x + (Math.random() - 0.5) * 0.3,
+                        pos.y + (Math.random() - 0.5) * 0.3,
+                        pos.z + (Math.random() - 0.5) * 0.3,
+                        0, 0.1, 0);
+            }
+
+            // Intensity-based particles (more particles = more rays)
+            int particleCount = Math.min(count / 10, 20); // Scale down for visibility
+            for (int i = 0; i < particleCount; i++) {
+                world.addParticle(net.minecraft.particle.ParticleTypes.TOTEM_OF_UNDYING,
+                        pos.x + (Math.random() - 0.5) * 0.5,
+                        pos.y + (Math.random() - 0.5) * 0.5,
+                        pos.z + (Math.random() - 0.5) * 0.5,
+                        0, 0.05, 0);
+            }
+
+            // Color-coded particles based on ray count ranges
+            if (count > 100) {
+                // High count - red particles
+                world.addParticle(net.minecraft.particle.ParticleTypes.FLAME,
+                        pos.x, pos.y, pos.z, 0, 0.1, 0);
+            } else if (count > 50) {
+                // Medium count - orange particles
+                world.addParticle(net.minecraft.particle.ParticleTypes.LAVA,
+                        pos.x, pos.y, pos.z, 0, 0.1, 0);
+            } else if (count > 10) {
+                // Low count - yellow particles
+                world.addParticle(net.minecraft.particle.ParticleTypes.END_ROD,
+                        pos.x, pos.y, pos.z, 0, 0.1, 0);
             }
         }
     }
