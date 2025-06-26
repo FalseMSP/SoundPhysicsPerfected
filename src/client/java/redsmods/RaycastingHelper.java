@@ -21,7 +21,7 @@ import redsmods.mixin.client.SoundSystemMixin;
 import java.util.*;
 
 public class RaycastingHelper {
-    private static final int RAYS_CAST = 64000; // 64000 is production number
+    private static final int RAYS_CAST = 140; // 64000 is production number
     private static final int MAX_BOUNCES = 7;
     private static final double RAY_SEGMENT_LENGTH = 64.0;
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
@@ -405,7 +405,7 @@ public class RaycastingHelper {
             }
 
             // Draw this segment
-//            drawBouncingRaySegment(world, currentPos, actualEnd, bounce);
+            drawBouncingRaySegment(world, currentPos, actualEnd, bounce);
 
             // If we hit a block, calculate bounce
             if (hitBlock) {
