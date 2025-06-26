@@ -2,14 +2,14 @@ package redsmods.mixin.client;
 
 import net.fabricmc.fabric.api.client.sound.v1.FabricSoundInstance;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.sound.Sound;
-import net.minecraft.client.sound.SoundInstance;
-import net.minecraft.client.sound.SoundSystem;
+import net.minecraft.client.option.GameOptions;
+import net.minecraft.client.sound.*;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -29,24 +29,27 @@ import static redsmods.RaycastingHelper.soundQueue;
 @Mixin(SoundSystem.class)
 public class SoundSystemMixin {
     private static final float BLOCKED_VOLUME_MULTIPLIER = 5f; // bigger number = quieter, its a distance factor
-    private static final double BOX_RADIUS = 0.6;
+    private static final double BOX_RADIUS = 1;
 
     private static final int MAX_SOUNDS = 100; // Limit queue size to prevent memory issues
     private int tickCounter = 0;
     private static final int CHECK_INTERVAL = 5;
     private HashSet<RedSoundInstance> replayList = new HashSet<>();
 
+    @Shadow
+    private SoundManager loader;
+
     @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
     private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
-
         // Add null checks
         if (client == null || client.player == null || client.world == null || sound == null) {
             return;
         }
         try {
-            if (!(sound instanceof RedPositionedSoundInstance) || sound.getAttenuationType() != SoundInstance.AttenuationType.NONE) { // !replayList.contains(redSoundData)
+            if (!(sound instanceof RedPositionedSoundInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE) { // !replayList.contains(redSoundData)
                 // Get sound coordinates
+                WeightedSoundSet weightedSoundSet = sound.getSoundSet(this.loader);
                 double soundX = sound.getX();
                 double soundY = sound.getY();
                 double soundZ = sound.getZ();
