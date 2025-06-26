@@ -21,9 +21,9 @@ import redsmods.mixin.client.SoundSystemMixin;
 import java.util.*;
 
 public class RaycastingHelper {
-    private static final int RAYS_CAST = 1000; // 64000 is production number
-    private static final int MAX_BOUNCES = 3;
-    private static final double RAY_SEGMENT_LENGTH = 16.0;
+    private static final int RAYS_CAST = 64000; // 64000 is production number
+    private static final int MAX_BOUNCES = 7;
+    private static final double RAY_SEGMENT_LENGTH = 64.0;
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
 
