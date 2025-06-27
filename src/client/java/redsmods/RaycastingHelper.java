@@ -351,7 +351,7 @@ public class RaycastingHelper {
 
                 // Increment ray hit count for this entity
                 entityRayHitCounts.put(entityHit, entityRayHitCounts.getOrDefault(entityHit, 0) + 1);
-
+                
                 // Draw line to the detected entity and stop this ray
 //                drawEntityDetectionLine(world, currentPos, entityCenter);
 //                drawBouncingRaySegment(world, currentPos, entityCenter, bounce);
