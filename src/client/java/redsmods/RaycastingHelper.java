@@ -249,7 +249,8 @@ public class RaycastingHelper {
             totalDistanceTraveled += segmentTraveled;
 
             // cast BLUE rays
-            castBlueRay(world,player,actualEnd,entities,totalDistanceTraveled);
+            if (hitBlock)
+                castBlueRay(world,player,actualEnd,entities,totalDistanceTraveled,initialDirection);
             // Check for entity intersections along this segment
             SoundData entityHit = checkRayEntityIntersection(currentPos, currentDirection, entities, actualEnd);
 
@@ -299,7 +300,7 @@ public class RaycastingHelper {
         return new RaycastResult(totalDistanceTraveled, initialDirection, hitEntity, currentPos, rayCompleted);
     }
 
-    private static void castBlueRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance) {
+    private static void castBlueRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
         // Cast rays directly towards each sound source to check line of sight
         for (SoundData soundEntity : entities) {
             Vec3d entityCenter = soundEntity.boundingBox.getCenter();
@@ -328,19 +329,22 @@ public class RaycastingHelper {
                 // Create ray result for this direct line of sight
                 RaycastResult blueRayResult = new RaycastResult(
                         distanceToEntity,
-                        directionToEntity,
+                        initalDirection,
                         soundEntity,
                         entityCenter,
                         true
                 );
 
-                RayHitData hitData = new RayHitData(blueRayResult, directionToEntity, weight);
+                RayHitData hitData = new RayHitData(blueRayResult, initalDirection, weight);
 
                 // Add to rayHitsByEntity map
                 rayHitsByEntity.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
 
-                // Draw blue ray visualization (optional)
-                drawBlueRay(world, currentPos, entityCenter);
+                // Increment ray hit count for this entity
+                entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
+
+                // Draw blue ray visualization
+//                drawBlueRay(world, currentPos, entityCenter);
             }
         }
     }
