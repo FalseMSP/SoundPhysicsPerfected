@@ -1,11 +1,8 @@
 package redsmods.mixin.client;
 
-import net.fabricmc.fabric.api.client.sound.v1.FabricSoundInstance;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.sound.*;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import org.lwjgl.openal.AL10;
@@ -19,7 +16,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
-import redsmods.ChannelAccessor;
 import redsmods.RedPositionedSoundInstance;
 import redsmods.RedSoundInstance;
 import redsmods.SoundData;
@@ -136,8 +132,7 @@ public class SoundSystemMixin {
             return;
         }
 
-        // Access the sound system directly
-        SoundSystem soundSystem = ((SoundManagerAccessor) this).getSoundSystem();
+
 
         // You'll need to create another accessor for SoundSystem to access its playing sounds
         // This approach is different from the original because the structure changed
