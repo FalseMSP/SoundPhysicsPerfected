@@ -26,41 +26,6 @@ public class RaycastingHelper {
     private static final Map<Integer,ArrayList<RedPositionedSoundInstance>> soundPlayingWaiting = new HashMap<>();
     private static int ticksSinceWorld;
 
-    // PLAYER "enviornment scanning" raycasting
-    public static void castSphereFromPlayer(World world, net.minecraft.entity.player.PlayerEntity player, double maxDistance, boolean drawRays) {
-        try {
-            // Get player's eye position as the center of the sphere
-            Vec3d playerEyePos = player.getEyePos();
-
-            // Generate ray directions in a sphere pattern
-            Vec3d[] rayDirections = generateRayDirections();
-
-            for (Vec3d direction : rayDirections) {
-                // Cast ray from player in this direction
-                Vec3d rayStart = playerEyePos;
-                Vec3d rayEnd = rayStart.add(direction.multiply(maxDistance));
-
-                RaycastContext raycastContext = new RaycastContext(
-                        rayStart,
-                        rayEnd,
-                        RaycastContext.ShapeType.COLLIDER,
-                        RaycastContext.FluidHandling.NONE,
-                        player
-                );
-
-                BlockHitResult hitResult = world.raycast(raycastContext);
-
-                // Draw the ray if requested
-                if (drawRays) {
-                    drawPlayerRay(world, rayStart, rayEnd, hitResult);
-                }
-            }
-
-        } catch (Exception e) {
-            System.err.println("Error in sphere raycast from player: " + e.getMessage());
-        }
-    }
-
     public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
         try {
             Vec3d playerEyePos = player.getEyePos();
@@ -129,50 +94,6 @@ public class RaycastingHelper {
 
         for (AveragedSoundData avgData : averagedResults.values()) {
             playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.8f, 1.0f);
-        }
-    }
-
-    // Method to play a single sound at averaged position
-    public static void playSoundAtAveragedPosition(MinecraftClient client, AveragedSoundData avgData, Vec3d playerPos) {
-        if (client == null || client.world == null || avgData == null) {
-            return;
-        }
-
-        try {
-            // Calculate the target position based on average direction and distance
-            Vec3d targetPosition = playerPos.add(avgData.averageDirection.multiply(avgData.averageDistance));
-
-            // Get the original sound identifier
-            RedSoundInstance originalSound = avgData.soundEntity.sound;
-            Identifier soundId = originalSound.getId();
-
-            // Create a new positioned sound instance at the averaged location
-            PositionedSoundInstance newSound = new RedPositionedSoundInstance(
-                    soundId,                                    // Sound identifier
-                    originalSound.getCategory(),                // Sound category
-                    originalSound.getVolume(),                  // Volume
-                    originalSound.getPitch(),                   // Pitch
-                    SoundInstance.createRandom(),                           // Random instance
-                    originalSound.isRepeatable(),
-                    originalSound.getRepeatDelay(),              // Repeat delay
-                    originalSound.getAttenuationType(),
-                    (float) targetPosition.x,                   // X position
-                    (float) targetPosition.y,                   // Y position
-                    (float) targetPosition.z,                   // Z position
-                    originalSound.isRelative()                  // Relative positioning
-            );
-
-            // Play the sound
-            client.getSoundManager().play(newSound);
-
-            // Debug output
-            System.out.println("Playing averaged sound: " + soundId.toString());
-            System.out.println("  Original position: " + avgData.soundEntity.position.toString());
-            System.out.println("  Averaged position: " + targetPosition.toString());
-            System.out.println("  Distance from player: " + String.format("%.2f", avgData.averageDistance));
-
-        } catch (Exception e) {
-            System.err.println("Error playing averaged sound: " + e.getMessage());
         }
     }
 
