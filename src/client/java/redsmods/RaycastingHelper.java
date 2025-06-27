@@ -158,7 +158,7 @@ public class RaycastingHelper {
                 // Calculate weight using inverse square law (1/d²)
                 // Add small epsilon to prevent division by zero
                 double distance = Math.max(res.totalDistance, 0.1);
-                double weight = 1.0 / (distance); // made it linear: * distance
+                double weight = 1.0 / (distance * distance); // made it linear: * distance
 
                 res.hitEntity.setDistance((int) Math.floor(distance/SPEED_OF_SOUND_TICKS)); // messy asf casting lol
 
@@ -323,7 +323,7 @@ public class RaycastingHelper {
 
             if (hasLineOfSight) {
                 // Calculate weight based on distance (closer = higher weight)
-                double weight = 1.0 / Math.max(distanceToEntity+currentDistance, 0.1);
+                double weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1));
 
                 // Create ray result for this direct line of sight
                 RaycastResult blueRayResult = new RaycastResult(
