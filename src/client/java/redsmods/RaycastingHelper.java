@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -21,19 +22,20 @@ public class RaycastingHelper {
     Raycasting Helper for Red's Sounds (tbh this is what does all the work bc im lazy and don't know how to code lmao
     Colors of rays defined by: https://www.youtube.com/watch?v=u6EuAUjq92k
     White: Normal Bouncing Ray
-    Blue: Sound Seeking Ray
+    Green: Sound Seeking Ray
     More to be defined.
 
      */
 
-    private static final int RAYS_CAST = 2048; // 64000 is production number
-    private static final int MAX_BOUNCES = 4;
+    private static final int RAYS_CAST = 1024; // 64000 is definitely not production number
+    private static final int MAX_BOUNCES = 15;
     private static final double RAY_SEGMENT_LENGTH = 64.0;
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
-    private static final double SPEED_OF_SOUND_TICKS = 17.15*2; // 17.15 blocks per gametick
+    private static final double SPEED_OF_SOUND_TICKS = 17.15; // 17.15 blocks per gametick
     private static final Map<Integer,ArrayList<RedPositionedSoundInstance>> soundPlayingWaiting = new HashMap<>();
     private static int ticksSinceWorld;
+    private static Map<Integer,Integer> echoFac = new HashMap<>();
 
     // Sound RayData
     private static Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
@@ -130,6 +132,30 @@ public class RaycastingHelper {
 
             queueSound(newSound,avgData.soundEntity.getDistance());
 
+            // echo logic
+            System.out.println(echoFac);
+            echoFac.remove(0); // we don't care about instant echos
+            for(Integer i : echoFac.keySet()) {
+                float echoVolume = (float) (adjustedVolume * Math.min(1,((double) echoFac.get(i) / ((RAYS_CAST*MAX_BOUNCES)/2.0))));
+                System.out.println(adjustedVolume);
+                RedPositionedSoundInstance echoSound = new RedPositionedSoundInstance(
+                        soundId,                                    // Sound identifier
+                        originalSound.getCategory(),                // Sound category
+                        Math.max(0.01f, Math.min(1.0f, echoVolume)),  // Clamp volume between 0-1
+                        Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
+                        SoundInstance.createRandom(),                           // Random instance
+                        originalSound.isRepeatable(),
+                        originalSound.getRepeatDelay(),              // Repeat delay
+                        originalSound.getAttenuationType(),
+                        (float) targetPosition.x,                   // X position
+                        (float) targetPosition.y,                   // Y position
+                        (float) targetPosition.z,                   // Z position
+                        originalSound.isRelative()                  // Relative positioning
+                );
+
+                queueSound(echoSound,avgData.soundEntity.getDistance(),i);
+            }
+
             // Debug output
             System.out.println("Playing adjusted averaged sound: " + soundId.toString());
             System.out.println("  Volume: " + String.format("%.3f", adjustedVolume) + " (original: " + String.format("%.3f", baseVolume) + ")");
@@ -144,13 +170,18 @@ public class RaycastingHelper {
     }
 
     private static void queueSound(RedPositionedSoundInstance newSound, int distance) {
-        soundPlayingWaiting.computeIfAbsent(distance*2+ticksSinceWorld+2,k -> new ArrayList<>()).add(newSound);
+        soundPlayingWaiting.computeIfAbsent((distance) + ticksSinceWorld + 1, k -> new ArrayList<>()).add(newSound);
+    }
+
+    private static void queueSound(RedPositionedSoundInstance newSound, int distance, int delay) {
+        soundPlayingWaiting.computeIfAbsent((distance) + ticksSinceWorld + 1 + delay, k -> new ArrayList<>()).add(newSound);
     }
 
     // Main method to process rays and calculate averages
     public static Map<SoundData, AveragedSoundData> processRaysWithAveraging(World world, PlayerEntity player,
                                                                              Vec3d playerEyePos, List<Vec3d> rayDirections,
                                                                              Queue<SoundData> nearbyEntities, double maxTotalDistance) {
+        echoFac.clear();
         // Cast all rays and collect hit data
         for (Vec3d direction : rayDirections) {
             RaycastResult res = castBouncingRay(world, player, playerEyePos, direction, nearbyEntities, maxTotalDistance);
@@ -248,9 +279,11 @@ public class RaycastingHelper {
             double segmentTraveled = currentPos.distanceTo(actualEnd);
             totalDistanceTraveled += segmentTraveled;
 
-            // cast BLUE rays
-            if (hitBlock)
-                castBlueRay(world,player,actualEnd,entities,totalDistanceTraveled,initialDirection);
+            // cast Green rays
+            if (hitBlock) {
+                castGreenRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
+                castBlueRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
+            }
             // Check for entity intersections along this segment
             SoundData entityHit = checkRayEntityIntersection(currentPos, currentDirection, entities, actualEnd);
 
@@ -300,7 +333,7 @@ public class RaycastingHelper {
         return new RaycastResult(totalDistanceTraveled, initialDirection, hitEntity, currentPos, rayCompleted);
     }
 
-    private static void castBlueRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
+    private static void castGreenRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
         // Cast rays directly towards each sound source to check line of sight
         for (SoundData soundEntity : entities) {
             Vec3d entityCenter = soundEntity.boundingBox.getCenter();
@@ -327,7 +360,7 @@ public class RaycastingHelper {
                 double weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1));
 
                 // Create ray result for this direct line of sight
-                RaycastResult blueRayResult = new RaycastResult(
+                RaycastResult GreenRayResult = new RaycastResult(
                         distanceToEntity,
                         initalDirection,
                         soundEntity,
@@ -335,7 +368,7 @@ public class RaycastingHelper {
                         true
                 );
 
-                RayHitData hitData = new RayHitData(blueRayResult, initalDirection, weight);
+                RayHitData hitData = new RayHitData(GreenRayResult, initalDirection, weight);
 
                 // Add to rayHitsByEntity map
                 rayHitsByEntity.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
@@ -343,36 +376,75 @@ public class RaycastingHelper {
                 // Increment ray hit count for this entity
                 entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
 
-                // Draw blue ray visualization
-//                drawBlueRay(world, currentPos, entityCenter);
+                // Draw Green ray visualization
+//                drawGreenRay(world, currentPos, entityCenter);
             }
         }
     }
-    public static void drawBlueRay (World world, Vec3d start, Vec3d end){
+
+    private static void castBlueRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
+        // Cast rays directly towards each sound source to check line of sight
+        Vec3d entityCenter = player.getBoundingBox().getCenter();
+
+        // get currentPos out of a block
+        currentPos = currentPos.add(entityCenter.subtract(currentPos).multiply(0.87));
+        double distanceToEntity = currentPos.distanceTo(entityCenter);
+
+        // Create raycast context for line of sight check
+        RaycastContext raycastContext = new RaycastContext(
+                currentPos,
+                entityCenter,
+                RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE,
+                player
+        );
+
+        BlockHitResult blockHit = world.raycast(raycastContext);
+
+        // Check if we have line of sight (no block hit or hit is beyond the entity)
+        boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
+                currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 0.6;
+
+        if (hasLineOfSight) {
+            int timeDelay = (int) Math.floor(currentDistance / SPEED_OF_SOUND_TICKS);
+            echoFac.putIfAbsent(timeDelay,0);
+            echoFac.put(timeDelay,echoFac.get(timeDelay)+1);
+
+            // Draw Blue ray visualization
+//            drawBlueRay(world, currentPos, entityCenter);
+        }
+    }
+
+    public static void drawGreenRay (World world, Vec3d start, Vec3d end){
         if (world.isClient) {
             Vec3d direction = end.subtract(start).normalize();
             double distance = start.distanceTo(end);
 
-            // Draw blue particles for line of sight rays
+            // Draw Green particles for line of sight rays
             for (double d = 0; d < distance; d += 0.5) {
                 Vec3d particlePos = start.add(direction.multiply(d));
 
-                // Use blue/cyan particles for line of sight visualization
-                world.addParticle(net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
+                // Use Green particles for line of sight visualization
+                world.addParticle(ParticleTypes.HAPPY_VILLAGER,
                         particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
             }
         }
     }
 
-    // Helper method to get just the total distance (for backward compatibility)
-    public static double getTotalRayDistance(World world, PlayerEntity player, Vec3d startPos, Vec3d direction, Queue<SoundData> entities, double maxTotalDistance) {
-        RaycastResult result = castBouncingRay(world, player, startPos, direction, entities, maxTotalDistance);
-        return result.totalDistance;
-    }
+    public static void drawBlueRay (World world, Vec3d start, Vec3d end){
+        if (world.isClient) {
+            Vec3d direction = end.subtract(start).normalize();
+            double distance = start.distanceTo(end);
 
-    // Helper method to get just the initial direction (for backward compatibility)
-    public static Vec3d getInitialRayDirection(Vec3d direction) {
-        return direction.normalize();
+            // Draw Green particles for line of sight rays
+            for (double d = 0; d < distance; d += 0.5) {
+                Vec3d particlePos = start.add(direction.multiply(d));
+
+                // Use Green particles for line of sight visualization
+                world.addParticle(ParticleTypes.SOUL_FIRE_FLAME,
+                        particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
+            }
+        }
     }
 
     public static Vec3d calculateReflection(Vec3d incident, Direction hitSide) {
@@ -450,7 +522,7 @@ public class RaycastingHelper {
                 // Color coding: first ray = white, bounces = progressively more red
                 switch (bounceCount) {
                     case 0:
-                        // Original ray - white/blue
+                        // Original ray - white/Green
                         world.addParticle(net.minecraft.particle.ParticleTypes.END_ROD,
                                 particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
                         break;

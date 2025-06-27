@@ -30,7 +30,7 @@ public class SoundSystemMixin {
     private HashSet<RedSoundInstance> replayList = new HashSet<>();
 
     @Shadow
-    private SoundManager loader;
+    private SoundManager loader; 
 
     @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
     private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
