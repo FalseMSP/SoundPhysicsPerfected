@@ -17,6 +17,15 @@ import net.minecraft.world.World;
 import java.util.*;
 
 public class RaycastingHelper {
+    /*
+    Raycasting Helper for Red's Sounds (tbh this is what does all the work bc im lazy and don't know how to code lmao
+    Colors of rays defined by: https://www.youtube.com/watch?v=u6EuAUjq92k
+    White: Normal Bouncing Ray
+    Blue: Sound Seeking Ray
+    More to be defined.
+
+     */
+
     private static final int RAYS_CAST = 2048; // 64000 is production number
     private static final int MAX_BOUNCES = 4;
     private static final double RAY_SEGMENT_LENGTH = 64.0;
@@ -26,6 +35,8 @@ public class RaycastingHelper {
     private static final Map<Integer,ArrayList<RedPositionedSoundInstance>> soundPlayingWaiting = new HashMap<>();
     private static int ticksSinceWorld;
 
+    // Sound RayData
+    private static Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
     public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
         try {
             Vec3d playerEyePos = player.getEyePos();
@@ -33,12 +44,6 @@ public class RaycastingHelper {
 
             // Clear previous ray hit counts
             entityRayHitCounts.clear();
-
-            // Get all entities within expanded range
-            Box searchBox = new Box(
-                    playerEyePos.subtract(maxTotalDistance, maxTotalDistance, maxTotalDistance),
-                    playerEyePos.add(maxTotalDistance, maxTotalDistance, maxTotalDistance)
-            );
 
             MinecraftClient client = MinecraftClient.getInstance();
             if (client == null || client.getSoundManager() == null) {
@@ -49,22 +54,8 @@ public class RaycastingHelper {
 
             // Generate ray directions
             Vec3d[] rayDirections = RaycastingHelper.generateRayDirections();
-            Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
+            rayHitsByEntity.clear(); // clear list before every call
 
-            for (Vec3d direction : rayDirections) {
-                RaycastResult res = castBouncingRay(world, player, playerEyePos, direction, nearbyEntities, maxTotalDistance);
-                if (res.hitEntity != null) {
-                    // Calculate weight using inverse square law (1/d²)
-                    // Add small epsilon to prevent division by zero
-                    double distance = Math.max(res.totalDistance, 0.1);
-                    double weight = 1.0 / (distance * distance);
-
-                    RayHitData hitData = new RayHitData(res, direction, weight);
-
-                    // Group by entity
-                    rayHitsByEntity.computeIfAbsent(res.hitEntity, k -> new ArrayList<>()).add(hitData);
-                }
-            }
             processAndPlayAveragedSounds(world,player,playerEyePos,new ArrayList<>(Arrays.asList(rayDirections)),nearbyEntities,maxTotalDistance,client);
             // Display ray hit counts for detected sfx
             displayEntityRayHitCounts(world, player);
@@ -160,10 +151,6 @@ public class RaycastingHelper {
     public static Map<SoundData, AveragedSoundData> processRaysWithAveraging(World world, PlayerEntity player,
                                                                              Vec3d playerEyePos, List<Vec3d> rayDirections,
                                                                              Queue<SoundData> nearbyEntities, double maxTotalDistance) {
-
-        // Map to store ray hits grouped by sound entity
-        Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
-
         // Cast all rays and collect hit data
         for (Vec3d direction : rayDirections) {
             RaycastResult res = castBouncingRay(world, player, playerEyePos, direction, nearbyEntities, maxTotalDistance);
@@ -261,6 +248,8 @@ public class RaycastingHelper {
             double segmentTraveled = currentPos.distanceTo(actualEnd);
             totalDistanceTraveled += segmentTraveled;
 
+            // cast BLUE rays
+            castBlueRay(world,player,actualEnd,entities,totalDistanceTraveled);
             // Check for entity intersections along this segment
             SoundData entityHit = checkRayEntityIntersection(currentPos, currentDirection, entities, actualEnd);
 
@@ -308,6 +297,67 @@ public class RaycastingHelper {
 
         // Return comprehensive result
         return new RaycastResult(totalDistanceTraveled, initialDirection, hitEntity, currentPos, rayCompleted);
+    }
+
+    private static void castBlueRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance) {
+        // Cast rays directly towards each sound source to check line of sight
+        for (SoundData soundEntity : entities) {
+            Vec3d entityCenter = soundEntity.boundingBox.getCenter();
+            Vec3d directionToEntity = entityCenter.subtract(currentPos).normalize();
+            double distanceToEntity = currentPos.distanceTo(entityCenter);
+
+            // Create raycast context for line of sight check
+            RaycastContext raycastContext = new RaycastContext(
+                    currentPos,
+                    entityCenter,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
+
+            BlockHitResult blockHit = world.raycast(raycastContext);
+
+            // Check if we have line of sight (no block hit or hit is beyond the entity)
+            boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
+                    currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 0.6;
+
+            if (hasLineOfSight) {
+                // Calculate weight based on distance (closer = higher weight)
+                double weight = 1.0 / Math.max(distanceToEntity+currentDistance, 0.1);
+
+                // Create ray result for this direct line of sight
+                RaycastResult blueRayResult = new RaycastResult(
+                        distanceToEntity,
+                        directionToEntity,
+                        soundEntity,
+                        entityCenter,
+                        true
+                );
+
+                RayHitData hitData = new RayHitData(blueRayResult, directionToEntity, weight);
+
+                // Add to rayHitsByEntity map
+                rayHitsByEntity.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
+
+                // Draw blue ray visualization (optional)
+                drawBlueRay(world, currentPos, entityCenter);
+            }
+        }
+    }
+    public static void drawBlueRay (World world, Vec3d start, Vec3d end){
+        if (world.isClient) {
+            Vec3d direction = end.subtract(start).normalize();
+            double distance = start.distanceTo(end);
+
+            // Draw blue particles for line of sight rays
+            for (double d = 0; d < distance; d += 0.5) {
+                Vec3d particlePos = start.add(direction.multiply(d));
+
+                // Use blue/cyan particles for line of sight visualization
+                world.addParticle(net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
+                        particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
+            }
+        }
     }
 
     // Helper method to get just the total distance (for backward compatibility)
@@ -447,152 +497,11 @@ public class RaycastingHelper {
                 Vec3d entityPos = entity.boundingBox.getCenter();
                 Vec3d displayPos = entityPos.add(0, entity.boundingBox.getLengthY() / 2 + 0.5, 0);
 
-                // Create floating text effect with particles
-                displayRayCountText(world, displayPos, rayCount);
-
                 // Print to console for debugging
                 String entityName = entity.soundId;
                 System.out.println("SFX: " + entityName + " hit by " + rayCount + " rays");
             }
         }
-    }
-
-    public static void displayRayCountText(World world, Vec3d pos, int count) {
-        if (world.isClient) {
-            // Create a visual representation of the count using particles
-            // Spawn particles in a pattern that represents the number
-
-            // Base particles for visibility
-            for (int i = 0; i < 5; i++) {
-                world.addParticle(net.minecraft.particle.ParticleTypes.ENCHANT,
-                        pos.x + (Math.random() - 0.5) * 0.3,
-                        pos.y + (Math.random() - 0.5) * 0.3,
-                        pos.z + (Math.random() - 0.5) * 0.3,
-                        0, 0.1, 0);
-            }
-
-            // Intensity-based particles (more particles = more rays)
-            int particleCount = Math.min(count / 10, 20); // Scale down for visibility
-            for (int i = 0; i < particleCount; i++) {
-                world.addParticle(net.minecraft.particle.ParticleTypes.TOTEM_OF_UNDYING,
-                        pos.x + (Math.random() - 0.5) * 0.5,
-                        pos.y + (Math.random() - 0.5) * 0.5,
-                        pos.z + (Math.random() - 0.5) * 0.5,
-                        0, 0.05, 0);
-            }
-
-            // Color-coded particles based on ray count ranges
-            if (count > 100) {
-                // High count - red particles
-                world.addParticle(net.minecraft.particle.ParticleTypes.FLAME,
-                        pos.x, pos.y, pos.z, 0, 0.1, 0);
-            } else if (count > 50) {
-                // Medium count - orange particles
-                world.addParticle(net.minecraft.particle.ParticleTypes.LAVA,
-                        pos.x, pos.y, pos.z, 0, 0.1, 0);
-            } else if (count > 10) {
-                // Low count - yellow particles
-                world.addParticle(net.minecraft.particle.ParticleTypes.END_ROD,
-                        pos.x, pos.y, pos.z, 0, 0.1, 0);
-            }
-        }
-    }
-
-    // OBJECT -> PLAYER raycasting
-    // DEPRECATED
-    // Helper method to draw rays cast from player with different visualization
-    private static void drawPlayerRay(World world, Vec3d rayStart, Vec3d rayEnd, BlockHitResult hitResult) {
-        // Determine the actual end point of the ray
-        Vec3d actualEnd = rayEnd;
-        if (hitResult.getType() == HitResult.Type.BLOCK) {
-            actualEnd = hitResult.getPos();
-        }
-
-        // Choose color - blue for rays from player
-        int color = 0x0000FF; // Blue for player rays
-
-        // Draw the ray using debug renderer
-        if (world.isClient) {
-//            drawPlayerDebugLine(rayStart, actualEnd, color, world);
-        }
-    }
-
-    private static void drawPlayerDebugLine(Vec3d start, Vec3d end, int color, World world) {
-        if (world.isClient) {
-            // Spawn particles along the ray path
-            Vec3d direction = end.subtract(start).normalize();
-            double distance = start.distanceTo(end);
-
-            for (double d = 0; d < distance; d += 1.0) { // Larger spacing for less particle spam
-                Vec3d particlePos = start.add(direction.multiply(d));
-
-                // Use blue-ish particles for player rays
-                world.addParticle(net.minecraft.particle.ParticleTypes.ENCHANT,
-                        particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
-            }
-        }
-    }
-
-    // RAYCASTING WHATNOT
-    public static boolean checkLineOfSight(World world, Vec3d soundPos, Vec3d playerPos, net.minecraft.entity.player.PlayerEntity player, boolean drawRays) {
-        try {
-            // Get player's bounding box
-            Box playerBounds = player.getBoundingBox();
-
-            // Define ray directions - using a sphere-like distribution
-            Vec3d[] rayDirections = generateRayDirections();
-
-            // Get the starting block position
-            BlockPos startingBlockPos = new BlockPos((int)Math.floor(soundPos.x), (int)Math.floor(soundPos.y), (int)Math.floor(soundPos.z));
-            boolean startingInBlock = world.getBlockState(startingBlockPos).isSolidBlock(world, startingBlockPos);
-
-            boolean foundClearPath = false;
-
-            for (Vec3d direction : rayDirections) {
-                Vec3d rayStart = soundPos;
-
-                // If starting inside a block, move the ray start to just outside the block
-                if (startingInBlock) {
-                    rayStart = moveOutsideBlock(soundPos, direction, startingBlockPos);
-                }
-
-                // Cast ray in this direction
-                Vec3d rayEnd = rayStart.add(direction.multiply(64)); // Max distance of 64 blocks
-
-                RaycastContext raycastContext = new RaycastContext(
-                        rayStart,
-                        rayEnd,
-                        RaycastContext.ShapeType.COLLIDER,
-                        RaycastContext.FluidHandling.NONE,
-                        player
-                );
-
-                BlockHitResult hitResult = world.raycast(raycastContext);
-
-                // Check if ray intersects with player hitbox before hitting any blocks
-                boolean rayHitsPlayer = rayIntersectsPlayerHitbox(rayStart, direction, playerBounds, hitResult);
-
-                if (rayHitsPlayer) {
-                    foundClearPath = true;
-                }
-
-                // Draw the ray if requested
-                if (drawRays) {
-                    drawRay(world, rayStart, rayEnd, hitResult, rayHitsPlayer);
-                }
-            }
-
-            return foundClearPath;
-
-        } catch (Exception e) {
-            System.err.println("Error in line of sight check: " + e.getMessage());
-            return true; // Default to clear line of sight on error
-        }
-    }
-
-    // Overloaded method for backwards compatibility
-    public static boolean checkLineOfSight(World world, Vec3d soundPos, Vec3d playerPos, net.minecraft.entity.player.PlayerEntity player) {
-        return checkLineOfSight(world, soundPos, playerPos, player, false);
     }
 
     public static Vec3d[] generateRayDirections() {
@@ -615,142 +524,6 @@ public class RaycastingHelper {
         }
 
         return directions;
-    }
-
-    public static boolean rayIntersectsPlayerHitbox(Vec3d rayStart, Vec3d rayDirection, Box playerBounds, BlockHitResult blockHit) {
-        // Calculate intersection with player's bounding box
-        double[] tValues = new double[6];
-
-        // Check intersection with each face of the bounding box
-        tValues[0] = (playerBounds.minX - rayStart.x) / rayDirection.x; // Left face
-        tValues[1] = (playerBounds.maxX - rayStart.x) / rayDirection.x; // Right face
-        tValues[2] = (playerBounds.minY - rayStart.y) / rayDirection.y; // Bottom face
-        tValues[3] = (playerBounds.maxY - rayStart.y) / rayDirection.y; // Top face
-        tValues[4] = (playerBounds.minZ - rayStart.z) / rayDirection.z; // Front face
-        tValues[5] = (playerBounds.maxZ - rayStart.z) / rayDirection.z; // Back face
-
-        // Find the entry and exit points
-        double tNear = Double.NEGATIVE_INFINITY;
-        double tFar = Double.POSITIVE_INFINITY;
-
-        for (int i = 0; i < 3; i++) {
-            double t1 = tValues[i * 2];
-            double t2 = tValues[i * 2 + 1];
-
-            if (t1 > t2) {
-                double temp = t1;
-                t1 = t2;
-                t2 = temp;
-            }
-
-            tNear = Math.max(tNear, t1);
-            tFar = Math.min(tFar, t2);
-
-            if (tNear > tFar || tFar < 0) {
-                return false; // No intersection
-            }
-        }
-
-        // Check if intersection occurs before hitting a block
-        if (tNear >= 0) {
-            if (blockHit.getType() == HitResult.Type.MISS) {
-                return true; // Ray hits player and no blocks in the way
-            }
-
-            // Calculate distance to block hit
-            Vec3d blockHitPos = blockHit.getPos();
-            double distanceToBlock = rayStart.distanceTo(blockHitPos);
-            double distanceToPlayer = tNear;
-
-            // Player is closer than the block hit
-            return distanceToPlayer < distanceToBlock;
-        }
-        return false;
-    }
-    public static void drawRay(World world, Vec3d rayStart, Vec3d rayEnd, BlockHitResult hitResult, boolean rayHitsPlayer) {
-        // Determine the actual end point of the ray
-        Vec3d actualEnd = rayEnd;
-        if (hitResult.getType() == HitResult.Type.BLOCK) {
-            actualEnd = hitResult.getPos();
-        }
-
-        // Choose color based on result
-        int color;
-        if (rayHitsPlayer) {
-            color = 0x00FF00; // Green for rays that hit the player
-        } else if (hitResult.getType() == HitResult.Type.BLOCK) {
-            color = 0xFF0000; // Red for rays that hit blocks
-        } else {
-            color = 0xFFFFFF; // White for rays that hit nothing
-        }
-
-        // Draw the ray using debug renderer
-        if (world.isClient) {
-            drawDebugLine(rayStart, actualEnd, color,world);
-        }
-    }
-
-    public static void drawDebugLine(Vec3d start, Vec3d end, int color, World world) {
-        if (world.isClient) {
-            // Spawn particles along the ray path
-            Vec3d direction = end.subtract(start).normalize();
-            double distance = start.distanceTo(end);
-
-            for (double d = 0; d < distance; d += 0.5) {
-                Vec3d particlePos = start.add(direction.multiply(d));
-
-                // Spawn different particle types based on color
-                if (color == 0x00FF00) {
-                    // Green particles for successful rays
-                    world.addParticle(net.minecraft.particle.ParticleTypes.HAPPY_VILLAGER,
-                            particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
-                } else if (color == 0xFF0000) {
-                    // Red particles for blocked rays
-                    world.addParticle(net.minecraft.particle.ParticleTypes.ANGRY_VILLAGER,
-                            particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
-                } else {
-                    // White particles for unobstructed rays
-                    world.addParticle(net.minecraft.particle.ParticleTypes.END_ROD,
-                            particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
-                }
-            }
-        }
-
-    }
-
-    public static Vec3d moveOutsideBlock(Vec3d soundPos, Vec3d direction, BlockPos blockPos) {
-        // Calculate the block bounds
-        double minX = blockPos.getX();
-        double maxX = blockPos.getX() + 1.0;
-        double minY = blockPos.getY();
-        double maxY = blockPos.getY() + 1.0;
-        double minZ = blockPos.getZ();
-        double maxZ = blockPos.getZ() + 1.0;
-
-        // Find where the ray exits the block
-        double[] tValues = new double[6];
-        tValues[0] = (minX - soundPos.x) / direction.x; // Left face
-        tValues[1] = (maxX - soundPos.x) / direction.x; // Right face
-        tValues[2] = (minY - soundPos.y) / direction.y; // Bottom face
-        tValues[3] = (maxY - soundPos.y) / direction.y; // Top face
-        tValues[4] = (minZ - soundPos.z) / direction.z; // Front face
-        tValues[5] = (maxZ - soundPos.z) / direction.z; // Back face
-
-        // Find the closest positive t value (exit point)
-        double tExit = Double.POSITIVE_INFINITY;
-        for (double t : tValues) {
-            if (t > 0.001 && t < tExit) { // Small epsilon to avoid floating point issues
-                tExit = t;
-            }
-        }
-
-        // Move to exit point plus small offset
-        if (tExit != Double.POSITIVE_INFINITY) {
-            return soundPos.add(direction.multiply(tExit + 0.01));
-        }
-
-        // Fallback: just move a bit in the direction
-        return soundPos.add(direction.multiply(0.6));
     }
 
     public static void playQueuedObjects(int tsw) {

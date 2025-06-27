@@ -16,14 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import redsmods.RedPositionedSoundInstance;
 import redsmods.RedSoundInstance;
 import redsmods.SoundData;
-import redsmods.VolumeAdjustedSFX;
-
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.Queue;
-
-import static redsmods.RaycastingHelper.checkLineOfSight;
 import static redsmods.RaycastingHelper.soundQueue;
 
 @Mixin(SoundSystem.class)
