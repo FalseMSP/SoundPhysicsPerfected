@@ -13,7 +13,6 @@ import java.util.Objects;
 
 public class RedSoundInstance implements SoundInstance {
     private final Identifier id;
-    private final WeightedSoundSet soundSet;
     private final Sound sound;
     private final SoundCategory category;
     private final boolean repeatable;
@@ -52,7 +51,6 @@ public class RedSoundInstance implements SoundInstance {
 
         // Handle potentially null sound-related properties
         this.sound = original.getSound();
-        this.soundSet = null; // Note: getSoundSet requires SoundManager parameter
     }
 
     // Static factory method for safe deep copying
@@ -81,7 +79,7 @@ public class RedSoundInstance implements SoundInstance {
 
     @Override
     public @Nullable WeightedSoundSet getSoundSet(SoundManager soundManager) {
-        return soundSet;
+        return null;
     }
 
     @Override
