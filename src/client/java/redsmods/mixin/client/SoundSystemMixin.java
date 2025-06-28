@@ -61,7 +61,7 @@ public class SoundSystemMixin {
 
         try {
             WeightedSoundSet weightedSoundSet = sound.getSoundSet(this.loader); // load pitches and whatnot into the sound data
-            if (!(sound instanceof RedPositionedSoundInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE) { // !replayList.contains(redSoundData)
+            if (!(sound instanceof RedPositionedSoundInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE && !sound.isRepeatable()) { // !replayList.contains(redSoundData)
                 // Get sound coordinates
                 double soundX = sound.getX();
                 double soundY = sound.getY();
@@ -274,9 +274,7 @@ public class SoundSystemMixin {
             alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN,   lateReverbGain);
 
             if (outdoorLeakPercent < 0.95)
-                AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
-
-        } catch (Exception e) {
+                AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);        } catch (Exception e) {
             // Ignore errors to prevent crashes
         }
     }
