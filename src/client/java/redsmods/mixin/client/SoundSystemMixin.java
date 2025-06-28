@@ -3,37 +3,34 @@ package redsmods.mixin.client;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.*;
 import net.minecraft.text.Text;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
 import org.lwjgl.openal.ALC10;
 import org.lwjgl.openal.EXTEfx;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
+import redsmods.RaycastingHelper;
 import redsmods.RedPositionedSoundInstance;
 import redsmods.RedSoundInstance;
 import redsmods.SoundData;
-import java.util.HashSet;
+
+import java.util.Map;
+
+import static java.lang.Math.clamp;
+import static org.joml.Math.lerp;
+import static org.lwjgl.openal.EXTEfx.*;
 import static redsmods.RaycastingHelper.soundQueue;
 
 @Mixin(SoundSystem.class)
 public class SoundSystemMixin {
-    private static final float BLOCKED_VOLUME_MULTIPLIER = 5f; // bigger number = quieter, its a distance factor
-    private static final double BOX_RADIUS = 1;
 
     private static final int MAX_SOUNDS = 100; // Limit queue size to prevent memory issues
-    private int tickCounter = 0;
-    private static final int CHECK_INTERVAL = 5;
-    private HashSet<RedSoundInstance> replayList = new HashSet<>();
 
-    long currentContext = ALC10.alcGetCurrentContext();
-    long currentDevice = ALC10.alcGetContextsDevice(currentContext);
     int reverb0 = EXTEfx.alGenEffects();
 
     private static int auxFXSlot = 0;
@@ -43,26 +40,18 @@ public class SoundSystemMixin {
 
     @Shadow
     private SoundManager loader;
+    @Shadow
+    private Map<SoundInstance, Channel.SourceManager> sources;
 
-    @Shadow @Final private SoundEngine soundEngine;
+//    @Shadow @Final private SoundEngine soundEngine;
 
     @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
     private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
-//        if (!efxInitialized) {
-//            initializeReverb();
-//        }
-//
-//        if (!efxInitialized) return; // Skip if initialization failed
-//
-//        try {
-//            // Get the OpenAL source ID for this sound
-//            int sourceId = getSourceIdForSound(soundInstance);
-//            if (sourceId != -1) {
-//                applyReverbToSource(sourceId);
-//            }
-//        } catch (Exception e) {
-//            // Silently continue if reverb application fails
-//        }
+        if (!efxInitialized) {
+            initializeReverb();
+        }
+
+        if (!efxInitialized) return; // Skip if initialization failed
 
         MinecraftClient client = MinecraftClient.getInstance();
         // Add null checks
@@ -71,30 +60,20 @@ public class SoundSystemMixin {
         }
 
         try {
+            WeightedSoundSet weightedSoundSet = sound.getSoundSet(this.loader); // load pitches and whatnot into the sound data
             if (!(sound instanceof RedPositionedSoundInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE) { // !replayList.contains(redSoundData)
                 // Get sound coordinates
-                WeightedSoundSet weightedSoundSet = sound.getSoundSet(this.loader);
                 double soundX = sound.getX();
                 double soundY = sound.getY();
                 double soundZ = sound.getZ();
                 Vec3d soundPos = new Vec3d(soundX, soundY, soundZ);
-
-                // Create rectangular bounding box with 0.6m radius
-                Box boundingBox = new Box(
-                        soundX - BOX_RADIUS, // minX
-                        soundY - BOX_RADIUS, // minY
-                        soundZ - BOX_RADIUS, // minZ
-                        soundX + BOX_RADIUS, // maxX
-                        soundY + BOX_RADIUS, // maxY
-                        soundZ + BOX_RADIUS  // maxZ
-                );
 
                 // Get sound ID
                 String soundId = sound.getId().toString();
 
                 // Create sound data object
                 RedSoundInstance redSoundData = new RedSoundInstance(sound);
-                SoundData soundData = new SoundData(redSoundData, soundPos, boundingBox, soundId);
+                SoundData soundData = new SoundData(redSoundData, soundPos, soundId);
 
                 // Add to queue
                 soundQueue.offer(soundData);
@@ -113,6 +92,8 @@ public class SoundSystemMixin {
                         soundId, coordinates, distanceStr, soundQueue.size());
                 client.player.sendMessage(Text.literal(message), true);
                 ci.cancel();
+            } else if (sound instanceof RedPositionedSoundInstance) {
+                // do something to post-proc sounds ig maybe if u want :p
             }
         } catch (Exception e) {
             // Log error but don't crash
@@ -128,6 +109,13 @@ public class SoundSystemMixin {
             locals = LocalCapture.CAPTURE_FAILHARD
     )
     private void onSoundTick(boolean paused, CallbackInfo ci) {
+        if (!efxInitialized) {
+            initializeReverb();
+        }
+
+        if (!efxInitialized) return; // Skip if initialization failed
+
+        updateActiveSources(); // Brute force reverb to ALL sounds
         if (paused) {
             return;
         }
@@ -201,11 +189,11 @@ public class SoundSystemMixin {
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_DIFFUSION, 0.8f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_GAIN, 0.3f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_GAINHF, 0.8f);
-        EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_DECAY_TIME, 1.5f);
-        EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_DECAY_HFRATIO, 0.7f);
+        EXTEfx.alEffectf(reverbEffect, AL_EAXREVERB_DECAY_TIME, 15f);
+        EXTEfx.alEffectf(reverbEffect, AL_EAXREVERB_DECAY_HFRATIO, 0.7f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_REFLECTIONS_GAIN, 0.2f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_LATE_REVERB_GAIN, 0.4f);
-        EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_LATE_REVERB_DELAY, 0.03f);
+        EXTEfx.alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY, 0.03f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_AIR_ABSORPTION_GAINHF, 0.99f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, 0.0f);
     }
@@ -214,7 +202,7 @@ public class SoundSystemMixin {
      * Update all currently active sources with reverb
      * This is a brute-force approach that works when source tracking is difficult
      */
-    private void updateActiveSources() {
+    private static void updateActiveSources() {
         try {
             // Get all generated OpenAL sources and apply reverb
             // This requires keeping track of source IDs or iterating through all possible sources
@@ -238,15 +226,55 @@ public class SoundSystemMixin {
      */
     private static void applyReverbToSource(int sourceId) {
         try {
-            // Set reverb send gain (how much reverb to apply)
-            float reverbGain = 0.6f; // Adjust this value (0.0 to 1.0)
+            float wallDistance = (float) (RaycastingHelper.distanceFromWallEcho / RaycastingHelper.distanceFromWallEchoDenom);
+            float occlusionPercent = (float) RaycastingHelper.reverbStrength / RaycastingHelper.reverbDenom;
+            float outdoorLeakPercent = (float) RaycastingHelper.outdoorLeak / RaycastingHelper.outdoorLeakDenom;
 
-            // Configure the send filter
-            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAIN, reverbGain);
+            System.out.println(occlusionPercent +" " + wallDistance + " " + outdoorLeakPercent);
+
+            float distanceMeters     = clamp(wallDistance, 1.0f, 100.0f);
+            occlusionPercent   = 1 - clamp(occlusionPercent+outdoorLeakPercent, 0.0f, 1.0f);
+            outdoorLeakPercent = clamp(outdoorLeakPercent, 0.0f, 1.0f);
+
+            float dryFactor = 1.0f - outdoorLeakPercent; // 0 = fully outdoor, 1 = fully indoor
+            float speedOfSound = 343.0f;
+
+            float wallDelay = (distanceMeters * 2.0f) / speedOfSound;
+
+            float decayTime        = clamp(wallDelay * 5.0f * dryFactor, 0.1f, 6.0f);
+            float reflectionsDelay = clamp(wallDelay * 0.5f, 0.005f, 0.05f);
+            float lateReverbDelay  = clamp(wallDelay, 0.01f, 0.1f);
+
+            float decayHfRatio     = lerp(0.5f, 1.3f, (1.0f - occlusionPercent) * dryFactor);
+            float diffusion        = lerp(0.3f, 1.0f, dryFactor * (1.0f - occlusionPercent));
+            float gainHF           = lerp(0.05f, 0.9f, (1.0f - occlusionPercent) * dryFactor);
+
+            float reflectionsGain  = lerp(0.0f, 0.7f, dryFactor);
+            float lateReverbGain   = lerp(0.0f, 1.0f, dryFactor);
+
+            float density          = lerp(0.3f, 1.0f, dryFactor);
+            float gain             = lerp(0.05f, 0.3f, dryFactor);
+            float airAbsorptionHF  = lerp(0.95f, 0.99f, dryFactor);
+            float roomRolloff      = 0.4f;
+
+            // Apply to OpenAL effect
+            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAIN, gain);
             EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAINHF, 1.0f);
+            alEffectf(reverbEffect, AL_EAXREVERB_DENSITY,                density);
+            alEffectf(reverbEffect, AL_EAXREVERB_GAIN,                   gain);
+            alEffectf(reverbEffect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF,  airAbsorptionHF);
+            alEffectf(reverbEffect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR,    roomRolloff);
+            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_TIME,         decayTime);
+            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_HFRATIO,      decayHfRatio);
+            alEffectf(reverbEffect, AL_EAXREVERB_DIFFUSION,          diffusion);
+            alEffectf(reverbEffect, AL_EAXREVERB_GAINHF,             gainHF);
+            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_DELAY,  reflectionsDelay);
+            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY,  lateReverbDelay);
+            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_GAIN,   reflectionsGain);
+            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN,   lateReverbGain);
 
-            // Connect source to reverb effect slot
-            AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
+            if (outdoorLeakPercent < 0.95)
+                AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
 
         } catch (Exception e) {
             // Ignore errors to prevent crashes

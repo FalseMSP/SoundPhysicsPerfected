@@ -8,15 +8,13 @@ import net.minecraft.util.math.Vec3d;
 public class SoundData {
     public final RedSoundInstance sound;
     public final Vec3d position;
-    public final Box boundingBox;
     public final String soundId;
     public final long timestamp;
     public int distance = 0; // IN TICKS (blocks/SPEED_OF_SOUND_TICKS)
 
-    public SoundData(RedSoundInstance sound, Vec3d position, Box boundingBox, String soundId) {
+    public SoundData(RedSoundInstance sound, Vec3d position, String soundId) {
         this.sound = sound;
         this.position = position;
-        this.boundingBox = boundingBox;
         this.soundId = soundId;
         this.timestamp = System.currentTimeMillis();
     }

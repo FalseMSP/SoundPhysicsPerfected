@@ -1,15 +1,12 @@
 package redsmods;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
@@ -29,14 +26,20 @@ public class RaycastingHelper {
 
     private static final int RAYS_CAST = 1024; // 64000 is definitely not production number
     private static final int MAX_BOUNCES = 15;
-    private static final double RAY_SEGMENT_LENGTH = 64.0;
+    private static final double RAY_SEGMENT_LENGTH = 256.0;
+    private static final double SPEED_OF_SOUND_MS = 3;
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
     private static final double SPEED_OF_SOUND_TICKS = 17.15; // 17.15 blocks per gametick
     private static final Map<Integer,ArrayList<RedPositionedSoundInstance>> soundPlayingWaiting = new HashMap<>();
     private static int ticksSinceWorld;
-    private static Map<Integer,Integer> echoFac = new HashMap<>();
-
+//    public static Map<Integer,Integer> echoFac = new HashMap<>();
+    public static double distanceFromWallEcho = 0; // Modified in BlueRay casting
+    public static double distanceFromWallEchoDenom = 0; // Modified in BlueRay casting
+    public static int reverbStrength = 0; // Modified in BlueRay casting
+    public static int reverbDenom = 0; // used in reverbStrength/reverbDenom (total)
+    public static int outdoorLeak;
+    public static int outdoorLeakDenom;
     // Sound RayData
     private static Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
     public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
@@ -132,29 +135,29 @@ public class RaycastingHelper {
 
             queueSound(newSound,avgData.soundEntity.getDistance());
 
-            // echo logic
-            System.out.println(echoFac);
-            echoFac.remove(0); // we don't care about instant echos
-            for(Integer i : echoFac.keySet()) {
-                float echoVolume = (float) (adjustedVolume * Math.min(1,((double) echoFac.get(i) / ((RAYS_CAST*MAX_BOUNCES)/2.0))));
-                System.out.println(adjustedVolume);
-                RedPositionedSoundInstance echoSound = new RedPositionedSoundInstance(
-                        soundId,                                    // Sound identifier
-                        originalSound.getCategory(),                // Sound category
-                        Math.max(0.01f, Math.min(1.0f, echoVolume)),  // Clamp volume between 0-1
-                        Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
-                        SoundInstance.createRandom(),                           // Random instance
-                        originalSound.isRepeatable(),
-                        originalSound.getRepeatDelay(),              // Repeat delay
-                        originalSound.getAttenuationType(),
-                        (float) targetPosition.x,                   // X position
-                        (float) targetPosition.y,                   // Y position
-                        (float) targetPosition.z,                   // Z position
-                        originalSound.isRelative()                  // Relative positioning
-                );
-
-                queueSound(echoSound,avgData.soundEntity.getDistance(),i);
-            }
+            // echo logic (DEPRECATED)
+            System.out.println(distanceFromWallEcho + ", " + reverbStrength);
+//            echoFac.remove(0); // we don't care about instant echos
+//            for(Integer i : echoFac.keySet()) {
+//                float echoVolume = (float) (adjustedVolume * Math.min(1,((double) echoFac.get(i) / ((RAYS_CAST*MAX_BOUNCES)/2.0))));
+//                System.out.println(adjustedVolume);
+//                RedPositionedSoundInstance echoSound = new RedPositionedSoundInstance(
+//                        soundId,                                    // Sound identifier
+//                        originalSound.getCategory(),                // Sound category
+//                        Math.max(0.01f, Math.min(1.0f, echoVolume)),  // Clamp volume between 0-1
+//                        Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
+//                        SoundInstance.createRandom(),                           // Random instance
+//                        originalSound.isRepeatable(),
+//                        originalSound.getRepeatDelay(),              // Repeat delay
+//                        originalSound.getAttenuationType(),
+//                        (float) targetPosition.x,                   // X position
+//                        (float) targetPosition.y,                   // Y position
+//                        (float) targetPosition.z,                   // Z position
+//                        originalSound.isRelative()                  // Relative positioning
+//                );
+//
+//                queueSound(echoSound,avgData.soundEntity.getDistance(),i);
+//            }
 
             // Debug output
             System.out.println("Playing adjusted averaged sound: " + soundId.toString());
@@ -181,7 +184,13 @@ public class RaycastingHelper {
     public static Map<SoundData, AveragedSoundData> processRaysWithAveraging(World world, PlayerEntity player,
                                                                              Vec3d playerEyePos, List<Vec3d> rayDirections,
                                                                              Queue<SoundData> nearbyEntities, double maxTotalDistance) {
-        echoFac.clear();
+        reverbStrength = 0;
+        distanceFromWallEcho = 0;
+        distanceFromWallEchoDenom = 0;
+        reverbDenom = 0;
+        outdoorLeak = 0;
+        outdoorLeakDenom = 0;
+//        echoFac.clear()
         // Cast all rays and collect hit data
         for (Vec3d direction : rayDirections) {
             RaycastResult res = castBouncingRay(world, player, playerEyePos, direction, nearbyEntities, maxTotalDistance);
@@ -284,32 +293,13 @@ public class RaycastingHelper {
                 castGreenRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
                 castBlueRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
             }
-            // Check for entity intersections along this segment
-            SoundData entityHit = checkRayEntityIntersection(currentPos, currentDirection, entities, actualEnd);
-
-            if (entityHit != null) {
-                // Calculate precise distance to entity
-                Vec3d entityCenter = entityHit.boundingBox.getCenter();
-                double distanceToEntity = currentPos.distanceTo(entityCenter);
-                totalDistanceTraveled = totalDistanceTraveled - segmentTraveled + distanceToEntity;
-
-                // Increment ray hit count for this entity
-                entityRayHitCounts.put(entityHit, entityRayHitCounts.getOrDefault(entityHit, 0) + 1);
-                
-                // Draw line to the detected entity and stop this ray
-//                drawEntityDetectionLine(world, currentPos, entityCenter);
-//                drawBouncingRaySegment(world, currentPos, entityCenter, bounce);
-
-                hitEntity = entityHit;
-                rayCompleted = true;
-                break;
-            }
 
             // Draw this segment
 //            drawBouncingRaySegment(world, currentPos, actualEnd, bounce);
 
             // If we hit a block, calculate bounce
             if (hitBlock) {
+                outdoorLeakDenom += 1;
                 Vec3d hitPos = blockHit.getPos();
                 Direction hitSide = blockHit.getSide();
 
@@ -324,6 +314,9 @@ public class RaycastingHelper {
                 remainingDistance -= segmentTraveled;
             } else {
                 // Ray reached maximum segment length without hitting anything
+                reverbDenom += (MAX_BOUNCES-bounce);
+                outdoorLeak += (MAX_BOUNCES-bounce);
+                outdoorLeakDenom += (MAX_BOUNCES-bounce);
                 rayCompleted = true;
                 break;
             }
@@ -336,8 +329,7 @@ public class RaycastingHelper {
     private static void castGreenRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
         // Cast rays directly towards each sound source to check line of sight
         for (SoundData soundEntity : entities) {
-            Vec3d entityCenter = soundEntity.boundingBox.getCenter();
-            Vec3d directionToEntity = entityCenter.subtract(currentPos).normalize();
+            Vec3d entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
 
             // Create raycast context for line of sight check
@@ -404,11 +396,14 @@ public class RaycastingHelper {
         // Check if we have line of sight (no block hit or hit is beyond the entity)
         boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
                 currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 0.6;
-
+        reverbDenom += 1;
         if (hasLineOfSight) {
-            int timeDelay = (int) Math.floor(currentDistance / SPEED_OF_SOUND_TICKS);
-            echoFac.putIfAbsent(timeDelay,0);
-            echoFac.put(timeDelay,echoFac.get(timeDelay)+1);
+//            int timeDelay = (int) Math.floor(currentDistance * SPEED_OF_SOUND_MS);
+            distanceFromWallEcho += currentDistance; // average
+            distanceFromWallEchoDenom += 1;
+            reverbStrength += 1; // get the MAXIMUM amount of reverb possible
+//            echoFac.putIfAbsent(timeDelay,0);
+//            echoFac.put(timeDelay,echoFac.get(timeDelay)+1);
 
             // Draw Blue ray visualization
 //            drawBlueRay(world, currentPos, entityCenter);
@@ -454,60 +449,6 @@ public class RaycastingHelper {
         // Where I is incident vector, N is normal, R is reflected vector
         double dotProduct = incident.dotProduct(normal);
         return incident.subtract(normal.multiply(2 * dotProduct));
-    }
-
-    public static SoundData checkRayEntityIntersection(Vec3d rayStart, Vec3d rayDirection, Queue<SoundData> entities, Vec3d rayEnd) {
-        SoundData closestEntity = null;
-        double closestDistance = Double.MAX_VALUE;
-        double maxDistance = rayStart.distanceTo(rayEnd);
-
-        for (SoundData entity : entities) {
-            Box entityBounds = entity.boundingBox;
-
-            // Calculate intersection with entity's bounding box
-            double[] tValues = new double[6];
-            tValues[0] = (entityBounds.minX - rayStart.x) / rayDirection.x; // Left face
-            tValues[1] = (entityBounds.maxX - rayStart.x) / rayDirection.x; // Right face
-            tValues[2] = (entityBounds.minY - rayStart.y) / rayDirection.y; // Bottom face
-            tValues[3] = (entityBounds.maxY - rayStart.y) / rayDirection.y; // Top face
-            tValues[4] = (entityBounds.minZ - rayStart.z) / rayDirection.z; // Front face
-            tValues[5] = (entityBounds.maxZ - rayStart.z) / rayDirection.z; // Back face
-
-            // Find the entry and exit points
-            double tNear = Double.NEGATIVE_INFINITY;
-            double tFar = Double.POSITIVE_INFINITY;
-
-            boolean intersects = true;
-            for (int i = 0; i < 3; i++) {
-                double t1 = tValues[i * 2];
-                double t2 = tValues[i * 2 + 1];
-
-                if (Double.isInfinite(t1) || Double.isInfinite(t2)) {
-                    continue;
-                }
-
-                if (t1 > t2) {
-                    double temp = t1;
-                    t1 = t2;
-                    t2 = temp;
-                }
-
-                tNear = Math.max(tNear, t1);
-                tFar = Math.min(tFar, t2);
-
-                if (tNear > tFar || tFar < 0) {
-                    intersects = false;
-                    break;
-                }
-            }
-
-            if (intersects && tNear >= 0 && tNear <= maxDistance && tNear < closestDistance) {
-                closestDistance = tNear;
-                closestEntity = entity;
-            }
-        }
-
-        return closestEntity;
     }
 
     public static void drawBouncingRaySegment(World world, Vec3d start, Vec3d end, int bounceCount) {
@@ -570,8 +511,8 @@ public class RaycastingHelper {
                 int rayCount = entry.getValue();
 
                 // Display the count above the entity
-                Vec3d entityPos = entity.boundingBox.getCenter();
-                Vec3d displayPos = entityPos.add(0, entity.boundingBox.getLengthY() / 2 + 0.5, 0);
+                Vec3d entityPos = entity.position;
+                Vec3d displayPos = entityPos.add(0, entity.position.y, 0);
 
                 // Print to console for debugging
                 String entityName = entity.soundId;
