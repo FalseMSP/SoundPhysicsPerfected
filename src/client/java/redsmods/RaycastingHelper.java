@@ -1,5 +1,6 @@
 package redsmods;
 
+import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.entity.player.PlayerEntity;
@@ -7,6 +8,7 @@ import net.minecraft.particle.ParticleTypes;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
@@ -292,8 +294,8 @@ public class RaycastingHelper {
             if (hitBlock) {
                 castGreenRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
                 castBlueRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
+                castRedRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
             }
-
             // Draw this segment
 //            drawBouncingRaySegment(world, currentPos, actualEnd, bounce);
 
@@ -375,7 +377,7 @@ public class RaycastingHelper {
     }
 
     private static void castBlueRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
-        // Cast rays directly towards each sound source to check line of sight
+        // Cast rays directly towards player to check line of sight
         Vec3d entityCenter = player.getBoundingBox().getCenter();
 
         // get currentPos out of a block
@@ -408,6 +410,82 @@ public class RaycastingHelper {
             // Draw Blue ray visualization
 //            drawBlueRay(world, currentPos, entityCenter);
         }
+    }
+
+    private static void castRedRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
+        // Cast rays directly towards each sound source to check how many blocks are between the sources.
+        for (SoundData soundEntity : entities) {
+            Vec3d entityCenter = soundEntity.position;
+            double distanceToEntity = currentPos.distanceTo(entityCenter);
+
+            // Count blocks between player and sound source
+            int blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
+
+            // You can now use blockCount for your calculations
+            // For example, apply attenuation based on number of blocks:
+            double blockAttenuation = Math.pow(0.8, blockCount); // Each block reduces sound by 20%
+
+            // Calculate weight based on distance and block count
+            double weight = blockAttenuation / (Math.max(distanceToEntity + currentDistance, 0.1) * Math.max(distanceToEntity + currentDistance, 0.1));
+
+            // Create ray result with block count information
+            RaycastResult rayResult = new RaycastResult(
+                    distanceToEntity,
+                    initalDirection,
+                    soundEntity,
+                    entityCenter,
+                    blockCount == 0 // true if no blocks in between
+            );
+
+            RayHitData hitData = new RayHitData(rayResult, initalDirection, weight);
+
+            // Add to rayHitsByEntity map
+            rayHitsByEntity.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
+
+            // Increment ray hit count for this entity
+            entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
+
+            // Optional: Log block count for debugging
+            // System.out.println("Blocks between player and " + soundEntity + ": " + blockCount);
+        }
+    }
+
+    private static int countBlocksBetween(World world, Vec3d start, Vec3d end, PlayerEntity player) {
+        int blockCount = 0;
+        Vec3d direction = end.subtract(start).normalize();
+        double totalDistance = start.distanceTo(end);
+        double stepSize = 0.5; // Check every 0.5 blocks for accuracy
+
+        for (double distance = stepSize; distance < totalDistance; distance += stepSize) {
+            Vec3d currentPos = start.add(direction.multiply(distance));
+            BlockPos blockPos = new BlockPos((int)Math.floor(currentPos.x),
+                    (int)Math.floor(currentPos.y),
+                    (int)Math.floor(currentPos.z));
+
+            BlockState blockState = world.getBlockState(blockPos);
+
+            // Check if the block is solid and not air
+            if (!blockState.isAir() && blockState.isSolidBlock(world, blockPos)) {
+                // Create a small raycast to check if this specific block actually blocks the path
+                Vec3d blockCenter = Vec3d.ofCenter(blockPos);
+                RaycastContext raycastContext = new RaycastContext(
+                        start,
+                        blockCenter,
+                        RaycastContext.ShapeType.COLLIDER,
+                        RaycastContext.FluidHandling.NONE,
+                        player
+                );
+
+                BlockHitResult hit = world.raycast(raycastContext);
+                if (hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(blockPos)) {
+                    blockCount++;
+                    // Skip ahead to avoid counting the same block multiple times
+                    distance += 1.0;
+                }
+            }
+        }
+
+        return blockCount;
     }
 
     public static void drawGreenRay (World world, Vec3d start, Vec3d end){
