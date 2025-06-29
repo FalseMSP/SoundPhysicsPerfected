@@ -1,5 +1,6 @@
 package redsmods.mixin.client;
 
+import net.fabricmc.fabric.mixin.client.rendering.AtlasSourceManagerAccessor;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.*;
 import net.minecraft.text.Text;
@@ -19,7 +20,9 @@ import redsmods.RedPositionedSoundInstance;
 import redsmods.RedSoundInstance;
 import redsmods.SoundData;
 
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Queue;
 
 import static java.lang.Math.clamp;
 import static org.joml.Math.lerp;
@@ -37,6 +40,8 @@ public class SoundSystemMixin {
     private static int reverbEffect = 0;
     private static int sendFilter = 0;
     private static boolean efxInitialized = false;
+
+    private static final Queue<SoundInstance> FXQueue = new LinkedList<>();
 
     @Shadow
     private SoundManager loader;
@@ -94,6 +99,7 @@ public class SoundSystemMixin {
                 ci.cancel();
             } else if (sound instanceof RedPositionedSoundInstance) {
                 // do something to post-proc sounds ig maybe if u want :p
+                FXQueue.add(sound);
             }
         } catch (Exception e) {
             // Log error but don't crash
@@ -115,15 +121,19 @@ public class SoundSystemMixin {
 
         if (!efxInitialized) return; // Skip if initialization failed
 
-        updateActiveSources(); // Brute force reverb to ALL sounds
         if (paused) {
             return;
         }
+        while(!FXQueue.isEmpty()) {
+            SoundInstance sound = FXQueue.poll();
+            Channel.SourceManager manager = sources.get(sound);
+            SourceManagerAccessor accessor = (SourceManagerAccessor) manager;
+            Source source = accessor.getSource();
+            int id = ((SourceAccessor) source).getPointer();
+            System.out.println("Accessor Source: " + id);
+        }
 
-
-
-        // You'll need to create another accessor for SoundSystem to access its playing sounds
-        // This approach is different from the original because the structure changed
+        updateActiveSources(); // Brute force reverb to ALL sounds
     }
 
     @Inject(method = "stop(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("TAIL"))
@@ -214,6 +224,7 @@ public class SoundSystemMixin {
                     int state = AL10.alGetSourcei(sourceId, AL10.AL_SOURCE_STATE);
                     if (state == AL10.AL_PLAYING || state == AL10.AL_PAUSED) {
                         applyReverbToSource(sourceId);
+                        System.out.println("Source ID: " + sourceId);
                     }
                 }
             }
@@ -275,7 +286,6 @@ public class SoundSystemMixin {
 
             if (outdoorLeakPercent < 0.95)
                 AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);        } catch (Exception e) {
-            // Ignore errors to prevent crashes
         }
     }
 }

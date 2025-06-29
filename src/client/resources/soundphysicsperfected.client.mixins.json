@@ -1,15 +1,17 @@
 {
-	"required": true,
-	"package": "redsmods.mixin.client",
-	"compatibilityLevel": "JAVA_21",
-	"client": [
-		"PlayerEntityMixin",
-		"SoundSystemMixin"
-	],
-	"injectors": {
-		"defaultRequire": 1
-	},
-	"mixins": [
-		"SoundEventMixin"
+  "required": true,
+  "package": "redsmods.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "PlayerEntityMixin",
+    "SoundSystemMixin",
+    "SourceAccessor",
+    "SourceManagerAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "mixins": [
+    "SoundEventMixin"
 	]
 }
