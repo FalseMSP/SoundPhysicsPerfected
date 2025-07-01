@@ -25,6 +25,10 @@ public class RedSoundInstance implements SoundInstance {
         return original.getId();
     }
 
+    public SoundInstance getOriginal() {
+        return original;
+    }
+
     @Override
     public @Nullable WeightedSoundSet getSoundSet(SoundManager soundManager) {
         return original.getSoundSet(soundManager);

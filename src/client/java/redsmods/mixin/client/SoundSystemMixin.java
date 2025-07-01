@@ -13,24 +13,24 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
-import redsmods.RaycastingHelper;
-import redsmods.RedPositionedSoundInstance;
-import redsmods.RedSoundInstance;
-import redsmods.SoundData;
+import redsmods.*;
 
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static java.lang.Math.clamp;
 import static org.joml.Math.lerp;
 import static org.lwjgl.openal.EXTEfx.*;
-import static redsmods.RaycastingHelper.soundQueue;
+import static redsmods.RaycastingHelper.*;
 
 @Mixin(SoundSystem.class)
-public class SoundSystemMixin {
+public abstract class SoundSystemMixin {
 
     private static final int MAX_SOUNDS = 100; // Limit queue size to prevent memory issues
 
@@ -50,6 +50,8 @@ public class SoundSystemMixin {
 
 //    @Shadow @Final private SoundEngine soundEngine;
 
+    @Shadow public abstract void stop();
+
     @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
     private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
         if (!efxInitialized) {
@@ -66,7 +68,7 @@ public class SoundSystemMixin {
 
         try {
             WeightedSoundSet weightedSoundSet = sound.getSoundSet(this.loader); // load pitches and whatnot into the sound data
-            if (!(sound instanceof RedPositionedSoundInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE && !sound.isRepeatable()) { // !replayList.contains(redSoundData)
+            if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE && !sound.isRepeatable()) { // !replayList.contains(redSoundData)
                 // Get sound coordinates
                 double soundX = sound.getX();
                 double soundY = sound.getY();
@@ -83,10 +85,11 @@ public class SoundSystemMixin {
                 // Add to queue
                 soundQueue.offer(soundData);
 
-                // Remove oldest sounds if queue is too large
+                // Remove the oldest sounds if queue is too large
                 while (soundQueue.size() > MAX_SOUNDS) {
                     soundQueue.poll();
                 }
+
 
                 // Get player position for debug message
                 Vec3d playerPos = client.player.getEyePos();
@@ -140,9 +143,24 @@ public class SoundSystemMixin {
         updateActiveSources(); // Brute force reverb to ALL sounds
     }
 
-    @Inject(method = "stop(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("TAIL"))
-    private void onSoundStop(SoundInstance sound, CallbackInfo ci) {
+    @ModifyVariable(method = "stop(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), argsOnly = true)
+    private SoundInstance modifySoundParameter(SoundInstance sound) {
+        if (!efxInitialized) return sound; // fx aren't init, most likely permeation isn't playing
+        System.out.println("Stop called for: " + sound.getSound().getLocation());
         soundQueue.remove(sound);
+        SoundInstance customSound = soundInstanceMap.get(sound);
+        SoundInstance soundPermeation = soundPermInstanceMap.get(sound);
+        soundInstanceMap.remove(sound);
+        soundPermInstanceMap.remove(sound);
+
+        // remove the permeation manually before using the default stop method
+        Channel.SourceManager sourceManager = sources.get(soundPermeation);
+        if (sourceManager != null) {
+            sourceManager.run(Source::stop);
+        }
+
+        // Return the custom sound if it exists, otherwise return the original
+        return customSound != null ? customSound : sound;
     }
 
     // Add method to clean up orphaned sounds

@@ -3,6 +3,7 @@ package redsmods;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.SoundInstance;
+import net.minecraft.client.sound.TickableSoundInstance;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.util.Identifier;
@@ -15,6 +16,7 @@ import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RaycastingHelper {
     /*
@@ -33,7 +35,7 @@ public class RaycastingHelper {
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
     private static final double SPEED_OF_SOUND_TICKS = 17.15; // 17.15 blocks per gametick
-    private static final Map<Integer,ArrayList<RedPositionedSoundInstance>> soundPlayingWaiting = new HashMap<>();
+    private static final Map<Integer,ArrayList<SoundInstance>> soundPlayingWaiting = new HashMap<>();
     private static int ticksSinceWorld;
 //    public static Map<Integer,Integer> echoFac = new HashMap<>();
     public static double distanceFromWallEcho = 0; // Modified in BlueRay casting
@@ -45,7 +47,9 @@ public class RaycastingHelper {
     // Sound RayData
     private static final Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
     private static Map<SoundData, List<RayHitData>> redRaysToTarget = new HashMap<>();
-    private static final Map<SoundData, AveragedSoundData> muffledAveragedResults = new HashMap<>();;
+    private static final Map<SoundData, AveragedSoundData> muffledAveragedResults = new HashMap<>();
+    public static final Map<SoundInstance, SoundInstance> soundInstanceMap = new ConcurrentHashMap<>();
+    public static final Map<SoundInstance, SoundInstance> soundPermInstanceMap = new ConcurrentHashMap<>();
 
     public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
         try {
@@ -74,6 +78,7 @@ public class RaycastingHelper {
             while (!soundQueue.isEmpty()) { // iterate through soundQueue
                 soundQueue.poll();
             }
+
         } catch (Exception e) {
             System.err.println("Error in player bouncing ray entity detection: " + e.getMessage());
         }
@@ -99,7 +104,7 @@ public class RaycastingHelper {
         }
 
         for (AveragedSoundData avgData : muffledAveragedResults.values()) {
-            playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 0.1f, 1f);
+            playMuffled(client, avgData, playerEyePos, 0.1f, 1f);
         }
     }
     // Advanced method with volume and pitch adjustment based on confidence
@@ -125,23 +130,27 @@ public class RaycastingHelper {
             // Calculate adjusted pitch
             float basePitch = originalSound.getPitch();
             float adjustedPitch = basePitch * pitchMultiplier;
-
+            SoundInstance newSound;
             // Create positioned sound with adjustments
-            RedPositionedSoundInstance newSound = new RedPositionedSoundInstance(
-                    soundId,                                    // Sound identifier
-                    originalSound.getCategory(),                // Sound category
-                    Math.max(0.01f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
-                    Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
-                    SoundInstance.createRandom(),                           // Random instance
-                    originalSound.isRepeatable(),
-                    originalSound.getRepeatDelay(),              // Repeat delay
-                    originalSound.getAttenuationType(),
-                    (float) targetPosition.x,                   // X position
-                    (float) targetPosition.y,                   // Y position
-                    (float) targetPosition.z,                   // Z position
-                    originalSound.isRelative()                  // Relative positioning
-            );
-
+            if (originalSound.getOriginal() instanceof TickableSoundInstance) {
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound);
+            } else {
+                newSound = new RedPositionedSoundInstance(
+                        soundId,                                    // Sound identifier
+                        originalSound.getCategory(),                // Sound category
+                        Math.max(0.01f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
+                        Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
+                        SoundInstance.createRandom(),                           // Random instance
+                        originalSound.isRepeatable(),
+                        originalSound.getRepeatDelay(),              // Repeat delay
+                        originalSound.getAttenuationType(),
+                        (float) targetPosition.x,                   // X position
+                        (float) targetPosition.y,                   // Y position
+                        (float) targetPosition.z,                   // Z position
+                        originalSound.isRelative()                  // Relative positioning
+                );
+            }
+            soundInstanceMap.put(originalSound.getOriginal(),newSound);
             if (adjustedVolume <= 0.01)
                 return;
 
@@ -162,9 +171,7 @@ public class RaycastingHelper {
             System.err.println("Error playing adjusted averaged sound: " + e.getMessage());
         }
     }
-
-    // Advanced method with volume and pitch adjustment based on confidence
-    public static void playMuffledSound(MinecraftClient client, AveragedSoundData avgData, Vec3d playerPos,
+    public static void playMuffled(MinecraftClient client, AveragedSoundData avgData, Vec3d playerPos,
                                                         float volumeMultiplier, float pitchMultiplier) {
         if (client == null || client.world == null || avgData == null) {
             return;
@@ -186,42 +193,37 @@ public class RaycastingHelper {
             // Calculate adjusted pitch
             float basePitch = originalSound.getPitch();
             float adjustedPitch = basePitch * pitchMultiplier;
-
+            SoundInstance newSound;
             // Create positioned sound with adjustments
-            RedPositionedSoundInstance newSound = new RedPositionedSoundInstance(
-                    soundId,                                    // Sound identifier
-                    originalSound.getCategory(),                // Sound category
-                    Math.max(0.01f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
-                    Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
-                    SoundInstance.createRandom(),                           // Random instance
-                    originalSound.isRepeatable(),
-                    originalSound.getRepeatDelay(),              // Repeat delay
-                    originalSound.getAttenuationType(),
-                    (float) targetPosition.x,                   // X position
-                    (float) targetPosition.y,                   // Y position
-                    (float) targetPosition.z,                   // Z position
-                    originalSound.isRelative()                  // Relative positioning
-            );
-
+            if (originalSound.getOriginal() instanceof TickableSoundInstance) {
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound);
+            } else {
+                newSound = new RedPositionedSoundInstance(
+                        soundId,                                    // Sound identifier
+                        originalSound.getCategory(),                // Sound category
+                        Math.max(0.01f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
+                        Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
+                        SoundInstance.createRandom(),                           // Random instance
+                        originalSound.isRepeatable(),
+                        originalSound.getRepeatDelay(),              // Repeat delay
+                        originalSound.getAttenuationType(),
+                        (float) targetPosition.x,                   // X position
+                        (float) targetPosition.y,                   // Y position
+                        (float) targetPosition.z,                   // Z position
+                        originalSound.isRelative()                  // Relative positioning
+                );
+            }
+            soundPermInstanceMap.put(originalSound.getOriginal(),newSound);
             if (adjustedVolume <= 0.01)
                 return;
 
-            queueSound(newSound,avgData.soundEntity.getDistance());
-
-            // Debug output
-            System.out.println("Playing adjusted averaged sound: " + soundId.toString());
-            System.out.println("  Volume: " + String.format("%.3f", adjustedVolume) + " (original: " + String.format("%.3f", baseVolume) + ")");
-            System.out.println("  Pitch: " + String.format("%.3f", adjustedPitch) + " (original: " + String.format("%.3f", basePitch) + ")");
-            System.out.println("  Confidence: " + String.format("%.3f", confidenceMultiplier));
-            System.out.println("  Distance: " + avgData.soundEntity.getDistance() + " ");
-            System.out.println("  x: " + targetPosition.getX() + "  y: " + targetPosition.getY() + "  z: " + targetPosition.getZ());
-
+            queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
         } catch (Exception e) {
             System.err.println("Error playing adjusted averaged sound: " + e.getMessage());
         }
     }
 
-    private static void queueSound(RedPositionedSoundInstance newSound, int distance) {
+    private static void queueSound(SoundInstance newSound, int distance) {
         soundPlayingWaiting.computeIfAbsent((distance) + ticksSinceWorld + 1, k -> new ArrayList<>()).add(newSound);
     }
 
@@ -687,8 +689,8 @@ public class RaycastingHelper {
             return;
 
         MinecraftClient client = MinecraftClient.getInstance();
-        ArrayList<RedPositionedSoundInstance> sound = soundPlayingWaiting.get((Integer) ticksSinceWorld);
-        for (RedPositionedSoundInstance newSound : sound)
+        ArrayList<SoundInstance> sound = soundPlayingWaiting.get((Integer) ticksSinceWorld);
+        for (SoundInstance newSound : sound)
             client.getSoundManager().play(newSound);
         soundPlayingWaiting.remove(tsw);
     }
