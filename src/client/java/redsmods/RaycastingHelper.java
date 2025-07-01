@@ -103,8 +103,10 @@ public class RaycastingHelper {
             playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.8f, 1.0f);
         }
 
+        System.out.println("Processing " + muffledAveragedResults.size() + " muffled sounds:");
+
         for (AveragedSoundData avgData : muffledAveragedResults.values()) {
-            playMuffled(client, avgData, playerEyePos, 0.1f, 1f);
+            playMuffled(client, avgData, playerEyePos, 0.6f, 1f);
         }
     }
     // Advanced method with volume and pitch adjustment based on confidence
@@ -198,7 +200,7 @@ public class RaycastingHelper {
             if (originalSound.getOriginal() instanceof TickableSoundInstance) {
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound);
             } else {
-                newSound = new RedPositionedSoundInstance(
+                newSound = new RedPermeatedSoundInstance(
                         soundId,                                    // Sound identifier
                         originalSound.getCategory(),                // Sound category
                         Math.max(0.01f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
@@ -218,6 +220,13 @@ public class RaycastingHelper {
                 return;
 
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
+
+            System.out.println("Playing muffled averaged sound: " + soundId.toString());
+            System.out.println("  Volume: " + String.format("%.3f", adjustedVolume) + " (original: " + String.format("%.3f", baseVolume) + ")");
+            System.out.println("  Pitch: " + String.format("%.3f", adjustedPitch) + " (original: " + String.format("%.3f", basePitch) + ")");
+            System.out.println("  Confidence: " + String.format("%.3f", confidenceMultiplier));
+            System.out.println("  Distance: " + avgData.soundEntity.getDistance() + " ");
+            System.out.println("  x: " + targetPosition.getX() + "  y: " + targetPosition.getY() + "  z: " + targetPosition.getZ());
         } catch (Exception e) {
             System.err.println("Error playing adjusted averaged sound: " + e.getMessage());
         }
@@ -320,6 +329,9 @@ public class RaycastingHelper {
 
         SoundData hitEntity = null;
         boolean rayCompleted = false;
+
+        castGreenRay(world, player, startPos, entities, totalDistanceTraveled, initialDirection);
+        castRedRay(world, player, startPos, entities, totalDistanceTraveled, initialDirection);
 
         for (int bounce = 0; bounce <= MAX_BOUNCES && remainingDistance > 0; bounce++) {
             double segmentDistance = Math.min(RAY_SEGMENT_LENGTH, remainingDistance);
@@ -476,17 +488,16 @@ public class RaycastingHelper {
         for (SoundData soundEntity : entities) {
             Vec3d entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
-            if (distanceToEntity + currentDistance > SPEED_OF_SOUND_TICKS || distanceToEntity > SPEED_OF_SOUND_TICKS)
-                continue;
+//            if (distanceToEntity + currentDistance > SPEED_OF_SOUND_TICKS || distanceToEntity > SPEED_OF_SOUND_TICKS)
+//                continue;
 
             // Count blocks between player and sound source
             int blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
             if (blockCount == 0) // so green and red rays don't overlap
                 continue;
 
-            // You can now use blockCount for your calculations
-            // For example, apply attenuation based on number of blocks:
-            double blockAttenuation = Math.pow(0.5, blockCount); // Each block reduces sound by 70%
+            // apply attenuation based on number of blocks:
+            double blockAttenuation = Math.pow(0.4, blockCount); // Each block reduces sound by 60%
 
             // Calculate weight based on distance and block count
             double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
@@ -527,7 +538,7 @@ public class RaycastingHelper {
             BlockState blockState = world.getBlockState(blockPos);
 
             // Check if the block is solid and not air
-            if (!blockState.isAir() && blockState.isSolidBlock(world, blockPos)) {
+            if (!blockState.isAir()) {
                 // Create a small raycast to check if this specific block actually blocks the path
                 Vec3d blockCenter = Vec3d.ofCenter(blockPos);
                 RaycastContext raycastContext = new RaycastContext(

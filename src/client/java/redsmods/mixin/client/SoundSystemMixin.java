@@ -38,6 +38,7 @@ public abstract class SoundSystemMixin {
 
     private static int auxFXSlot = 0;
     private static int reverbEffect = 0;
+    private static int muffleFilter = 0;
     private static int sendFilter = 0;
     private static boolean efxInitialized = false;
 
@@ -68,7 +69,7 @@ public abstract class SoundSystemMixin {
 
         try {
             WeightedSoundSet weightedSoundSet = sound.getSoundSet(this.loader); // load pitches and whatnot into the sound data
-            if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE && !sound.isRepeatable()) { // !replayList.contains(redSoundData)
+            if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance || sound instanceof RedPermeatedSoundInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE && !sound.isRepeatable()) { // !replayList.contains(redSoundData)
                 // Get sound coordinates
                 double soundX = sound.getX();
                 double soundY = sound.getY();
@@ -100,7 +101,7 @@ public abstract class SoundSystemMixin {
                         soundId, coordinates, distanceStr, soundQueue.size());
                 client.player.sendMessage(Text.literal(message), true);
                 ci.cancel();
-            } else if (sound instanceof RedPositionedSoundInstance) {
+            } else if (sound instanceof RedPermeatedSoundInstance) {
                 // do something to post-proc sounds ig maybe if u want :p
                 FXQueue.add(sound);
             }
@@ -134,6 +135,7 @@ public abstract class SoundSystemMixin {
                 SourceManagerAccessor accessor = (SourceManagerAccessor) manager;
                 Source source = accessor.getSource();
                 int id = ((SourceAccessor) source).getPointer();
+                applyMuffleToSource(id,1f);
                 //            System.out.println("Accessor Source: " + id);
             } catch (Exception e) {
                 System.out.println("sourceID is invalid for a sound, non-issue");
@@ -193,6 +195,9 @@ public abstract class SoundSystemMixin {
             // Create reverb effect
             reverbEffect = EXTEfx.alGenEffects();
             EXTEfx.alEffecti(reverbEffect, EXTEfx.AL_EFFECT_TYPE, EXTEfx.AL_EFFECT_EAXREVERB);
+
+            muffleFilter = EXTEfx.alGenFilters();
+            EXTEfx.alFilteri(muffleFilter, EXTEfx.AL_FILTER_TYPE, EXTEfx.AL_FILTER_LOWPASS);
 
             // Create send filter
             sendFilter = EXTEfx.alGenFilters();
@@ -318,6 +323,28 @@ public abstract class SoundSystemMixin {
                 AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);        } catch (Exception e) {
         }
     }
+
+    private static void applyMuffleToSource(int sourceId, float muffleStrength) {
+        try {
+            // Clamp muffle strength between 0.0 (no muffling) and 1.0 (maximum muffling)
+            muffleStrength = clamp(muffleStrength, 0.0f, 1.0f);
+
+            // Calculate filter parameters based on muffle strength
+            float lowpassGain = lerp(1.0f, 0.2f, muffleStrength);     // Overall volume reduction
+            float lowpassGainHF = lerp(1.0f, 0.1f, muffleStrength);   // High frequency attenuation
+
+            // Apply low-pass filter (main muffling effect)
+            if (muffleFilter != -1) {
+                EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAIN, lowpassGain);
+                EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAINHF, lowpassGainHF);
+                AL11.alSourcei(sourceId, EXTEfx.AL_DIRECT_FILTER, muffleFilter);
+            }
+
+        } catch (Exception e) {
+            // Handle errors silently like the original function
+        }
+    }
+
     private static void debugSourceCount() {
         int sourcesInUse = 0;
         for (int i = 1; i < 1000; i++) { // Check first 1000 IDs
