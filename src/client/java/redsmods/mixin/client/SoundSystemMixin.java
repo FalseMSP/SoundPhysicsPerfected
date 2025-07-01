@@ -125,12 +125,16 @@ public class SoundSystemMixin {
             return;
         }
         while(!FXQueue.isEmpty()) {
-            SoundInstance sound = FXQueue.poll();
-            Channel.SourceManager manager = sources.get(sound);
-            SourceManagerAccessor accessor = (SourceManagerAccessor) manager;
-            Source source = accessor.getSource();
-            int id = ((SourceAccessor) source).getPointer();
-            System.out.println("Accessor Source: " + id);
+            try {
+                SoundInstance sound = FXQueue.poll();
+                Channel.SourceManager manager = sources.get(sound);
+                SourceManagerAccessor accessor = (SourceManagerAccessor) manager;
+                Source source = accessor.getSource();
+                int id = ((SourceAccessor) source).getPointer();
+                //            System.out.println("Accessor Source: " + id);
+            } catch (Exception e) {
+                System.out.println("sourceID is invalid for a sound, non-issue");
+            }
         }
 
         updateActiveSources(); // Brute force reverb to ALL sounds
@@ -224,7 +228,7 @@ public class SoundSystemMixin {
                     int state = AL10.alGetSourcei(sourceId, AL10.AL_SOURCE_STATE);
                     if (state == AL10.AL_PLAYING || state == AL10.AL_PAUSED) {
                         applyReverbToSource(sourceId);
-                        System.out.println("Source ID: " + sourceId);
+//                        System.out.println("Source ID: " + sourceId);
                     }
                 }
             }
@@ -241,7 +245,7 @@ public class SoundSystemMixin {
             float occlusionPercent = (float) RaycastingHelper.reverbStrength / RaycastingHelper.reverbDenom;
             float outdoorLeakPercent = (float) RaycastingHelper.outdoorLeak / RaycastingHelper.outdoorLeakDenom;
 
-            System.out.println(occlusionPercent +" " + wallDistance + " " + outdoorLeakPercent);
+//            System.out.println(occlusionPercent +" " + wallDistance + " " + outdoorLeakPercent);
 
             float distanceMeters     = clamp(wallDistance, 1.0f, 100.0f);
             occlusionPercent   = 1 - clamp(occlusionPercent+outdoorLeakPercent, 0.0f, 1.0f);

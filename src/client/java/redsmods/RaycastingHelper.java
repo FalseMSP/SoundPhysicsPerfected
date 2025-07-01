@@ -26,8 +26,8 @@ public class RaycastingHelper {
 
      */
 
-    private static final int RAYS_CAST = 1024; // 64000 is definitely not production number
-    private static final int MAX_BOUNCES = 15;
+    private static final int RAYS_CAST = 256; // 64000 is definitely not production number
+    private static final int MAX_BOUNCES = 4;
     private static final double RAY_SEGMENT_LENGTH = 256.0;
     private static final double SPEED_OF_SOUND_MS = 3;
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
@@ -43,7 +43,10 @@ public class RaycastingHelper {
     public static int outdoorLeak;
     public static int outdoorLeakDenom;
     // Sound RayData
-    private static Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
+    private static final Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
+    private static Map<SoundData, List<RayHitData>> redRaysToTarget = new HashMap<>();
+    private static final Map<SoundData, AveragedSoundData> muffledAveragedResults = new HashMap<>();;
+
     public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
         try {
             Vec3d playerEyePos = player.getEyePos();
@@ -62,6 +65,7 @@ public class RaycastingHelper {
             // Generate ray directions
             Vec3d[] rayDirections = RaycastingHelper.generateRayDirections();
             rayHitsByEntity.clear(); // clear list before every call
+            redRaysToTarget.clear(); // wow this was the issue? i feel like a real dumbass now D:
 
             processAndPlayAveragedSounds(world,player,playerEyePos,new ArrayList<>(Arrays.asList(rayDirections)),nearbyEntities,maxTotalDistance,client);
             // Display ray hit counts for detected sfx
@@ -83,7 +87,7 @@ public class RaycastingHelper {
         Map<SoundData, AveragedSoundData> averagedResults = processRaysWithAveraging(
                 world, player, playerEyePos, rayDirections, nearbyEntities, maxTotalDistance);
 
-        if (averagedResults.isEmpty()) {
+        if (averagedResults.isEmpty() && muffledAveragedResults.isEmpty()) {
 //            System.out.println("No sounds detected by raycasting");
             return;
         }
@@ -93,8 +97,11 @@ public class RaycastingHelper {
         for (AveragedSoundData avgData : averagedResults.values()) {
             playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.8f, 1.0f);
         }
-    }
 
+        for (AveragedSoundData avgData : muffledAveragedResults.values()) {
+            playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 0.1f, 1f);
+        }
+    }
     // Advanced method with volume and pitch adjustment based on confidence
     public static void playAveragedSoundWithAdjustments(MinecraftClient client, AveragedSoundData avgData, Vec3d playerPos,
                                                         float volumeMultiplier, float pitchMultiplier) {
@@ -135,31 +142,71 @@ public class RaycastingHelper {
                     originalSound.isRelative()                  // Relative positioning
             );
 
-            queueSound(newSound,avgData.soundEntity.getDistance());
+            if (adjustedVolume <= 0.01)
+                return;
+
+            queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
 
             // echo logic (DEPRECATED)
             System.out.println(distanceFromWallEcho + ", " + reverbStrength);
-//            echoFac.remove(0); // we don't care about instant echos
-//            for(Integer i : echoFac.keySet()) {
-//                float echoVolume = (float) (adjustedVolume * Math.min(1,((double) echoFac.get(i) / ((RAYS_CAST*MAX_BOUNCES)/2.0))));
-//                System.out.println(adjustedVolume);
-//                RedPositionedSoundInstance echoSound = new RedPositionedSoundInstance(
-//                        soundId,                                    // Sound identifier
-//                        originalSound.getCategory(),                // Sound category
-//                        Math.max(0.01f, Math.min(1.0f, echoVolume)),  // Clamp volume between 0-1
-//                        Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
-//                        SoundInstance.createRandom(),                           // Random instance
-//                        originalSound.isRepeatable(),
-//                        originalSound.getRepeatDelay(),              // Repeat delay
-//                        originalSound.getAttenuationType(),
-//                        (float) targetPosition.x,                   // X position
-//                        (float) targetPosition.y,                   // Y position
-//                        (float) targetPosition.z,                   // Z position
-//                        originalSound.isRelative()                  // Relative positioning
-//                );
-//
-//                queueSound(echoSound,avgData.soundEntity.getDistance(),i);
-//            }
+
+            // Debug output
+            System.out.println("Playing adjusted averaged sound: " + soundId.toString());
+            System.out.println("  Volume: " + String.format("%.3f", adjustedVolume) + " (original: " + String.format("%.3f", baseVolume) + ")");
+            System.out.println("  Pitch: " + String.format("%.3f", adjustedPitch) + " (original: " + String.format("%.3f", basePitch) + ")");
+            System.out.println("  Confidence: " + String.format("%.3f", confidenceMultiplier));
+            System.out.println("  Distance: " + avgData.soundEntity.getDistance() + " ");
+            System.out.println("  x: " + targetPosition.getX() + "  y: " + targetPosition.getY() + "  z: " + targetPosition.getZ());
+
+        } catch (Exception e) {
+            System.err.println("Error playing adjusted averaged sound: " + e.getMessage());
+        }
+    }
+
+    // Advanced method with volume and pitch adjustment based on confidence
+    public static void playMuffledSound(MinecraftClient client, AveragedSoundData avgData, Vec3d playerPos,
+                                                        float volumeMultiplier, float pitchMultiplier) {
+        if (client == null || client.world == null || avgData == null) {
+            return;
+        }
+
+        try {
+            // Calculate the target position
+            Vec3d targetPosition = playerPos.add(avgData.averageDirection.multiply(avgData.averageDistance));
+
+            // Get original sound properties
+            RedSoundInstance originalSound = avgData.soundEntity.sound;
+            Identifier soundId = originalSound.getId();
+
+            // Calculate adjusted volume based on ray count and weight (confidence-based)
+            float baseVolume = originalSound.getVolume();
+            float confidenceMultiplier = (float) Math.min(1.0, Math.log10(avgData.totalWeight + 1.0));
+            float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier;
+
+            // Calculate adjusted pitch
+            float basePitch = originalSound.getPitch();
+            float adjustedPitch = basePitch * pitchMultiplier;
+
+            // Create positioned sound with adjustments
+            RedPositionedSoundInstance newSound = new RedPositionedSoundInstance(
+                    soundId,                                    // Sound identifier
+                    originalSound.getCategory(),                // Sound category
+                    Math.max(0.01f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
+                    Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
+                    SoundInstance.createRandom(),                           // Random instance
+                    originalSound.isRepeatable(),
+                    originalSound.getRepeatDelay(),              // Repeat delay
+                    originalSound.getAttenuationType(),
+                    (float) targetPosition.x,                   // X position
+                    (float) targetPosition.y,                   // Y position
+                    (float) targetPosition.z,                   // Z position
+                    originalSound.isRelative()                  // Relative positioning
+            );
+
+            if (adjustedVolume <= 0.01)
+                return;
+
+            queueSound(newSound,avgData.soundEntity.getDistance());
 
             // Debug output
             System.out.println("Playing adjusted averaged sound: " + soundId.toString());
@@ -213,6 +260,7 @@ public class RaycastingHelper {
 
         // Calculate averages for each entity
         Map<SoundData, AveragedSoundData> averagedResults = new HashMap<>();
+        muffledAveragedResults.clear();
 
         for (Map.Entry<SoundData, List<RayHitData>> entry : rayHitsByEntity.entrySet()) {
             SoundData entity = entry.getKey();
@@ -220,6 +268,15 @@ public class RaycastingHelper {
 
             AveragedSoundData averagedData = calculateWeightedAverages(entity, rayHits);
             averagedResults.put(entity, averagedData);
+        }
+
+//        System.out.println(redRaysToTarget);
+        for (Map.Entry<SoundData, List<RayHitData>> entry : redRaysToTarget.entrySet()) {
+            SoundData entity = entry.getKey();
+            List<RayHitData> rayHits = entry.getValue();
+
+            AveragedSoundData averagedData = calculateWeightedAverages(entity, rayHits);
+            muffledAveragedResults.put(entity, averagedData);
         }
 
         return averagedResults;
@@ -347,7 +404,7 @@ public class RaycastingHelper {
 
             // Check if we have line of sight (no block hit or hit is beyond the entity)
             boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
-                    currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 0.6;
+                    currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 1;
 
             if (hasLineOfSight) {
                 // Calculate weight based on distance (closer = higher weight)
@@ -417,16 +474,20 @@ public class RaycastingHelper {
         for (SoundData soundEntity : entities) {
             Vec3d entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
+            if (distanceToEntity + currentDistance > SPEED_OF_SOUND_TICKS || distanceToEntity > SPEED_OF_SOUND_TICKS)
+                continue;
 
             // Count blocks between player and sound source
             int blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
+            if (blockCount == 0) // so green and red rays don't overlap
+                continue;
 
             // You can now use blockCount for your calculations
             // For example, apply attenuation based on number of blocks:
-            double blockAttenuation = Math.pow(0.8, blockCount); // Each block reduces sound by 20%
+            double blockAttenuation = Math.pow(0.5, blockCount); // Each block reduces sound by 70%
 
             // Calculate weight based on distance and block count
-            double weight = blockAttenuation / (Math.max(distanceToEntity + currentDistance, 0.1) * Math.max(distanceToEntity + currentDistance, 0.1));
+            double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
 
             // Create ray result with block count information
             RaycastResult rayResult = new RaycastResult(
@@ -436,14 +497,13 @@ public class RaycastingHelper {
                     entityCenter,
                     blockCount == 0 // true if no blocks in between
             );
-
             RayHitData hitData = new RayHitData(rayResult, initalDirection, weight);
 
             // Add to rayHitsByEntity map
-            rayHitsByEntity.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
+            redRaysToTarget.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
 
             // Increment ray hit count for this entity
-            entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
+//            entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
 
             // Optional: Log block count for debugging
             // System.out.println("Blocks between player and " + soundEntity + ": " + blockCount);
