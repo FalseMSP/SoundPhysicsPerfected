@@ -235,6 +235,15 @@ public abstract class SoundSystemMixin {
      * This is a brute-force approach that works when source tracking is difficult
      */
     private static void updateActiveSources() {
+        // Check if OpenAL context is available
+        long context = ALC10.alcGetCurrentContext();
+        if (context == 0) {
+            return; // No context available
+        }
+
+        // Clear any existing errors
+        AL10.alGetError();
+
         try {
             // Get all generated OpenAL sources and apply reverb
             // This requires keeping track of source IDs or iterating through all possible sources
@@ -305,9 +314,17 @@ public abstract class SoundSystemMixin {
             alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY,  lateReverbDelay);
             alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_GAIN,   reflectionsGain);
             alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN,   lateReverbGain);
-
             if (outdoorLeakPercent < 0.95)
                 AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);        } catch (Exception e) {
         }
+    }
+    private static void debugSourceCount() {
+        int sourcesInUse = 0;
+        for (int i = 1; i < 1000; i++) { // Check first 1000 IDs
+            if (AL10.alIsSource(i)) {
+                sourcesInUse++;
+            }
+        }
+        System.out.println("Sources currently in use: " + sourcesInUse);
     }
 }

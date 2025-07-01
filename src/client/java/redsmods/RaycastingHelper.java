@@ -28,9 +28,9 @@ public class RaycastingHelper {
 
      */
 
-    private static final int RAYS_CAST = 256; // 64000 is definitely not production number
+    private static final int RAYS_CAST = 512; // 64000 is definitely not production number
     private static final int MAX_BOUNCES = 4;
-    private static final double RAY_SEGMENT_LENGTH = 256.0;
+    private static final double RAY_SEGMENT_LENGTH = 16.0 * 12; // 12 chunk max length
     private static final double SPEED_OF_SOUND_MS = 3;
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
