@@ -28,8 +28,8 @@ public class RaycastingHelper {
 
      */
 
-    private static final int RAYS_CAST = 512; // 64000 is definitely not production number
-    private static final int MAX_BOUNCES = 4;
+    private static final int RAYS_CAST = Config.getInstance().raysCast;
+    private static final int MAX_BOUNCES = Config.getInstance().raysBounced;
     private static final double RAY_SEGMENT_LENGTH = 16.0 * 12; // 12 chunk max length
     private static final double SPEED_OF_SOUND_MS = 3;
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
@@ -50,6 +50,10 @@ public class RaycastingHelper {
     private static final Map<SoundData, AveragedSoundData> muffledAveragedResults = new HashMap<>();
     public static final Map<SoundInstance, SoundInstance> soundInstanceMap = new ConcurrentHashMap<>();
     public static final Map<SoundInstance, SoundInstance> soundPermInstanceMap = new ConcurrentHashMap<>();
+
+    // Config Grabbed stuff
+    public static final boolean ENABLE_REVERB = Config.getInstance().reverbEnabled;
+    public static final boolean ENABLE_PERMEATION = Config.getInstance().permeationEnabled;
 
     public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
         try {
