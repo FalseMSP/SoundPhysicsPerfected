@@ -4,6 +4,7 @@ import net.minecraft.sound.SoundEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
+import redsmods.Config;
 
 @Mixin(SoundEvent.class)
 public class SoundEventMixin {

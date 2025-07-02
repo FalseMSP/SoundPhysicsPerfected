@@ -1,5 +1,6 @@
 package redsmods;
 
+import io.netty.channel.unix.IovArray;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.SoundInstance;
@@ -24,14 +25,17 @@ public class RaycastingHelper {
     Colors of rays defined by: https://www.youtube.com/watch?v=u6EuAUjq92k
     White: Normal Bouncing Ray
     Green: Sound Seeking Ray
+    Blue: Reverb Seeking Ray
+    Red: Sound Seeking Permeated Ray
     More to be defined.
 
      */
 
     private static final int RAYS_CAST = Config.getInstance().raysCast;
     private static final int MAX_BOUNCES = Config.getInstance().raysBounced;
-    private static final double RAY_SEGMENT_LENGTH = 16.0 * 12; // 12 chunk max length
+    private static final double RAY_SEGMENT_LENGTH = 16.0 * Config.getInstance().maxRayLength;; // 12 chunk max length
     private static final double SPEED_OF_SOUND_MS = 3;
+    public static final Queue<RedTickableInstance> tickQueue = new LinkedList<>();
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
     private static final double SPEED_OF_SOUND_TICKS = 17.15; // 17.15 blocks per gametick
@@ -58,7 +62,7 @@ public class RaycastingHelper {
     public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
         try {
             Vec3d playerEyePos = player.getEyePos();
-            double maxTotalDistance = 64.0; // Max total distance after all bounces
+            double maxTotalDistance = RAY_SEGMENT_LENGTH * MAX_BOUNCES; // Max total distance after all bounces
 
             // Clear previous ray hit counts
             entityRayHitCounts.clear();
@@ -70,6 +74,9 @@ public class RaycastingHelper {
 
             Queue<SoundData> nearbyEntities = new LinkedList<>(soundQueue);
 
+            if (nearbyEntities.isEmpty() && tickQueue.isEmpty())
+                return; // no sounds to proc
+
             // Generate ray directions
             Vec3d[] rayDirections = RaycastingHelper.generateRayDirections();
             rayHitsByEntity.clear(); // clear list before every call
@@ -79,9 +86,7 @@ public class RaycastingHelper {
             // Display ray hit counts for detected sfx
             displayEntityRayHitCounts(world, player);
 
-            while (!soundQueue.isEmpty()) { // iterate through soundQueue
-                soundQueue.poll();
-            }
+            soundQueue.clear();
 
         } catch (Exception e) {
             System.err.println("Error in player bouncing ray entity detection: " + e.getMessage());
@@ -107,8 +112,9 @@ public class RaycastingHelper {
             playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.8f, 1.0f);
         }
 
+        if(!ENABLE_PERMEATION)
+            return;
         System.out.println("Processing " + muffledAveragedResults.size() + " muffled sounds:");
-
         for (AveragedSoundData avgData : muffledAveragedResults.values()) {
             playMuffled(client, avgData, playerEyePos, 0.6f, 1f);
         }
@@ -125,7 +131,7 @@ public class RaycastingHelper {
             Vec3d targetPosition = playerPos.add(avgData.averageDirection.multiply(avgData.averageDistance));
 
             // Get original sound properties
-            RedSoundInstance originalSound = avgData.soundEntity.sound;
+            SoundInstance originalSound = avgData.soundEntity.sound;
             Identifier soundId = originalSound.getId();
 
             // Calculate adjusted volume based on ray count and weight (confidence-based)
@@ -137,8 +143,13 @@ public class RaycastingHelper {
             float basePitch = originalSound.getPitch();
             float adjustedPitch = basePitch * pitchMultiplier;
             SoundInstance newSound;
+
             // Create positioned sound with adjustments
-            if (originalSound.getOriginal() instanceof TickableSoundInstance) {
+            if (originalSound instanceof RedTickableInstance) { // update pos of sounds
+                ((RedTickableInstance) originalSound).setPos(targetPosition);
+                ((RedTickableInstance) originalSound).setVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
+                return;
+            } else if (originalSound instanceof TickableSoundInstance) {
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound);
             } else {
                 newSound = new RedPositionedSoundInstance(
@@ -156,7 +167,7 @@ public class RaycastingHelper {
                         originalSound.isRelative()                  // Relative positioning
                 );
             }
-            soundInstanceMap.put(originalSound.getOriginal(),newSound);
+            soundInstanceMap.put(originalSound,newSound);
             if (adjustedVolume <= 0.01)
                 return;
 
@@ -188,7 +199,7 @@ public class RaycastingHelper {
             Vec3d targetPosition = playerPos.add(avgData.averageDirection.multiply(avgData.averageDistance));
 
             // Get original sound properties
-            RedSoundInstance originalSound = avgData.soundEntity.sound;
+            RedSoundInstance originalSound = (RedSoundInstance) avgData.soundEntity.sound;
             Identifier soundId = originalSound.getId();
 
             // Calculate adjusted volume based on ray count and weight (confidence-based)
@@ -335,7 +346,8 @@ public class RaycastingHelper {
         boolean rayCompleted = false;
 
         castGreenRay(world, player, startPos, entities, totalDistanceTraveled, initialDirection);
-        castRedRay(world, player, startPos, entities, totalDistanceTraveled, initialDirection);
+        if (ENABLE_PERMEATION)
+            castRedRay(world, player, startPos, entities, totalDistanceTraveled, initialDirection);
 
         for (int bounce = 0; bounce <= MAX_BOUNCES && remainingDistance > 0; bounce++) {
             double segmentDistance = Math.min(RAY_SEGMENT_LENGTH, remainingDistance);
@@ -368,8 +380,10 @@ public class RaycastingHelper {
             // cast Green rays
             if (hitBlock) {
                 castGreenRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
-                castBlueRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
-                castRedRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
+                if (ENABLE_REVERB)
+                    castBlueRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
+                if (ENABLE_PERMEATION)
+                    castRedRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
             }
             // Draw this segment
 //            drawBouncingRaySegment(world, currentPos, actualEnd, bounce);
@@ -444,6 +458,52 @@ public class RaycastingHelper {
 
                 // Increment ray hit count for this entity
                 entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
+
+                // Draw Green ray visualization
+//                drawGreenRay(world, currentPos, entityCenter);
+            }
+        }
+
+        for (RedTickableInstance soundEntity : tickQueue) {
+            Vec3d entityCenter = soundEntity.getPosition();
+            double distanceToEntity = currentPos.distanceTo(entityCenter);
+
+            // Create raycast context for line of sight check
+            RaycastContext raycastContext = new RaycastContext(
+                    currentPos,
+                    entityCenter,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
+
+            BlockHitResult blockHit = world.raycast(raycastContext);
+
+            // Check if we have line of sight (no block hit or hit is beyond the entity)
+            boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
+                    currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 1;
+
+            if (hasLineOfSight) {
+                // Calculate weight based on distance (closer = higher weight)
+                double weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1));
+                SoundData data = new TickableSoundData(soundEntity,soundEntity.getPosition(),soundEntity.getSound().getIdentifier().toString());
+
+                // Create ray result for this direct line of sight
+                RaycastResult GreenRayResult = new RaycastResult(
+                        distanceToEntity,
+                        initalDirection,
+                        data,
+                        entityCenter,
+                        true
+                );
+
+                RayHitData hitData = new RayHitData(GreenRayResult, initalDirection, weight);
+
+                // Add to rayHitsByEntity map
+                rayHitsByEntity.computeIfAbsent(data, k -> new ArrayList<>()).add(hitData);
+
+                // Increment ray hit count for this entity
+                entityRayHitCounts.put(data, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
 
                 // Draw Green ray visualization
 //                drawGreenRay(world, currentPos, entityCenter);
@@ -558,6 +618,7 @@ public class RaycastingHelper {
                     blockCount++;
                     // Skip ahead to avoid counting the same block multiple times
                     distance += 1.0;
+                    if (blockCount > 3) return 3;
                 }
             }
         }

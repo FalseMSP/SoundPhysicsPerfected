@@ -1,17 +1,19 @@
 package redsmods;
 
+import me.shedaniel.cloth.clothconfig.shadowed.blue.endless.jankson.annotation.Nullable;
+import net.fabricmc.loader.impl.lib.sat4j.core.Vec;
 import net.minecraft.client.sound.*;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
-import org.jetbrains.annotations.Nullable;
+import net.minecraft.world.tick.Tick;
 
 public class RedTickableInstance implements TickableSoundInstance {
     private final Identifier soundID;
     private final Sound sound;
     private final SoundCategory category;
-    private final TickableSoundInstance wrapped;
+    private SoundInstance wrapped;
     private double x;
     private double y;
     private double z;
@@ -29,7 +31,7 @@ public class RedTickableInstance implements TickableSoundInstance {
         this.done = false;
         this.volume = volume;
         this.pitch = pitch;
-        this.wrapped = (TickableSoundInstance) wrapped;
+        this.wrapped = wrapped;
     }
 
     @Override
@@ -39,9 +41,9 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     @Override
     public void tick() {
-        // Logic to update sound every tick
-        // For example: end the sound after some condition
-        wrapped.tick();
+        RaycastingHelper.tickQueue.add(this);
+        if (wrapped instanceof TickableSoundInstance)
+            ((TickableSoundInstance) wrapped).tick();
     }
 
     @Override
@@ -67,6 +69,10 @@ public class RedTickableInstance implements TickableSoundInstance {
     @Override
     public boolean isRepeatable() {
         return wrapped.isRepeatable();
+    }
+
+    public Vec3d getPosition() {
+        return new Vec3d(x,y,z);
     }
 
     @Override
@@ -116,5 +122,15 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     public void stop() {
         this.done = true;
+    }
+
+    public void setPos(Vec3d targetPosition) {
+        x = targetPosition.getX();
+        y = targetPosition.getY();
+        z = targetPosition.getZ();
+    }
+
+    public void setVolume(float max) {
+        volume = max;
     }
 }

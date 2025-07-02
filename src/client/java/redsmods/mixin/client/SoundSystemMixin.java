@@ -93,15 +93,15 @@ public abstract class SoundSystemMixin {
 
 
                 // Get player position for debug message
-                Vec3d playerPos = client.player.getEyePos();
-                String coordinates = String.format("(%.2f, %.2f, %.2f)", soundX, soundY, soundZ);
-                double distance = playerPos.distanceTo(soundPos);
-                String distanceStr = String.format("%.2fm", distance);
-                String message = String.format("Sound: %s at %s [%s] - Queued (%d total)",
-                        soundId, coordinates, distanceStr, soundQueue.size());
-                client.player.sendMessage(Text.literal(message), true);
+//                Vec3d playerPos = client.player.getEyePos();
+//                String coordinates = String.format("(%.2f, %.2f, %.2f)", soundX, soundY, soundZ);
+//                double distance = playerPos.distanceTo(soundPos);
+//                String distanceStr = String.format("%.2fm", distance);
+//                String message = String.format("Sound: %s at %s [%s] - Queued (%d total)",
+//                        soundId, coordinates, distanceStr, soundQueue.size());
+//                client.player.sendMessage(Text.literal(message), true);
                 ci.cancel();
-            } else if (sound instanceof RedPermeatedSoundInstance) {
+            } else if (ENABLE_PERMEATION && sound instanceof RedPermeatedSoundInstance) {
                 // do something to post-proc sounds ig maybe if u want :p
                 FXQueue.add(sound);
             }
@@ -141,8 +141,8 @@ public abstract class SoundSystemMixin {
                 System.out.println("sourceID is invalid for a sound, non-issue");
             }
         }
-
-        updateActiveSources(); // Brute force reverb to ALL sounds
+        if (ENABLE_REVERB)
+            updateActiveSources(); // Brute force reverb to ALL sounds
     }
 
     @ModifyVariable(method = "stop(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), argsOnly = true)

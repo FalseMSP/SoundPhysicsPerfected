@@ -33,16 +33,23 @@ public class ModMenuIntegration implements ModMenuApi {
 
         general.addEntry(entryBuilder
                 .startIntSlider(Text.translatable("Rays Cast"), config.raysCast, 64, 1024)
-                .setDefaultValue(512)
+                .setDefaultValue(64)
                 .setTooltip(Text.translatable("# of Rays to cast from players (More = More Lag)"))
                 .setSaveConsumer(newValue -> config.raysCast = newValue)
                 .build());
 
         general.addEntry(entryBuilder
                 .startIntSlider(Text.translatable("Ray Bounce #"), config.raysBounced, 1, 16)
-                .setDefaultValue(4)
+                .setDefaultValue(2)
                 .setTooltip(Text.translatable("Max # of times the ray will bounce before terminating (More Accurate)"))
                 .setSaveConsumer(newValue -> config.raysBounced = newValue)
+                .build());
+
+        general.addEntry(entryBuilder
+                .startIntSlider(Text.translatable("Max Ray Length"), config.maxRayLength,2,16)
+                .setDefaultValue(4)
+                .setTooltip(Text.translatable("Max Length of a singular ray, if you don't get reverb, turn this value up. if you get too much reverb, turn this down (this is in chunks)"))
+                .setSaveConsumer(newValue -> config.maxRayLength = newValue)
                 .build());
 
         general.addEntry(entryBuilder
@@ -58,7 +65,6 @@ public class ModMenuIntegration implements ModMenuApi {
                 .setTooltip(Text.translatable("Cast Red (Permeating) Rays and add muffle dynamically to permeated sources"))
                 .setSaveConsumer(newValue -> config.permeationEnabled = newValue)
                 .build());
-
 
         return builder.build();
     }
