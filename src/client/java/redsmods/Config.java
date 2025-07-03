@@ -15,11 +15,11 @@ public class Config {
     private static final Path CONFIG_FILE = FabricLoader.getInstance().getConfigDir().resolve("SoundPhysicsPerfected.json");
 
     // RaysCast setting
-    public int raysCast = 64;
-    public int raysBounced = 2;
+    public int raysCast = 256;
+    public int raysBounced = 3;
     public boolean reverbEnabled = true;
     public boolean permeationEnabled = true;
-    public int maxRayLength = 4;
+    public int maxRayLength = 8;
 
     public static Config getInstance() {
         if (INSTANCE == null) {

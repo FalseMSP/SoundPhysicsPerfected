@@ -111,15 +111,15 @@ public class RaycastingHelper {
             return;
         }
 
-        System.out.println("Processing " + averagedResults.size() + " detected sounds:");
 
         for (AveragedSoundData avgData : averagedResults.values()) {
+            System.out.println("Processing " + avgData.soundEntity.soundId + " detected sounds:" + avgData.rayCount);
             playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.8f, 1.0f);
         }
 
         if(!ENABLE_PERMEATION)
             return;
-        System.out.println("Processing " + muffledAveragedResults.size() + " muffled sounds:");
+//        System.out.println("Processing " + muffledAveragedResults.size() + " muffled sounds:");
         for (AveragedSoundData avgData : muffledAveragedResults.values()) {
             playMuffled(client, avgData, playerEyePos, 0.6f, 1f);
         }
@@ -132,6 +132,7 @@ public class RaycastingHelper {
         }
 
         try {
+
             // Calculate the target position
             Vec3d targetPosition = playerPos.add(avgData.averageDirection.multiply(1)); // avgData.averageDistance
 
@@ -139,6 +140,11 @@ public class RaycastingHelper {
             SoundInstance originalSound = avgData.soundEntity.sound;
             Identifier soundId = originalSound.getId();
 
+            if(avgData.totalWeight == 0 && originalSound instanceof RedTickableInstance) {
+                ((RedTickableInstance) originalSound).setVolume(0);
+                ((RedTickableInstance) originalSound).setPos(((RedTickableInstance) originalSound).getOriginalPosition());
+                return;
+            }
             // Calculate adjusted volume based on ray count and weight (confidence-based)
             float baseVolume;
             if (originalSound instanceof RedTickableInstance)
@@ -290,6 +296,7 @@ public class RaycastingHelper {
         Map<SoundData, AveragedSoundData> averagedResults = new HashMap<>();
         muffledAveragedResults.clear();
 
+
         for (Map.Entry<SoundData, List<RayHitData>> entry : rayHitsByEntity.entrySet()) {
             SoundData entity = entry.getKey();
             List<RayHitData> rayHits = entry.getValue();
@@ -328,7 +335,9 @@ public class RaycastingHelper {
             Vec3d weightedDirection = rayHit.rayResult.initialDirection.multiply(weight);
             weightedDirectionSum = weightedDirectionSum.add(weightedDirection);
         }
-
+        if (totalWeight == 0.0)
+            return new AveragedSoundData(entity, weightedDirectionSum, weightedDistanceSum,
+                    totalWeight, rayHits.size(), rayHits);
         // Calculate averages
         double averageDistance = weightedDistanceSum / totalWeight;
         Vec3d averageDirection = weightedDirectionSum.multiply(1.0 / totalWeight).normalize();
@@ -481,11 +490,10 @@ public class RaycastingHelper {
             // Check if we have line of sight (no block hit or hit is beyond the entity)
             boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
                     currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 1;
-
+            SoundData data = new TickableSoundData(soundEntity,soundEntity.getOriginalPosition(),soundEntity.getSound().getIdentifier().toString());
             if (hasLineOfSight) {
                 // Calculate weight based on distance (closer = higher weight)
                 double weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1));
-                SoundData data = new TickableSoundData(soundEntity,soundEntity.getOriginalPosition(),soundEntity.getSound().getIdentifier().toString());
 
                 // Create ray result for this direct line of sight
                 RaycastResult GreenRayResult = new RaycastResult(
@@ -506,6 +514,8 @@ public class RaycastingHelper {
 
                 // Draw Green ray visualization
 //                drawGreenRay(world, currentPos, entityCenter);
+            } else if (!rayHitsByEntity.containsKey(data)) { // create empty object to say that there was nothing hit
+                rayHitsByEntity.computeIfAbsent(data, k -> new ArrayList<>());
             }
         }
     }
