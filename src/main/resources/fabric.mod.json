@@ -3,13 +3,13 @@
 	"id": "soundphysicsperfected",
 	"version": "${version}",
 	"name": "SoundPhysicsPerfected",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "Ray Traced Audio Implementation in Minecraft",
 	"authors": [
-		"Me!"
+		"RedLife"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://summer.hackclub.com/projects/3723",
+		"sources": "https://github.com/FalseMSP/SoundPhysicsPerfected"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/soundphysicsperfected/icon.png",
@@ -26,6 +26,9 @@
 				"value": "redsmods.SoundPhysicsPerfectedClient",
 				"adapter": "kotlin"
 			}
+		],
+		"modmenu": [
+			"redsmods.ModMenuIntegration"
 		]
 	},
 	"mixins": [
@@ -44,5 +47,21 @@
 	},
 	"suggests": {
 		"another-mod": "*"
+	},
+	"recommends": {
+		"modmenu-badges-lib": "*"
+	},
+	"custom": {
+		"modmenu": {
+			"badges": [ "Client" ]
+		},
+		"mcb": [
+			{
+				"name": "Red's Mods",
+				"labelColor": -1842205,
+				"fillColor": -8573394,
+				"outlineColor": -65536
+			}
+		]
 	}
 }
