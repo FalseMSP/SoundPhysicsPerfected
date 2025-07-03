@@ -1,9 +1,7 @@
 package redsmods.mixin.client;
 
-import net.fabricmc.fabric.mixin.client.rendering.AtlasSourceManagerAccessor;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.*;
-import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
@@ -13,16 +11,18 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import redsmods.*;
+import redsmods.wrappers.RedPermeatedSoundInstance;
+import redsmods.wrappers.RedPositionedSoundInstance;
+import redsmods.wrappers.RedTickableInstance;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static java.lang.Math.clamp;
 import static org.joml.Math.lerp;
@@ -43,6 +43,8 @@ public abstract class SoundSystemMixin {
     private static boolean efxInitialized = false;
 
     private static final Queue<SoundInstance> FXQueue = new LinkedList<>();
+    private static final Queue<RedTickableInstance> FXTickQueue = new LinkedList<>();
+    private static final Map<Integer, RedTickableInstance> tickMap = new HashMap<>();
 
     @Shadow
     private SoundManager loader;
@@ -52,6 +54,8 @@ public abstract class SoundSystemMixin {
 //    @Shadow @Final private SoundEngine soundEngine;
 
     @Shadow public abstract void stop();
+
+    @Shadow public abstract void tick(boolean paused);
 
     @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
     private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
@@ -69,7 +73,7 @@ public abstract class SoundSystemMixin {
 
         try {
             WeightedSoundSet weightedSoundSet = sound.getSoundSet(this.loader); // load pitches and whatnot into the sound data
-            if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance || sound instanceof RedPermeatedSoundInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE && !sound.isRepeatable()) { // !replayList.contains(redSoundData)
+            if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance || sound instanceof RedPermeatedSoundInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE) { // !replayList.contains(redSoundData)
                 // Get sound coordinates
                 double soundX = sound.getX();
                 double soundY = sound.getY();
@@ -102,8 +106,9 @@ public abstract class SoundSystemMixin {
 //                client.player.sendMessage(Text.literal(message), true);
                 ci.cancel();
             } else if (ENABLE_PERMEATION && sound instanceof RedPermeatedSoundInstance) {
-                // do something to post-proc sounds ig maybe if u want :p
                 FXQueue.add(sound);
+            } else if (sound instanceof RedTickableInstance) {
+                FXTickQueue.add((RedTickableInstance) sound);
             }
         } catch (Exception e) {
             // Log error but don't crash
@@ -141,6 +146,22 @@ public abstract class SoundSystemMixin {
                 System.out.println("sourceID is invalid for a sound, non-issue");
             }
         }
+
+        while(!FXTickQueue.isEmpty()) {
+            RedTickableInstance sound = FXTickQueue.poll();
+            try {
+                Channel.SourceManager manager = sources.get(sound);
+                SourceManagerAccessor accessor = (SourceManagerAccessor) manager;
+                Source source = accessor.getSource();
+                int id = ((SourceAccessor) source).getPointer();
+                tickMap.put(id,sound);
+            } catch (Exception e) {
+                if (tickMap.containsValue(sound))
+                    System.out.println("Critical error (mem leak prolly)");
+                System.out.println("sourceID is invalid for a sound, non-issue");
+            }
+        }
+
         if (ENABLE_REVERB)
             updateActiveSources(); // Brute force reverb to ALL sounds
     }
@@ -262,7 +283,13 @@ public abstract class SoundSystemMixin {
                         applyReverbToSource(sourceId);
 //                        System.out.println("Source ID: " + sourceId);
                     }
+                } else if (tickMap.containsKey(sourceId)){
+                    tickMap.get(sourceId).stop();
+                    tickMap.remove(sourceId);
+                    System.out.println(tickMap);
                 }
+//                System.out.println(tickMap);
+//                System.out.println(tickQueue.peek().getId());
             }
         } catch (Exception e) {
             // Ignore errors

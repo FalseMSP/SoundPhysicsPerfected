@@ -1,18 +1,18 @@
-package redsmods;
+package redsmods.wrappers;
 
 import me.shedaniel.cloth.clothconfig.shadowed.blue.endless.jankson.annotation.Nullable;
-import net.fabricmc.loader.impl.lib.sat4j.core.Vec;
 import net.minecraft.client.sound.*;
 import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.tick.Tick;
+import redsmods.RaycastingHelper;
 
 public class RedTickableInstance implements TickableSoundInstance {
     private final Identifier soundID;
     private final Sound sound;
     private final SoundCategory category;
+    private final Vec3d originalPos;
+    private final float originalVolume;
     private SoundInstance wrapped;
     private double x;
     private double y;
@@ -20,8 +20,9 @@ public class RedTickableInstance implements TickableSoundInstance {
     private boolean done;
     private float volume;
     private float pitch;
+    private int tickCount;
 
-    public RedTickableInstance(Identifier soundID, Sound sound, SoundCategory category, Vec3d position, float volume, float pitch, SoundInstance wrapped) {
+    public RedTickableInstance(Identifier soundID, Sound sound, SoundCategory category, Vec3d position, float volume, float pitch, SoundInstance wrapped, Vec3d originalPos, float originalVolume) {
         this.soundID = soundID;
         this.sound = sound;
         this.category = category;
@@ -32,6 +33,9 @@ public class RedTickableInstance implements TickableSoundInstance {
         this.volume = volume;
         this.pitch = pitch;
         this.wrapped = wrapped;
+        this.originalPos = originalPos;
+        this.originalVolume = originalVolume;
+        tickCount = 0;
     }
 
     @Override
@@ -41,7 +45,10 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     @Override
     public void tick() {
-        RaycastingHelper.tickQueue.add(this);
+        tickCount++;
+        if (done) return;
+        if (tickCount % 2 == 0) // only update once every .1 second
+            RaycastingHelper.tickQueue.add(this);
         if (wrapped instanceof TickableSoundInstance)
             ((TickableSoundInstance) wrapped).tick();
     }
@@ -71,8 +78,8 @@ public class RedTickableInstance implements TickableSoundInstance {
         return wrapped.isRepeatable();
     }
 
-    public Vec3d getPosition() {
-        return new Vec3d(x,y,z);
+    public Vec3d getOriginalPosition() {
+        return originalPos;
     }
 
     @Override
@@ -132,5 +139,13 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     public void setVolume(float max) {
         volume = max;
+    }
+
+    public void setDone(boolean done) {
+        this.done = done;
+    }
+
+    public float getOriginalVolume() {
+        return originalVolume;
     }
 }

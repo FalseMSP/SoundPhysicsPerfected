@@ -1,4 +1,4 @@
-package redsmods;
+package redsmods.wrappers;
 
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.sound.SoundCategory;
