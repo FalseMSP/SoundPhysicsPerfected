@@ -20,6 +20,8 @@ public class Config {
     public boolean reverbEnabled = true;
     public boolean permeationEnabled = true;
     public int maxRayLength = 8;
+    public float SoundMult = 2;
+    public int tickRate = 2; // once every 2 ticks
 
     public static Config getInstance() {
         if (INSTANCE == null) {

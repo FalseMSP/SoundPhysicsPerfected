@@ -11,7 +11,7 @@
 		"homepage": "https://summer.hackclub.com/projects/3723",
 		"sources": "https://github.com/FalseMSP/SoundPhysicsPerfected"
 	},
-	"license": "CC0-1.0",
+	"license": "MIT",
 	"icon": "assets/soundphysicsperfected/icon.png",
 	"environment": "*",
 	"entrypoints": {

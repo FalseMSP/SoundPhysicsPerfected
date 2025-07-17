@@ -1,7 +1,6 @@
-package redsmods;
+package redsmods.storageclasses;
 
 import net.minecraft.client.sound.SoundInstance;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.Objects;

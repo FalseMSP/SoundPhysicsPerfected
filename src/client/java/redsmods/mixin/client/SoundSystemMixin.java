@@ -15,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import redsmods.*;
+import redsmods.storageclasses.SoundData;
 import redsmods.wrappers.RedPermeatedSoundInstance;
 import redsmods.wrappers.RedPositionedSoundInstance;
 import redsmods.wrappers.RedTickableInstance;
@@ -107,7 +108,7 @@ public abstract class SoundSystemMixin {
                 ci.cancel();
             } else if (ENABLE_PERMEATION && sound instanceof RedPermeatedSoundInstance) {
                 FXQueue.add(sound);
-            } else if (sound instanceof RedTickableInstance) {
+            } else if (TICK_RATE == 0 && sound instanceof RedTickableInstance) {
                 FXTickQueue.add((RedTickableInstance) sound);
             }
         } catch (Exception e) {

@@ -9,11 +9,10 @@ import redsmods.Config;
 @Mixin(SoundEvent.class)
 public class SoundEventMixin {
 
-    private static final float SOUND_DISTANCE_MULTI = 8;
+    private static final float SOUND_DISTANCE_MULTI = Config.getInstance().SoundMult;
 
     @ModifyConstant(method = "getDistanceToTravel", constant = @Constant(floatValue = 16F), expect = 2)
     private float allowance1(float value) {
         return value * SOUND_DISTANCE_MULTI;
     }
-
 }

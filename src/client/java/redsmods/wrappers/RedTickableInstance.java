@@ -7,6 +7,8 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
 import redsmods.RaycastingHelper;
 
+import static redsmods.RaycastingHelper.TICK_RATE;
+
 public class RedTickableInstance implements TickableSoundInstance {
     private final Identifier soundID;
     private final Sound sound;
@@ -46,8 +48,8 @@ public class RedTickableInstance implements TickableSoundInstance {
     @Override
     public void tick() {
         tickCount++;
-        if (done) return;
-        if (tickCount % 2 == 0) // only update once every .1 second
+        if (done || TICK_RATE == 0) return; // DONE or ticking sounds is off
+        if (tickCount % TICK_RATE == 0) // only update once every .1 second
             RaycastingHelper.tickQueue.add(this);
         if (wrapped instanceof TickableSoundInstance)
             ((TickableSoundInstance) wrapped).tick();
