@@ -25,7 +25,6 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 
-import static java.lang.Math.clamp;
 import static org.joml.Math.lerp;
 import static org.lwjgl.openal.EXTEfx.*;
 import static redsmods.RaycastingHelper.*;
@@ -381,5 +380,9 @@ public abstract class SoundSystemMixin {
             }
         }
         System.out.println("Sources currently in use: " + sourcesInUse);
+    }
+
+    private static float clamp(float a, float b, float c) {
+        return Math.min(Math.max(a,b),c);
     }
 }
