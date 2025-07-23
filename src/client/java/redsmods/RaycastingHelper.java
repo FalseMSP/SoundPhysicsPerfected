@@ -2,7 +2,6 @@ package redsmods;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.sound.Sound;
 import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.client.sound.TickableSoundInstance;
 import net.minecraft.entity.player.PlayerEntity;
@@ -15,7 +14,7 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
-import redsmods.mixin.client.SoundSystemMixin;
+import redsmods.storageclasses.*;
 import redsmods.wrappers.RedPermeatedSoundInstance;
 import redsmods.wrappers.RedPositionedSoundInstance;
 import redsmods.wrappers.RedTickableInstance;
@@ -32,27 +31,23 @@ public class RaycastingHelper {
     Blue: Reverb Seeking Ray
     Red: Sound Seeking Permeated Ray
     More to be defined.
-
      */
-
-    private static final int RAYS_CAST = Config.getInstance().raysCast;
-    private static final int MAX_BOUNCES = Config.getInstance().raysBounced;
-    private static final double RAY_SEGMENT_LENGTH = 16.0 * Config.getInstance().maxRayLength;; // 12 chunk max length
-    private static final double SPEED_OF_SOUND_MS = 3;
+    private static int RAYS_CAST = Config.getInstance().raysCast;
+    private static int MAX_BOUNCES = Config.getInstance().raysBounced;
+    private static double RAY_SEGMENT_LENGTH = 16.0 * Config.getInstance().maxRayLength; // 12 chunk max length
     public static final Queue<RedTickableInstance> tickQueue = new LinkedList<>();
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
     private static final double SPEED_OF_SOUND_TICKS = 17.15; // 17.15 blocks per gametick
     private static final Map<Integer,ArrayList<SoundInstance>> soundPlayingWaiting = new HashMap<>();
     private static int ticksSinceWorld;
-//    public static Map<Integer,Integer> echoFac = new HashMap<>();
     public static double distanceFromWallEcho = 0; // Modified in BlueRay casting
     public static double distanceFromWallEchoDenom = 0; // Modified in BlueRay casting
     public static int reverbStrength = 0; // Modified in BlueRay casting
     public static int reverbDenom = 0; // used in reverbStrength/reverbDenom (total)
     public static int outdoorLeak;
     public static int outdoorLeakDenom;
-    // Sound RayData
+
     private static final Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
     private static Map<SoundData, List<RayHitData>> redRaysToTarget = new HashMap<>();
     private static final Map<SoundData, AveragedSoundData> muffledAveragedResults = new HashMap<>();
@@ -60,8 +55,18 @@ public class RaycastingHelper {
     public static final Map<SoundInstance, SoundInstance> soundPermInstanceMap = new ConcurrentHashMap<>();
 
     // Config Grabbed stuff
-    public static final boolean ENABLE_REVERB = Config.getInstance().reverbEnabled;
-    public static final boolean ENABLE_PERMEATION = Config.getInstance().permeationEnabled;
+    public static boolean ENABLE_REVERB = Config.getInstance().reverbEnabled;
+    public static boolean ENABLE_PERMEATION = Config.getInstance().permeationEnabled;
+    public static int TICK_RATE = Config.getInstance().tickRate;
+
+    public static void getConfig() {
+        RAYS_CAST = Config.getInstance().raysCast;
+        MAX_BOUNCES = Config.getInstance().raysBounced;
+        ENABLE_REVERB = Config.getInstance().reverbEnabled;
+        ENABLE_PERMEATION = Config.getInstance().permeationEnabled;
+        RAY_SEGMENT_LENGTH = 16.0 * Config.getInstance().maxRayLength;
+        TICK_RATE = Config.getInstance().tickRate;
+    }
 
     public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
         try {
@@ -76,9 +81,7 @@ public class RaycastingHelper {
                 return;
             }
 
-            Queue<SoundData> nearbyEntities = new LinkedList<>(soundQueue);
-
-            if (nearbyEntities.isEmpty() && tickQueue.isEmpty())
+            if (soundQueue.isEmpty() && tickQueue.isEmpty())
                 return; // no sounds to proc
 
             // Generate ray directions
@@ -86,7 +89,7 @@ public class RaycastingHelper {
             rayHitsByEntity.clear(); // clear list before every call
             redRaysToTarget.clear(); // wow this was the issue? i feel like a real dumbass now D:
 
-            processAndPlayAveragedSounds(world,player,playerEyePos,new ArrayList<>(Arrays.asList(rayDirections)),nearbyEntities,maxTotalDistance,client);
+            processAndPlayAveragedSounds(world,player,playerEyePos,new ArrayList<>(Arrays.asList(rayDirections)),soundQueue,maxTotalDistance,client);
             // Display ray hit counts for detected sfx
             displayEntityRayHitCounts(world, player);
 
@@ -99,12 +102,12 @@ public class RaycastingHelper {
     }
 
     public static void processAndPlayAveragedSounds(World world, PlayerEntity player, Vec3d playerEyePos,
-                                                    List<Vec3d> rayDirections, Queue<SoundData> nearbyEntities,
+                                                    List<Vec3d> rayDirections, Queue<SoundData> soundQueue,
                                                     double maxTotalDistance, MinecraftClient client) {
 
         // Process rays and get averaged results
         Map<SoundData, AveragedSoundData> averagedResults = processRaysWithAveraging(
-                world, player, playerEyePos, rayDirections, nearbyEntities, maxTotalDistance);
+                world, player, playerEyePos, rayDirections, soundQueue, maxTotalDistance);
 
         if (averagedResults.isEmpty() && muffledAveragedResults.isEmpty()) {
 //            System.out.println("No sounds detected by raycasting");
@@ -279,7 +282,7 @@ public class RaycastingHelper {
     // Main method to process rays and calculate averages
     public static Map<SoundData, AveragedSoundData> processRaysWithAveraging(World world, PlayerEntity player,
                                                                              Vec3d playerEyePos, List<Vec3d> rayDirections,
-                                                                             Queue<SoundData> nearbyEntities, double maxTotalDistance) {
+                                                                             Queue<SoundData> soundQueue, double maxTotalDistance) {
         reverbStrength = 0;
         distanceFromWallEcho = 0;
         distanceFromWallEchoDenom = 0;
@@ -289,7 +292,7 @@ public class RaycastingHelper {
 //        echoFac.clear()
         // Cast all rays and collect hit data
         for (Vec3d direction : rayDirections) {
-            castBouncingRay(world, player, playerEyePos, direction, nearbyEntities, maxTotalDistance);
+            castBouncingRay(world, player, playerEyePos, direction, soundQueue, maxTotalDistance);
         }
 
         // Calculate averages for each entity
@@ -346,7 +349,7 @@ public class RaycastingHelper {
                 totalWeight, rayHits.size(), rayHits);
     }
 
-    public static RaycastResult castBouncingRay(World world, PlayerEntity player, Vec3d startPos, Vec3d direction, Queue<SoundData> entities, double maxTotalDistance) {
+    public static RaycastResult castBouncingRay(World world, PlayerEntity player, Vec3d startPos, Vec3d direction, Queue<SoundData> soundQueue, double maxTotalDistance) {
         Vec3d currentPos = startPos;
         Vec3d currentDirection = direction.normalize();
         Vec3d initialDirection = currentDirection.normalize(); // Store the initial direction as unit vector
@@ -387,11 +390,11 @@ public class RaycastingHelper {
 
             // cast Green rays
             if (hitBlock) {
-                castGreenRay(world, player, actualEnd, entities, totalDistanceTraveled*BounceAbsMult, initialDirection);
+                castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled*BounceAbsMult, initialDirection);
                 if (ENABLE_REVERB)
-                    castBlueRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
+                    castBlueRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
                 if (ENABLE_PERMEATION)
-                    castRedRay(world, player, actualEnd, entities, totalDistanceTraveled, initialDirection);
+                    castRedRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
             }
             // Draw this segment
 //            drawBouncingRaySegment(world, currentPos, actualEnd, bounce);
@@ -564,7 +567,16 @@ public class RaycastingHelper {
             double distanceToEntity = currentPos.distanceTo(entityCenter);
 //            if (distanceToEntity + currentDistance > SPEED_OF_SOUND_TICKS || distanceToEntity > SPEED_OF_SOUND_TICKS)
 //                continue;
+            RaycastContext raycastContext = new RaycastContext(
+                    currentPos,
+                    entityCenter,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
 
+            BlockHitResult blockHit = world.raycast(raycastContext);
+            currentPos = blockHit.getPos();
             // Count blocks between player and sound source
             int blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
             if (blockCount == 0) // so green and red rays don't overlap

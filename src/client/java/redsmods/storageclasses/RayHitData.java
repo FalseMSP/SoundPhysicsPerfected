@@ -1,4 +1,4 @@
-package redsmods;
+package redsmods.storageclasses;
 
 import net.minecraft.util.math.Vec3d;
 

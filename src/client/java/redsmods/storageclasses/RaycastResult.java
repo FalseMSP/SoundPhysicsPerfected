@@ -1,9 +1,6 @@
-package redsmods;
+package redsmods.storageclasses;
 
 import net.minecraft.util.math.Vec3d;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class RaycastResult {
     public final double totalDistance;
