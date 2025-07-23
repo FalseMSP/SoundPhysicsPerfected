@@ -96,15 +96,6 @@ public abstract class SoundSystemMixin {
                     soundQueue.poll();
                 }
 
-
-                // Get player position for debug message
-//                Vec3d playerPos = client.player.getEyePos();
-//                String coordinates = String.format("(%.2f, %.2f, %.2f)", soundX, soundY, soundZ);
-//                double distance = playerPos.distanceTo(soundPos);
-//                String distanceStr = String.format("%.2fm", distance);
-//                String message = String.format("Sound: %s at %s [%s] - Queued (%d total)",
-//                        soundId, coordinates, distanceStr, soundQueue.size());
-//                client.player.sendMessage(Text.literal(message), true);
                 ci.cancel();
             } else if (ENABLE_PERMEATION && sound instanceof RedPermeatedSoundInstance) {
                 FXQueue.add(sound);

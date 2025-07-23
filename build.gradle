@@ -42,14 +42,14 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 	modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
 
-	modImplementation "net.fabricmc.fabric-api:fabric-api:<latest>"
-	modImplementation "net.fabricmc:fabric-language-kotlin:<version>"
+//	modImplementation "net.fabricmc.fabric-api:fabric-api:<latest>"
+//	modImplementation "net.fabricmc:fabric-language-kotlin:<version>"
 
 	// ModMenu for Fabric 1.21.1
 	modImplementation("com.terraformersmc:modmenu:${project.modmenu_version}")
 
 	// Cloth Config for Fabric 1.21.1
-	modApi("me.shedaniel.cloth:cloth-config-fabric:15.0.127") {
+	modApi("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
 		exclude(group: "net.fabricmc.fabric-api")
 	}
 }
