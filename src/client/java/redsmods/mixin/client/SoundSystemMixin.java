@@ -73,7 +73,6 @@ public abstract class SoundSystemMixin {
         MinecraftClient client = MinecraftClient.getInstance();
         // Add null checks
         if (client == null || client.player == null || client.world == null || sound == null) {
-            System.out.println("not in world");
             return;
         }
 
