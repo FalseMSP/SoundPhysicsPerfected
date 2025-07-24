@@ -9,6 +9,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+enum RedsAttenuationType {
+    INVERSE_SQUARE,
+    LINEAR
+}
+
 public class Config {
     private static Config INSTANCE;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -22,6 +27,7 @@ public class Config {
     public int maxRayLength = 8;
     public float SoundMult = 2;
     public int tickRate = 2; // once every 2 ticks
+    public RedsAttenuationType attenuationType = RedsAttenuationType.INVERSE_SQUARE;
 
     public static Config getInstance() {
         if (INSTANCE == null) {
