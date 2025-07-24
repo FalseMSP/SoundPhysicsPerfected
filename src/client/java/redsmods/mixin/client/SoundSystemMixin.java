@@ -35,8 +35,6 @@ public abstract class SoundSystemMixin {
 
     private static final int MAX_SOUNDS = 100; // Limit queue size to prevent memory issues
 
-    int reverb0 = EXTEfx.alGenEffects();
-
     private static int auxFXSlot = 0;
     private static int reverbEffect = 0;
     private static int muffleFilter = 0;
@@ -292,6 +290,9 @@ public abstract class SoundSystemMixin {
      */
     private static void applyReverbToSource(int sourceId) {
         try {
+            if (distanceFromWallEchoDenom == 0 || reverbDenom == 0 || outdoorLeakDenom == 0)
+                return;
+
             float wallDistance = (float) (RaycastingHelper.distanceFromWallEcho / RaycastingHelper.distanceFromWallEchoDenom);
             float occlusionPercent = (float) RaycastingHelper.reverbStrength / RaycastingHelper.reverbDenom;
             float outdoorLeakPercent = (float) RaycastingHelper.outdoorLeak / RaycastingHelper.outdoorLeakDenom;

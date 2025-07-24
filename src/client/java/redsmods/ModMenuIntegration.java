@@ -80,6 +80,13 @@ public class ModMenuIntegration implements ModMenuApi {
                 .setTooltip(Text.translatable("Cast Red (Permeating) Rays and add muffle dynamically to permeated sources\nPERFORMANCE IMPACT: MEDIUM"))
                 .setSaveConsumer(newValue -> config.permeationEnabled = newValue)
                 .build());
+
+        general.addEntry(entryBuilder
+                .startEnumSelector(Text.translatable("Attenuation Mode"), RedsAttenuationType.class, config.attenuationType)
+                .setDefaultValue(RedsAttenuationType.INVERSE_SQUARE)
+                .setTooltip(Text.translatable("Inverse Square is realism, Linear is Minecraft\nPERFORMANCE IMPACT: NONE"))
+                .setSaveConsumer(newValue -> config.attenuationType = newValue)
+                .build());
         return builder.build();
     }
 }
