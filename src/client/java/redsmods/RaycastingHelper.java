@@ -501,7 +501,11 @@ public class RaycastingHelper {
             SoundData data = new TickableSoundData(soundEntity,soundEntity.getOriginalPosition(),soundEntity.getSound().getIdentifier().toString());
             if (hasLineOfSight) {
                 // Calculate weight based on distance (closer = higher weight)
-                double weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1));
+                double weight;
+                if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
+                    weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1)); // quadratic
+                else
+                    weight = 1.0 / Math.max(distanceToEntity+currentDistance, 0.1); // linear
 
                 // Create ray result for this direct line of sight
                 RaycastResult GreenRayResult = new RaycastResult(
