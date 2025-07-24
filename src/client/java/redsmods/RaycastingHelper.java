@@ -32,9 +32,6 @@ public class RaycastingHelper {
     Red: Sound Seeking Permeated Ray
     More to be defined.
      */
-    private static int RAYS_CAST = Config.getInstance().raysCast;
-    private static int MAX_BOUNCES = Config.getInstance().raysBounced;
-    private static double RAY_SEGMENT_LENGTH = 16.0 * Config.getInstance().maxRayLength; // 12 chunk max length
     public static final Queue<RedTickableInstance> tickQueue = new LinkedList<>();
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
@@ -55,9 +52,13 @@ public class RaycastingHelper {
     public static final Map<SoundInstance, SoundInstance> soundPermInstanceMap = new ConcurrentHashMap<>();
 
     // Config Grabbed stuff
+    private static int RAYS_CAST = Config.getInstance().raysCast;
+    private static int MAX_BOUNCES = Config.getInstance().raysBounced;
+    private static double RAY_SEGMENT_LENGTH = 16.0 * Config.getInstance().maxRayLength; // 12 chunk max length
     public static boolean ENABLE_REVERB = Config.getInstance().reverbEnabled;
     public static boolean ENABLE_PERMEATION = Config.getInstance().permeationEnabled;
     public static int TICK_RATE = Config.getInstance().tickRate;
+    public static RedsAttenuationType ATTENUATION_TYPE = Config.getInstance().attenuationType;
 
     public static void getConfig() {
         RAYS_CAST = Config.getInstance().raysCast;
@@ -66,6 +67,7 @@ public class RaycastingHelper {
         ENABLE_PERMEATION = Config.getInstance().permeationEnabled;
         RAY_SEGMENT_LENGTH = 16.0 * Config.getInstance().maxRayLength;
         TICK_RATE = Config.getInstance().tickRate;
+        ATTENUATION_TYPE = Config.getInstance().attenuationType;
     }
 
     public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
@@ -451,8 +453,11 @@ public class RaycastingHelper {
 
             if (hasLineOfSight) {
                 // Calculate weight based on distance (closer = higher weight)
-                double weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1));
-
+                double weight;
+                if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
+                    weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1)); // quadratic
+                else
+                    weight = 1.0 / Math.max(distanceToEntity+currentDistance, 0.1); // linear
                 // Create ray result for this direct line of sight
                 RaycastResult GreenRayResult = new RaycastResult(
                         distanceToEntity,
@@ -496,7 +501,11 @@ public class RaycastingHelper {
             SoundData data = new TickableSoundData(soundEntity,soundEntity.getOriginalPosition(),soundEntity.getSound().getIdentifier().toString());
             if (hasLineOfSight) {
                 // Calculate weight based on distance (closer = higher weight)
-                double weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1));
+                double weight;
+                if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
+                    weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1)); // quadratic
+                else
+                    weight = 1.0 / Math.max(distanceToEntity+currentDistance, 0.1); // linear
 
                 // Create ray result for this direct line of sight
                 RaycastResult GreenRayResult = new RaycastResult(
