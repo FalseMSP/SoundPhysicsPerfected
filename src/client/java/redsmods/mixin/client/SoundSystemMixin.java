@@ -37,8 +37,6 @@ public abstract class SoundSystemMixin {
 
     private static final int MAX_SOUNDS = 100; // Limit queue size to prevent memory issues
 
-    int reverb0 = EXTEfx.alGenEffects();
-
     private static int auxFXSlot = 0;
     private static int reverbEffect = 0;
     private static int muffleFilter = 0;
