@@ -297,6 +297,8 @@ public abstract class SoundSystemMixin {
      */
     private static void applyReverbToSource(int sourceId) {
         try {
+            if (distanceFromWallEchoDenom == 0 || reverbDenom == 0 || outdoorLeakDenom == 0)
+                return;
             float wallDistance = (float) (RaycastingHelper.distanceFromWallEcho / RaycastingHelper.distanceFromWallEchoDenom);
             float occlusionPercent = (float) RaycastingHelper.reverbStrength / RaycastingHelper.reverbDenom;
             float outdoorLeakPercent = (float) RaycastingHelper.outdoorLeak / RaycastingHelper.outdoorLeakDenom;
