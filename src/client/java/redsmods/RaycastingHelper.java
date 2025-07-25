@@ -112,7 +112,6 @@ public class RaycastingHelper {
                 world, player, playerEyePos, rayDirections, soundQueue, maxTotalDistance);
 
         if (averagedResults.isEmpty() && muffledAveragedResults.isEmpty()) {
-//            System.out.println("No sounds detected by raycasting");
             return;
         }
 
@@ -124,7 +123,6 @@ public class RaycastingHelper {
 
         if(!ENABLE_PERMEATION)
             return;
-//        System.out.println("Processing " + muffledAveragedResults.size() + " muffled sounds:");
         for (AveragedSoundData avgData : muffledAveragedResults.values()) {
             playMuffled(client, avgData, playerEyePos, 0.6f, 1f);
         }
@@ -175,20 +173,6 @@ public class RaycastingHelper {
             } else if (((RedSoundInstance) originalSound) instanceof TickableSoundInstance) {
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, new Vec3d(originalSound.getX(), originalSound.getY(), originalSound.getZ()),baseVolume);
             } else {
-//                newSound = new RedPositionedSoundInstance(
-//                        soundId,                                    // Sound identifier
-//                        originalSound.getCategory(),                // Sound category
-//                        Math.max(0.01f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
-//                        Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
-//                        SoundInstance.createRandom(),                           // Random instance
-//                        originalSound.isRepeatable(),
-//                        originalSound.getRepeatDelay(),              // Repeat delay
-//                        originalSound.getAttenuationType(),
-//                        (float) targetPosition.x,                   // X position
-//                        (float) targetPosition.y,                   // Y position
-//                        (float) targetPosition.z,                   // Z position
-//                        originalSound.isRelative()                  // Relative positioning
-//                );
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound,new Vec3d(originalSound.getX(),originalSound.getY(),originalSound.getZ()),baseVolume);
                 System.out.println(targetPosition);
                 System.out.println(adjustedVolume);
@@ -310,7 +294,6 @@ public class RaycastingHelper {
             averagedResults.put(entity, averagedData);
         }
 
-//        System.out.println(redRaysToTarget);
         for (Map.Entry<SoundData, List<RayHitData>> entry : redRaysToTarget.entrySet()) {
             SoundData entity = entry.getKey();
             List<RayHitData> rayHits = entry.getValue();

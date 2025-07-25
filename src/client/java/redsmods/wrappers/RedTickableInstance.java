@@ -134,13 +134,61 @@ public class RedTickableInstance implements TickableSoundInstance {
     }
 
     public void setPos(Vec3d targetPosition) {
-        x = targetPosition.getX();
-        y = targetPosition.getY();
-        z = targetPosition.getZ();
+        // Calculate the direction vector to the target
+        double deltaX = targetPosition.getX() - x;
+        double deltaY = targetPosition.getY() - y;
+        double deltaZ = targetPosition.getZ() - z;
+
+        // Calculate the distance to the target
+        double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+
+        // If we're already at the target or very close, set position directly
+        if (distance <= 0.001) {
+            x = targetPosition.getX();
+            y = targetPosition.getY();
+            z = targetPosition.getZ();
+            return;
+        }
+
+        // Maximum speed in blocks per tick
+        double maxSpeed = 0.05 * TICK_RATE;
+
+        // Calculate how far we can move this tick
+        double moveDistance = Math.min(maxSpeed, distance);
+
+        // Normalize the direction vector and scale by move distance
+        double moveX = (deltaX / distance) * moveDistance;
+        double moveY = (deltaY / distance) * moveDistance;
+        double moveZ = (deltaZ / distance) * moveDistance;
+
+        // Update position
+        x += moveX;
+        y += moveY;
+        z += moveZ;
     }
 
-    public void setVolume(float max) {
-        volume = max;
+    public void setVolume(float targetVolume) {
+        // Calculate the difference between current and target volume
+        float deltaVolume = targetVolume - volume;
+
+        // If we're already at the target or very close, set volume directly
+        if (Math.abs(deltaVolume) <= 0.001f) {
+            volume = targetVolume;
+            return;
+        }
+
+        // Maximum volume change per tick
+        float maxVolumeChange = 0.05f * TICK_RATE;
+
+        // Calculate how much we can change this tick
+        float volumeChange = Math.min(maxVolumeChange, Math.abs(deltaVolume));
+
+        // Apply the change in the correct direction
+        if (deltaVolume > 0) {
+            volume += volumeChange;
+        } else {
+            volume -= volumeChange;
+        }
     }
 
     public void setDone(boolean done) {
