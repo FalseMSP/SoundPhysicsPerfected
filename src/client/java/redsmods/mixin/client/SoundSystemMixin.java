@@ -60,6 +60,8 @@ public abstract class SoundSystemMixin {
 
     @Shadow public abstract void tick(boolean paused);
 
+    @Shadow @Final private SoundLoader soundLoader;
+
     @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)Lnet/minecraft/client/sound/SoundSystem$PlayResult;", at = @At("HEAD"), cancellable = true)
     private void onSoundPlay(SoundInstance sound, CallbackInfoReturnable<SoundSystem.PlayResult> cir) {
         if (!efxInitialized) {
@@ -70,7 +72,7 @@ public abstract class SoundSystemMixin {
 
         MinecraftClient client = MinecraftClient.getInstance();
         // Add null checks
-        if (client == null || client.player == null || client.world == null || sound == null || this.loader == null) {
+        if (client == null || client.player == null || client.world == null || sound == null || this.soundLoader == null) {
             return;
         }
 
