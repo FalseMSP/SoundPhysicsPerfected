@@ -23,6 +23,8 @@ public class RedTickableInstance implements TickableSoundInstance {
     private float volume;
     private float pitch;
     private int tickCount;
+    private Vec3d targetPosition;
+    private float targetVolume;
 
     public RedTickableInstance(Identifier soundID, Sound sound, SoundCategory category, Vec3d position, float volume, float pitch, SoundInstance wrapped, Vec3d originalPos, float originalVolume) {
         this.soundID = soundID;
@@ -38,6 +40,8 @@ public class RedTickableInstance implements TickableSoundInstance {
         this.originalPos = originalPos;
         this.originalVolume = originalVolume;
         tickCount = 0;
+        targetPosition = position;
+        targetVolume = volume;
     }
 
     @Override
@@ -53,6 +57,8 @@ public class RedTickableInstance implements TickableSoundInstance {
             RaycastingHelper.tickQueue.add(this);
         if (wrapped instanceof TickableSoundInstance)
             ((TickableSoundInstance) wrapped).tick();
+        updatePos();
+        updateVolume();
     }
 
     @Override
@@ -134,6 +140,12 @@ public class RedTickableInstance implements TickableSoundInstance {
     }
 
     public void setPos(Vec3d targetPosition) {
+        if (this.soundID.toString().contains("rain")) {
+            this.targetPosition = targetPosition;
+        }
+    }
+
+    public void updatePos() {
         // Calculate the direction vector to the target
         double deltaX = targetPosition.getX() - x;
         double deltaY = targetPosition.getY() - y;
@@ -151,7 +163,7 @@ public class RedTickableInstance implements TickableSoundInstance {
         }
 
         // Maximum speed in blocks per tick
-        double maxSpeed = 0.05 * TICK_RATE;
+        double maxSpeed = 17.15; // m per tick, speed of sound
 
         // Calculate how far we can move this tick
         double moveDistance = Math.min(maxSpeed, distance);
@@ -168,6 +180,9 @@ public class RedTickableInstance implements TickableSoundInstance {
     }
 
     public void setVolume(float targetVolume) {
+        this.targetVolume = targetVolume;
+    }
+    public void updateVolume() {
         // Calculate the difference between current and target volume
         float deltaVolume = targetVolume - volume;
 

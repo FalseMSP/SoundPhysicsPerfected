@@ -90,7 +90,7 @@ public class RaycastingHelper {
             weatherQueue.clear();
 
             for (SoundData sound : soundQueue) {
-                if (sound.soundId.equals("minecraft:weather.rain")) {
+                if (sound.soundId.contains("rain")) {
                     weatherQueue.add(sound);
                     soundQueue.remove(sound);
                 }
@@ -147,8 +147,12 @@ public class RaycastingHelper {
         try {
 
             // Calculate the target position
-            Vec3d targetPosition = playerPos.add(avgData.averageDirection.multiply(1)); // avgData.averageDistance
-
+            Vec3d targetPosition;
+            if (avgData.soundEntity.soundId.contains("rain")) { // if outdoors and raining, make the rain sound play on the player to make it sound like its all around the player && ((double) outdoorLeak / outdoorLeakDenom) > 0.4
+                targetPosition = playerPos.add(avgData.averageDirection.multiply(5));
+            } else {
+                targetPosition = playerPos.add(avgData.averageDirection.multiply(avgData.averageDistance));
+            }
             // Get original sound properties
             SoundInstance originalSound = avgData.soundEntity.sound;
             Identifier soundId = originalSound.getId();
@@ -160,10 +164,12 @@ public class RaycastingHelper {
             }
             // Calculate adjusted volume based on ray count and weight (confidence-based)
             float baseVolume;
+
             if (originalSound instanceof RedTickableInstance)
                 baseVolume = ((RedTickableInstance) originalSound).getOriginalVolume();
             else
                 baseVolume = ((RedSoundInstance) originalSound).original.getVolume();
+
             float confidenceMultiplier = (float) Math.min(1.0, Math.log10(avgData.totalWeight + 1.0));
             float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier;
 
@@ -409,29 +415,25 @@ public class RaycastingHelper {
             } else {
                 // Ray reached maximum segment length without hitting anything, Outside/Outdoor Rays!!
                 for (SoundData soundEntity : weatherQueue) {
-                    if (soundEntity.soundId.equals("minecraft:weather.rain")) {
-                        // Create ray result for this direct line of sight
+                    double weight;
+                    if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
+                        weight = 1.0 / (Math.max(totalDistanceTraveled - segmentDistance, 0.1) * Math.max(totalDistanceTraveled - segmentDistance, 0.1)); // quadratic
+                    else
+                        weight = 1.0 / Math.max(totalDistanceTraveled - segmentDistance, 0.1); // linear
 
-                        double weight;
-                        if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
-                            weight = 1.0 / (Math.max(totalDistanceTraveled - segmentDistance, 0.1) * Math.max(totalDistanceTraveled - segmentDistance, 0.1)); // quadratic
-                        else
-                            weight = 1.0 / Math.max(totalDistanceTraveled - segmentDistance, 0.1); // linear
+                    RaycastResult GreenRayResult = new RaycastResult(
+                            maxTotalDistance,
+                            initialDirection,
+                            soundEntity
+                    );
 
-                        RaycastResult GreenRayResult = new RaycastResult(
-                                maxTotalDistance,
-                                initialDirection,
-                                soundEntity
-                        );
+                    RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight);
 
-                        RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight);
+                    // Add to rayHitsByEntity map
+                    rayHitsByEntity.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
 
-                        // Add to rayHitsByEntity map
-                        rayHitsByEntity.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
-
-                        // Increment ray hit count for this entity
-                        entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
-                    }
+                    // Increment ray hit count for this entity
+                    entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
                 }
 
                 // Calculate reflected direction based on hit face (spherical reflection)
