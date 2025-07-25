@@ -35,6 +35,7 @@ public class RaycastingHelper {
     public static final Queue<RedTickableInstance> tickQueue = new LinkedList<>();
     private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
+    public static final Queue<SoundData> weatherQueue = new LinkedList<>();
     private static final double SPEED_OF_SOUND_TICKS = 17.15; // 17.15 blocks per gametick
     private static final Map<Integer,ArrayList<SoundInstance>> soundPlayingWaiting = new HashMap<>();
     private static int ticksSinceWorld;
@@ -85,6 +86,15 @@ public class RaycastingHelper {
 
             if (soundQueue.isEmpty() && tickQueue.isEmpty())
                 return; // no sounds to proc
+
+            weatherQueue.clear();
+
+            for (SoundData sound : soundQueue) {
+                if (sound.soundId.equals("minecraft:weather.rain")) {
+                    weatherQueue.add(sound);
+                    soundQueue.remove(sound);
+                }
+            }
 
             // Generate ray directions
             Vec3d[] rayDirections = RaycastingHelper.generateRayDirections();
@@ -174,8 +184,6 @@ public class RaycastingHelper {
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, new Vec3d(originalSound.getX(), originalSound.getY(), originalSound.getZ()),baseVolume);
             } else {
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound,new Vec3d(originalSound.getX(),originalSound.getY(),originalSound.getZ()),baseVolume);
-                System.out.println(targetPosition);
-                System.out.println(adjustedVolume);
             }
             soundInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(),newSound);
             if (adjustedVolume <= 0.01)
@@ -342,7 +350,6 @@ public class RaycastingHelper {
         double totalDistanceTraveled = 0.0;
 
         SoundData hitEntity = null;
-        boolean rayCompleted = false;
 
         for (int bounce = 0; bounce <= MAX_BOUNCES && remainingDistance > 0; bounce++) {
             double BounceAbsMult = Math.pow(0.7,bounce); // Bounce Absoprtion
@@ -400,17 +407,53 @@ public class RaycastingHelper {
                 // Reduce remaining distance
                 remainingDistance -= segmentTraveled;
             } else {
-                // Ray reached maximum segment length without hitting anything
-                reverbDenom += (MAX_BOUNCES-bounce);
-                outdoorLeak += (MAX_BOUNCES-bounce);
-                outdoorLeakDenom += (MAX_BOUNCES-bounce);
-                rayCompleted = true;
-                break;
+                // Ray reached maximum segment length without hitting anything, Outside/Outdoor Rays!!
+                for (SoundData soundEntity : weatherQueue) {
+                    if (soundEntity.soundId.equals("minecraft:weather.rain")) {
+                        // Create ray result for this direct line of sight
+
+                        double weight;
+                        if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
+                            weight = 1.0 / (Math.max(totalDistanceTraveled - segmentDistance, 0.1) * Math.max(totalDistanceTraveled - segmentDistance, 0.1)); // quadratic
+                        else
+                            weight = 1.0 / Math.max(totalDistanceTraveled - segmentDistance, 0.1); // linear
+
+                        RaycastResult GreenRayResult = new RaycastResult(
+                                maxTotalDistance,
+                                initialDirection,
+                                soundEntity
+                        );
+
+                        RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight);
+
+                        // Add to rayHitsByEntity map
+                        rayHitsByEntity.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
+
+                        // Increment ray hit count for this entity
+                        entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
+                    }
+                }
+
+                // Calculate reflected direction based on hit face (spherical reflection)
+                Vec3d toCenter = player.getPos().subtract(actualEnd); // points towards player
+                Vec3d normal = toCenter.normalize();
+                Vec3d reflectedDirection = calculateReflection(currentDirection, normal);
+
+                // Update for next bounce
+                currentPos = segmentEnd.add(reflectedDirection.multiply(0.01)); // Small offset to avoid hitting same block
+                currentDirection = reflectedDirection;
+
+                // Reduce remaining distance
+                remainingDistance -= segmentTraveled;
+
+                reverbDenom += 1;
+                outdoorLeak += 1;
+                outdoorLeakDenom += 1;
             }
         }
 
         // Return comprehensive result
-        return new RaycastResult(totalDistanceTraveled, initialDirection, hitEntity, currentPos, rayCompleted);
+        return new RaycastResult(totalDistanceTraveled, initialDirection, hitEntity, currentPos);
     }
 
     private static void castGreenRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
@@ -446,8 +489,7 @@ public class RaycastingHelper {
                         distanceToEntity,
                         initalDirection,
                         soundEntity,
-                        entityCenter,
-                        true
+                        entityCenter
                 );
 
                 RayHitData hitData = new RayHitData(GreenRayResult, initalDirection, weight);
@@ -495,8 +537,7 @@ public class RaycastingHelper {
                         distanceToEntity,
                         initalDirection,
                         data,
-                        entityCenter,
-                        true
+                        entityCenter
                 );
 
                 RayHitData hitData = new RayHitData(GreenRayResult, initalDirection, weight);
@@ -585,16 +626,12 @@ public class RaycastingHelper {
                     distanceToEntity,
                     initalDirection,
                     soundEntity,
-                    entityCenter,
-                    blockCount == 0 // true if no blocks in between
+                    entityCenter
             );
             RayHitData hitData = new RayHitData(rayResult, initalDirection, weight);
 
             // Add to rayHitsByEntity map
             redRaysToTarget.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
-
-            // Increment ray hit count for this entity
-//            entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
 
             // Optional: Log block count for debugging
             // System.out.println("Blocks between player and " + soundEntity + ": " + blockCount);
@@ -675,6 +712,13 @@ public class RaycastingHelper {
     public static Vec3d calculateReflection(Vec3d incident, Direction hitSide) {
         Vec3d normal = Vec3d.of(hitSide.getVector());
 
+        // Reflection formula: R = I - 2(I·N)N
+        // Where I is incident vector, N is normal, R is reflected vector
+        double dotProduct = incident.dotProduct(normal);
+        return incident.subtract(normal.multiply(2 * dotProduct));
+    }
+
+    public static Vec3d calculateReflection(Vec3d incident, Vec3d normal) {
         // Reflection formula: R = I - 2(I·N)N
         // Where I is incident vector, N is normal, R is reflected vector
         double dotProduct = incident.dotProduct(normal);

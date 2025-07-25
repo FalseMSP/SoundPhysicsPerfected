@@ -306,7 +306,7 @@ public abstract class SoundSystemMixin {
             float occlusionPercent = (float) RaycastingHelper.reverbStrength / RaycastingHelper.reverbDenom;
             float outdoorLeakPercent = (float) RaycastingHelper.outdoorLeak / RaycastingHelper.outdoorLeakDenom;
 
-//            System.out.println(occlusionPercent +" " + wallDistance + " " + outdoorLeakPercent);
+            System.out.println("REVERB DEBUG" + occlusionPercent +" " + wallDistance + " " + outdoorLeakPercent);
 
             float distanceMeters     = clamp(wallDistance, 1.0f, 100.0f);
             occlusionPercent   = 1 - clamp(occlusionPercent+outdoorLeakPercent, 0.0f, 1.0f);
