@@ -34,8 +34,6 @@ public abstract class SoundSystemMixin {
 
     private static final int MAX_SOUNDS = 100; // Limit queue size to prevent memory issues
 
-    int reverb0 = EXTEfx.alGenEffects();
-
     private static int auxFXSlot = 0;
     private static int reverbEffect = 0;
     private static int muffleFilter = 0;
@@ -67,7 +65,7 @@ public abstract class SoundSystemMixin {
 
         MinecraftClient client = MinecraftClient.getInstance();
         // Add null checks
-        if (client == null || client.player == null || client.world == null || sound == null) {
+        if (client == null || client.player == null || client.world == null || sound == null || this.loader == null) {
             return;
         }
 
@@ -300,11 +298,14 @@ public abstract class SoundSystemMixin {
      */
     private static void applyReverbToSource(int sourceId) {
         try {
+            if (distanceFromWallEchoDenom == 0 || reverbDenom == 0 || outdoorLeakDenom == 0)
+                return;
+
             float wallDistance = (float) (RaycastingHelper.distanceFromWallEcho / RaycastingHelper.distanceFromWallEchoDenom);
             float occlusionPercent = (float) RaycastingHelper.reverbStrength / RaycastingHelper.reverbDenom;
             float outdoorLeakPercent = (float) RaycastingHelper.outdoorLeak / RaycastingHelper.outdoorLeakDenom;
 
-//            System.out.println(occlusionPercent +" " + wallDistance + " " + outdoorLeakPercent);
+//            System.out.println("REVERB DEBUG: " + occlusionPercent +" " + wallDistance + " " + outdoorLeakPercent);
 
             float distanceMeters     = clamp(wallDistance, 1.0f, 100.0f);
             occlusionPercent   = 1 - clamp(occlusionPercent+outdoorLeakPercent, 0.0f, 1.0f);
