@@ -24,9 +24,9 @@ public class Config {
     public int raysBounced = 3;
     public boolean reverbEnabled = true;
     public boolean permeationEnabled = true;
-    public int maxRayLength = 8;
-    public float SoundMult = 2;
-    public int tickRate = 2; // once every 2 ticks
+    public int maxRayLength = 4; // chunks
+    public float SoundMult = 1; // make it just work like default Minecraft for lag helping :)
+    public int tickRate = 5; // once every 5 ticks
     public RedsAttenuationType attenuationType = RedsAttenuationType.INVERSE_SQUARE;
 
     public static Config getInstance() {

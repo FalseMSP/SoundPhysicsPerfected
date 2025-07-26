@@ -140,9 +140,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     }
 
     public void setPos(Vec3d targetPosition) {
-        if (this.soundID.toString().contains("rain")) {
-            this.targetPosition = targetPosition;
-        }
+        this.targetPosition = targetPosition;
     }
 
     public void updatePos() {
@@ -180,7 +178,9 @@ public class RedTickableInstance implements TickableSoundInstance {
     }
 
     public void setVolume(float targetVolume) {
-        this.targetVolume = targetVolume;
+        if (!this.soundID.toString().contains("rain")) {
+            this.targetVolume = targetVolume;
+        }
     }
     public void updateVolume() {
         // Calculate the difference between current and target volume
