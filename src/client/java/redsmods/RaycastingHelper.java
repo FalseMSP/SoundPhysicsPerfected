@@ -127,7 +127,6 @@ public class RaycastingHelper {
 
 
         for (AveragedSoundData avgData : averagedResults.values()) {
-            System.out.println("Processing " + avgData.soundEntity.soundId + " detected sounds:" + avgData.rayCount);
             playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.8f, 1.0f);
         }
 
