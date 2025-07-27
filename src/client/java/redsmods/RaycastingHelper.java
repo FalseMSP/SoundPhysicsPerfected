@@ -179,9 +179,6 @@ public class RaycastingHelper {
 
             // Create positioned sound with adjustments
             if (originalSound instanceof RedTickableInstance) { // update pos of sounds
-                System.out.println(soundId);
-                System.out.println(((RedTickableInstance) originalSound).getOriginalPosition());
-                System.out.println(originalSound.getX() + "    " + originalSound.getY() + "    " + originalSound.getZ());
                 ((RedTickableInstance) originalSound).setPos(targetPosition);
                 ((RedTickableInstance) originalSound).setVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
                 return;
@@ -197,7 +194,7 @@ public class RaycastingHelper {
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
 
             // echo logic (DEPRECATED)
-            System.out.println(distanceFromWallEcho + ", " + reverbStrength);
+//            System.out.println(distanceFromWallEcho + ", " + reverbStrength);
 
             // Debug output
 //            System.out.println("Playing adjusted averaged sound: " + soundId.toString());
