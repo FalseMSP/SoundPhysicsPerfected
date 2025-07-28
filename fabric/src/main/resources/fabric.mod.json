@@ -3,9 +3,9 @@
   "id": "sound_physics_perfected",
   "version": "${version}",
   "name": "Sound Physics Perfected",
-  "description": "This is an example description! Tell everyone what your mod is about!",
+  "description": "Ray Traced Audio Implementation for Minecraft",
   "authors": [
-    "Me!"
+    "RedLife"
   ],
   "contact": {
     "homepage": "https://fabricmc.net/",
@@ -15,14 +15,16 @@
   "icon": "assets/sound_physics_perfected/icon.png",
   "environment": "*",
   "entrypoints": {
-    
+    "modmenu": [
+      "com.redsmods.sound_physics_perfected.fabric.ModMenuIntegration"
+    ]
   },
   "mixins": [
     "sound_physics_perfected.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.16.14",
-    "minecraft": "~1.21.1",
+    "minecraft": "~1.21.6",
     "java": ">=21",
     "architectury": ">=13.0.8",
     "fabric-api": "*"

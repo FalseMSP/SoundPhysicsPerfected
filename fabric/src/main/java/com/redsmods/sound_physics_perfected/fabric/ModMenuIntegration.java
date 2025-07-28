@@ -1,4 +1,4 @@
-package com.redsmods.sound_physics_perfected.fabric.client;
+package com.redsmods.sound_physics_perfected.fabric;
 
 import com.redsmods.sound_physics_perfected.Config;
 import com.redsmods.sound_physics_perfected.RaycastingHelper;

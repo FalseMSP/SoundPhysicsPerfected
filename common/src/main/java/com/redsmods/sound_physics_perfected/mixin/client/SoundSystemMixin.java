@@ -19,6 +19,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 import java.util.HashMap;
@@ -46,7 +47,7 @@ public abstract class SoundSystemMixin {
     private static final Map<Integer, RedTickableInstance> tickMap = new HashMap<>();
 
     @Shadow
-    private SoundManager loader;
+    private SoundManager soundManager;
     @Shadow
     private Map<SoundInstance, Channel.SourceManager> sources;
 
@@ -56,8 +57,8 @@ public abstract class SoundSystemMixin {
 
     @Shadow public abstract void tick(boolean paused);
 
-    @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
-    private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
+    @Inject(method = "play(Lnet/minecraft/client/sound/SoundInstance;)Lnet/minecraft/client/sound/SoundSystem$PlayResult;", at = @At("HEAD"), cancellable = true)
+    private void onSoundPlay(SoundInstance sound, CallbackInfoReturnable<SoundSystem.PlayResult> cir) {
         if (!efxInitialized) {
             initializeReverb();
         }
@@ -66,12 +67,12 @@ public abstract class SoundSystemMixin {
 
         MinecraftClient client = MinecraftClient.getInstance();
         // Add null checks
-        if (client == null || client.player == null || client.world == null || sound == null || this.loader == null) {
+        if (client == null || client.player == null || client.world == null || sound == null || this.soundManager == null) {
             return;
         }
 
         try {
-            WeightedSoundSet weightedSoundSet = sound.getSoundSet(this.loader); // load pitches and whatnot into the sound data
+            WeightedSoundSet weightedSoundSet = sound.getSoundSet(this.soundManager); // load pitches and whatnot into the sound data
             if (!(sound instanceof RedPositionedSoundInstance || sound instanceof TickableSoundInstance || sound instanceof RedPermeatedSoundInstance) && sound.getAttenuationType() != SoundInstance.AttenuationType.NONE) { // !replayList.contains(redSoundData)
                 // Get sound coordinates
                 double soundX = sound.getX();
@@ -94,7 +95,7 @@ public abstract class SoundSystemMixin {
                     soundQueue.poll();
                 }
 
-                ci.cancel();
+                cir.cancel();
             } else if (ENABLE_PERMEATION && sound instanceof RedPermeatedSoundInstance) {
                 FXQueue.add(sound);
             } else if (TICK_RATE == 0 && sound instanceof RedTickableInstance) {

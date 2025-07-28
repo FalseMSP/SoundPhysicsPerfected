@@ -662,38 +662,6 @@ public class RaycastingHelper {
         return blockCount;
     }
 
-    public static void drawGreenRay(World world, Vec3d start, Vec3d end) {
-        if (world.isClient) {
-            Vec3d direction = end.subtract(start).normalize();
-            double distance = start.distanceTo(end);
-
-            // Draw Green particles for line of sight rays
-            for (double d = 0; d < distance; d += 0.5) {
-                Vec3d particlePos = start.add(direction.multiply(d));
-
-                // Use Green particles for line of sight visualization
-                world.addParticle(ParticleTypes.HAPPY_VILLAGER,
-                        particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
-            }
-        }
-    }
-
-    public static void drawBlueRay(World world, Vec3d start, Vec3d end) {
-        if (world.isClient) {
-            Vec3d direction = end.subtract(start).normalize();
-            double distance = start.distanceTo(end);
-
-            // Draw Green particles for line of sight rays
-            for (double d = 0; d < distance; d += 0.5) {
-                Vec3d particlePos = start.add(direction.multiply(d));
-
-                // Use Green particles for line of sight visualization
-                world.addParticle(ParticleTypes.SOUL_FIRE_FLAME,
-                        particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
-            }
-        }
-    }
-
     public static Vec3d calculateReflection(Vec3d incident, Direction hitSide) {
         Vec3d normal = Vec3d.of(hitSide.getVector());
 
@@ -708,59 +676,6 @@ public class RaycastingHelper {
         // Where I is incident vector, N is normal, R is reflected vector
         double dotProduct = incident.dotProduct(normal);
         return incident.subtract(normal.multiply(2 * dotProduct));
-    }
-
-    public static void drawBouncingRaySegment(World world, Vec3d start, Vec3d end, int bounceCount) {
-        if (world.isClient) {
-            Vec3d direction = end.subtract(start).normalize();
-            double distance = start.distanceTo(end);
-
-            // Use different colors based on bounce count
-            for (double d = 0; d < distance; d += 0.4) {
-                Vec3d particlePos = start.add(direction.multiply(d));
-
-                // Color coding: first ray = white, bounces = progressively more red
-                switch (bounceCount) {
-                    case 0:
-                        // Original ray - white/Green
-                        world.addParticle(net.minecraft.particle.ParticleTypes.END_ROD,
-                                particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
-                        break;
-                    case 1:
-                        // First bounce - light red
-                        world.addParticle(net.minecraft.particle.ParticleTypes.FLAME,
-                                particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
-                        break;
-                    case 2:
-                        // Second bounce - orange
-                        world.addParticle(net.minecraft.particle.ParticleTypes.LAVA,
-                                particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
-                        break;
-                    default:
-                        // Third+ bounce - red smoke
-                        world.addParticle(net.minecraft.particle.ParticleTypes.LARGE_SMOKE,
-                                particlePos.x, particlePos.y, particlePos.z, 0, 0, 0);
-                        break;
-                }
-            }
-        }
-    }
-
-    public static void drawEntityDetectionLine(World world, Vec3d start, Vec3d end) {
-        if (world.isClient) {
-            Vec3d direction = end.subtract(start).normalize();
-            double distance = start.distanceTo(end);
-
-            // Draw a line with golden particles for entity detection
-            for (double d = 0; d < distance; d += 0.3) {
-                Vec3d particlePos = start.add(direction.multiply(d));
-
-                // Use golden/yellow particles for entity detection
-                world.addParticle(net.minecraft.particle.ParticleTypes.ENCHANT,
-                        particlePos.x, particlePos.y, particlePos.z,
-                        0, 0.02, 0); // Small upward velocity for visual effect
-            }
-        }
     }
 
     public static void displayEntityRayHitCounts(World world, PlayerEntity player) {
