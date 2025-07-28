@@ -20,6 +20,7 @@ import redsmods.wrappers.RedPositionedSoundInstance;
 import redsmods.wrappers.RedTickableInstance;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class RaycastingHelper {
@@ -460,6 +461,9 @@ public class RaycastingHelper {
             Vec3d entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
 
+            if (distanceToEntity + currentDistance > 16 * soundEntity.sound.getVolume())
+                return; // don't bother processing if out of earshot.
+
             // Create raycast context for line of sight check
             RaycastContext raycastContext = new RaycastContext(
                     currentPos,
@@ -596,6 +600,9 @@ public class RaycastingHelper {
         for (SoundData soundEntity : entities) {
             Vec3d entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
+            if (distanceToEntity + currentDistance > 16 * soundEntity.sound.getVolume())
+                return; // don't bother processing if out of distance.
+
 //            if (distanceToEntity + currentDistance > SPEED_OF_SOUND_TICKS || distanceToEntity > SPEED_OF_SOUND_TICKS)
 //                continue;
             RaycastContext raycastContext = new RaycastContext(
@@ -638,40 +645,45 @@ public class RaycastingHelper {
 
     private static int countBlocksBetween(World world, Vec3d start, Vec3d end, PlayerEntity player) {
         int blockCount = 0;
-        Vec3d direction = end.subtract(start).normalize();
-        double totalDistance = start.distanceTo(end);
-        double stepSize = 0.5; // Check every 0.5 blocks for accuracy
+        Vec3d currentStart = start;
 
-        for (double distance = stepSize; distance < totalDistance; distance += stepSize) {
-            Vec3d currentPos = start.add(direction.multiply(distance));
-            BlockPos blockPos = new BlockPos((int)Math.floor(currentPos.x),
-                    (int)Math.floor(currentPos.y),
-                    (int)Math.floor(currentPos.z));
+        while (blockCount < 3) {
+            // Cast a ray from current position to the end point
+            RaycastContext raycastContext = new RaycastContext(
+                    currentStart,
+                    end,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
 
-            BlockState blockState = world.getBlockState(blockPos);
+            BlockHitResult hit = world.raycast(raycastContext);
 
-            // Check if the block is solid and not air
+            // If we didn't hit anything or reached the end, we're done
+            if (hit.getType() != HitResult.Type.BLOCK) {
+                break;
+            }
+
+            BlockPos hitBlockPos = hit.getBlockPos();
+            BlockState blockState = world.getBlockState(hitBlockPos);
+
+            // Only count solid blocks (not air)
             if (!blockState.isAir()) {
-                // Create a small raycast to check if this specific block actually blocks the path
-                Vec3d blockCenter = Vec3d.ofCenter(blockPos);
-                RaycastContext raycastContext = new RaycastContext(
-                        start,
-                        blockCenter,
-                        RaycastContext.ShapeType.COLLIDER,
-                        RaycastContext.FluidHandling.NONE,
-                        player
-                );
+                blockCount++;
+            }
 
-                BlockHitResult hit = world.raycast(raycastContext);
-                if (hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(blockPos)) {
-                    blockCount++;
-                    // Skip ahead to avoid counting the same block multiple times
-                    distance += 1.0;
-                    if (blockCount > 3) return 3;
-                }
+            // Move 1 block forward past the hit block in the direction of travel
+            Vec3d direction = end.subtract(currentStart).normalize();
+            Vec3d hitPoint = hit.getPos();
+
+            // Move slightly past the hit block to avoid hitting the same block again
+            currentStart = hitPoint.add(direction.multiply(1.1));
+
+            // Check if we've passed the end point
+            if (currentStart.distanceTo(start) >= end.distanceTo(start)) {
+                break;
             }
         }
-
         return blockCount;
     }
 
