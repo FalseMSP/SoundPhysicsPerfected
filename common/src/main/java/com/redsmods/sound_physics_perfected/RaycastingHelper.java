@@ -351,6 +351,10 @@ public class RaycastingHelper {
 
         SoundData hitEntity = null;
 
+        castGreenRay(world, player, currentPos, soundQueue, 0, initialDirection); // cast from player directly to check if there is a direct line of sight
+        if (ENABLE_PERMEATION)
+            castRedRay(world, player, currentPos, soundQueue, 0, initialDirection);
+
         for (int bounce = 0; bounce <= MAX_BOUNCES && remainingDistance > 0; bounce++) {
             double BounceAbsMult = Math.pow(0.7, bounce);
             double segmentDistance = Math.min(RAY_SEGMENT_LENGTH, remainingDistance);
