@@ -159,6 +159,7 @@ public abstract class SoundSystemMixin {
     @ModifyVariable(method = "stop(Lnet/minecraft/client/sound/SoundInstance;)V", at = @At("HEAD"), argsOnly = true)
     private SoundInstance modifySoundParameter(SoundInstance sound) {
         if (!efxInitialized) return sound; // fx aren't init, most likely permeation isn't playing
+        if(sound == null) return sound; // sorry, if some other mod kills their sound by using a mixin, i am not finna be held responsible, that's their own fault.
         soundQueue.remove(sound);
         SoundInstance customSound = soundInstanceMap.get(sound);
         SoundInstance soundPermeation = soundPermInstanceMap.get(sound);
