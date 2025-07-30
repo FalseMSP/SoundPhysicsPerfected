@@ -1,0 +1,48 @@
+name: Bug Report
+description: File a bug report
+assignees: []
+
+body:
+  - type: dropdown
+    id: modLoader
+    attributes:
+      label: Mod Loader
+      description: Which Mod Loader are you using?
+      options:
+        - Fabric
+        - NeoForge
+        - Synatra Connector
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: modVersion
+    attributes:
+      label: Mod Version
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What is the bug?
+      description: What happened and what did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Include a list of mods, or any other information to replicate the bug you have.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Or crash report
+      render: shell
