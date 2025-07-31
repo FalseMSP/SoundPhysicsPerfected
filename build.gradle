@@ -44,6 +44,12 @@ dependencies {
 
 	modImplementation "net.fabricmc.fabric-api:fabric-api:<latest>"
 	modImplementation "net.fabricmc:fabric-language-kotlin:<version>"
+
+	modImplementation("com.terraformersmc:modmenu:${project.modmenu_version}")
+
+	modApi("me.shedaniel.cloth:cloth-config-fabric:11.1.136") {
+		exclude(group: "net.fabricmc.fabric-api")
+	}
 }
 
 processResources {

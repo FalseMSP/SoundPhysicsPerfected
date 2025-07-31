@@ -26,6 +26,9 @@
 				"value": "redsmods.SoundPhysicsPerfectedClient",
 				"adapter": "kotlin"
 			}
+		],
+		"modmenu": [
+			"redsmods.ModMenuIntegration"
 		]
 	},
 	"mixins": [
@@ -47,18 +50,5 @@
 	},
 	"recommends": {
 		"modmenu-badges-lib": "*"
-	},
-	"custom": {
-		"modmenu": {
-			"badges": ["client"]
-		},
-		"mcb": [
-			{
-				"name": "Red's Mods",
-				"labelColor": -1842205,
-				"fillColor": -8573394,
-				"outlineColor": -65536
-			}
-		]
 	}
 }
