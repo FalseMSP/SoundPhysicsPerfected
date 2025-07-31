@@ -351,6 +351,10 @@ public class RaycastingHelper {
 
         SoundData hitEntity = null;
 
+        castGreenRay(world, player, startPos, soundQueue, totalDistanceTraveled, initialDirection);
+        if (ENABLE_PERMEATION)
+            castRedRay(world, player, startPos, soundQueue, totalDistanceTraveled, initialDirection);
+
         for (int bounce = 0; bounce <= MAX_BOUNCES && remainingDistance > 0; bounce++) {
             double BounceAbsMult = Math.pow(0.7, bounce);
             double segmentDistance = Math.min(RAY_SEGMENT_LENGTH, remainingDistance);
