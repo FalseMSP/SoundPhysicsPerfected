@@ -20,37 +20,47 @@ import redsmods.wrappers.RedPositionedSoundInstance;
 import redsmods.wrappers.RedTickableInstance;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class RaycastingHelper {
     /*
     Raycasting Helper for Red's Sounds (tbh this is what does all the work bc im lazy and don't know how to code lmao
     Colors of rays defined by: https://www.youtube.com/watch?v=u6EuAUjq92k
+
     White: Normal Bouncing Ray
     Green: Sound Seeking Ray
     Blue: Reverb Seeking Ray
     Red: Sound Seeking Permeated Ray
-    More to be defined.
+
+    Thread Safety go brrrrrrrrrrrrr
      */
     public static final Queue<RedTickableInstance> tickQueue = new LinkedList<>();
-    private static java.util.Map<SoundData, Integer> entityRayHitCounts = new java.util.HashMap<>();
+    private static final ConcurrentHashMap<SoundData, Integer> entityRayHitCounts = new ConcurrentHashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
     public static final Queue<SoundData> weatherQueue = new LinkedList<>();
     private static final double SPEED_OF_SOUND_TICKS = 17.15; // 17.15 blocks per gametick
-    private static final Map<Integer,ArrayList<SoundInstance>> soundPlayingWaiting = new HashMap<>();
+    private static final Map<Integer,ArrayList<SoundInstance>> soundPlayingWaiting = new ConcurrentHashMap<>();
     private static int ticksSinceWorld;
-    public static double distanceFromWallEcho = 0; // Modified in BlueRay casting
-    public static double distanceFromWallEchoDenom = 0; // Modified in BlueRay casting
-    public static int reverbStrength = 0; // Modified in BlueRay casting
-    public static int reverbDenom = 0; // used in reverbStrength/reverbDenom (total)
-    public static int outdoorLeak;
-    public static int outdoorLeakDenom;
 
-    private static final Map<SoundData, List<RayHitData>> rayHitsByEntity = new HashMap<>();
-    private static Map<SoundData, List<RayHitData>> redRaysToTarget = new HashMap<>();
-    private static final Map<SoundData, AveragedSoundData> muffledAveragedResults = new HashMap<>();
-    public static final Map<SoundInstance, SoundInstance> soundInstanceMap = new ConcurrentHashMap<>();
-    public static final Map<SoundInstance, SoundInstance> soundPermInstanceMap = new ConcurrentHashMap<>();
+    private static final AtomicReference<Double> distanceFromWallEcho = new AtomicReference<>(0.0);
+    private static final AtomicReference<Double> distanceFromWallEchoDenom = new AtomicReference<>(0.0);
+    private static final AtomicInteger reverbStrength = new AtomicInteger(0);
+    private static final AtomicInteger reverbDenom = new AtomicInteger(0);
+    private static final AtomicInteger outdoorLeak = new AtomicInteger(0);
+    private static final AtomicInteger outdoorLeakDenom = new AtomicInteger(0);
+
+    private static final ConcurrentHashMap<SoundData, List<RayHitData>> rayHitsByEntity = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<SoundData, List<RayHitData>> redRaysToTarget = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<SoundData, AveragedSoundData> muffledAveragedResults = new ConcurrentHashMap<>();
+    public static final ConcurrentHashMap<SoundInstance, SoundInstance> soundInstanceMap = new ConcurrentHashMap<>();
+    public static final ConcurrentHashMap<SoundInstance, SoundInstance> soundPermInstanceMap = new ConcurrentHashMap<>();
+
+    // Thread pool for parallel ray processing
+    private static final int THREAD_POOL_SIZE = Math.max(2, Runtime.getRuntime().availableProcessors() - 1);
+    private static final ExecutorService raycastExecutor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+    private static final ExecutorService soundProcessingExecutor = Executors.newFixedThreadPool(2);
 
     // Config Grabbed stuff
     private static int RAYS_CAST = Config.getInstance().raysCast;
@@ -89,10 +99,13 @@ public class RaycastingHelper {
 
             weatherQueue.clear();
 
-            for (SoundData sound : soundQueue) {
+            // Process weather sounds
+            Iterator<SoundData> iterator = soundQueue.iterator();
+            while (iterator.hasNext()) {
+                SoundData sound = iterator.next();
                 if (sound.soundId.contains("rain")) {
                     weatherQueue.add(sound);
-                    soundQueue.remove(sound);
+                    iterator.remove();
                 }
             }
 
@@ -117,7 +130,6 @@ public class RaycastingHelper {
                                                     List<Vec3d> rayDirections, Queue<SoundData> soundQueue,
                                                     double maxTotalDistance, MinecraftClient client) {
 
-        // Process rays and get averaged results
         Map<SoundData, AveragedSoundData> averagedResults = processRaysWithAveraging(
                 world, player, playerEyePos, rayDirections, soundQueue, maxTotalDistance);
 
@@ -125,17 +137,28 @@ public class RaycastingHelper {
             return;
         }
 
+        List<CompletableFuture<Void>> soundTasks = new ArrayList<>();
 
         for (AveragedSoundData avgData : averagedResults.values()) {
-            playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.8f, 1.0f);
+            CompletableFuture<Void> task = CompletableFuture.runAsync(() ->
+                            playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.8f, 1.0f),
+                    soundProcessingExecutor);
+            soundTasks.add(task);
         }
 
-        if(!ENABLE_PERMEATION)
-            return;
-        for (AveragedSoundData avgData : muffledAveragedResults.values()) {
-            playMuffled(client, avgData, playerEyePos, 0.6f, 1f);
+        if(ENABLE_PERMEATION) {
+            for (AveragedSoundData avgData : muffledAveragedResults.values()) {
+                CompletableFuture<Void> task = CompletableFuture.runAsync(() ->
+                                playMuffled(client, avgData, playerEyePos, 0.6f, 1f),
+                        soundProcessingExecutor);
+                soundTasks.add(task);
+            }
         }
+
+        // Wait for all sound processing to complete
+        CompletableFuture.allOf(soundTasks.toArray(new CompletableFuture[0])).join();
     }
+
     // Advanced method with volume and pitch adjustment based on confidence
     public static void playAveragedSoundWithAdjustments(MinecraftClient client, AveragedSoundData avgData, Vec3d playerPos,
                                                         float volumeMultiplier, float pitchMultiplier) {
@@ -144,7 +167,6 @@ public class RaycastingHelper {
         }
 
         try {
-
             // Calculate the target position
             Vec3d targetPosition;
             if (avgData.soundEntity.soundId.contains("rain")) { // if outdoors and raining, make the rain sound play on the player to make it sound like its all around the player && ((double) outdoorLeak / outdoorLeakDenom) > 0.4
@@ -193,23 +215,13 @@ public class RaycastingHelper {
 
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
 
-            // echo logic (DEPRECATED)
-//            System.out.println(distanceFromWallEcho + ", " + reverbStrength);
-
-            // Debug output
-//            System.out.println("Playing adjusted averaged sound: " + soundId.toString());
-//            System.out.println("  Volume: " + String.format("%.3f", adjustedVolume) + " (original: " + String.format("%.3f", baseVolume) + ")");
-//            System.out.println("  Pitch: " + String.format("%.3f", adjustedPitch) + " (original: " + String.format("%.3f", basePitch) + ")");
-//            System.out.println("  Confidence: " + String.format("%.3f", confidenceMultiplier));
-//            System.out.println("  Distance: " + avgData.soundEntity.getDistance() + " ");
-//            System.out.println("  x: " + targetPosition.getX() + "  y: " + targetPosition.getY() + "  z: " + targetPosition.getZ());
-
         } catch (Exception e) {
             System.err.println("Error playing adjusted averaged sound: " + e.getMessage());
         }
     }
+
     public static void playMuffled(MinecraftClient client, AveragedSoundData avgData, Vec3d playerPos,
-                                                        float volumeMultiplier, float pitchMultiplier) {
+                                   float volumeMultiplier, float pitchMultiplier) {
         if (client == null || client.world == null || avgData == null) {
             return;
         }
@@ -256,12 +268,6 @@ public class RaycastingHelper {
 
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
 
-//            System.out.println("Playing muffled averaged sound: " + soundId.toString());
-//            System.out.println("  Volume: " + String.format("%.3f", adjustedVolume) + " (original: " + String.format("%.3f", baseVolume) + ")");
-//            System.out.println("  Pitch: " + String.format("%.3f", adjustedPitch) + " (original: " + String.format("%.3f", basePitch) + ")");
-//            System.out.println("  Confidence: " + String.format("%.3f", confidenceMultiplier));
-//            System.out.println("  Distance: " + avgData.soundEntity.getDistance() + " ");
-//            System.out.println("  x: " + targetPosition.getX() + "  y: " + targetPosition.getY() + "  z: " + targetPosition.getZ());
         } catch (Exception e) {
             System.err.println("Error playing adjusted averaged sound: " + e.getMessage());
         }
@@ -275,44 +281,311 @@ public class RaycastingHelper {
         soundPlayingWaiting.computeIfAbsent((distance) + ticksSinceWorld + 1 + delay, k -> new ArrayList<>()).add(newSound);
     }
 
-    // Main method to process rays and calculate averages
     public static Map<SoundData, AveragedSoundData> processRaysWithAveraging(World world, PlayerEntity player,
                                                                              Vec3d playerEyePos, List<Vec3d> rayDirections,
                                                                              Queue<SoundData> soundQueue, double maxTotalDistance) {
-        reverbStrength = 0;
-        distanceFromWallEcho = 0;
-        distanceFromWallEchoDenom = 0;
-        reverbDenom = 0;
-        outdoorLeak = 0;
-        outdoorLeakDenom = 0;
-//        echoFac.clear()
-        // Cast all rays and collect hit data
-        for (Vec3d direction : rayDirections) {
-            castBouncingRay(world, player, playerEyePos, direction, soundQueue, maxTotalDistance);
+        // Reset atomic variables
+        reverbStrength.set(0);
+        distanceFromWallEcho.set(0.0);
+        distanceFromWallEchoDenom.set(0.0);
+        reverbDenom.set(0);
+        outdoorLeak.set(0);
+        outdoorLeakDenom.set(0);
+
+        final ConcurrentLinkedQueue<SoundData> threadSafeSoundQueue = new ConcurrentLinkedQueue<>(soundQueue); // deep copy so queue can be appended while sounds are proccessing without breakin shi
+
+        // Divide rays into chunks for parallel processing
+        int raysPerChunk = Math.max(1, rayDirections.size() / THREAD_POOL_SIZE);
+        List<List<Vec3d>> rayChunks = new ArrayList<>();
+
+        for (int i = 0; i < rayDirections.size(); i += raysPerChunk) {
+            int endIndex = Math.min(i + raysPerChunk, rayDirections.size());
+            rayChunks.add(rayDirections.subList(i, endIndex));
         }
 
-        // Calculate averages for each entity
-        Map<SoundData, AveragedSoundData> averagedResults = new HashMap<>();
+        // Submit ray casting tasks
+        List<CompletableFuture<Void>> rayTasks = new ArrayList<>();
+
+        for (List<Vec3d> rayChunk : rayChunks) {
+            CompletableFuture<Void> task = CompletableFuture.runAsync(() -> {
+                for (Vec3d direction : rayChunk) {
+                    castBouncingRay(world, player, playerEyePos, direction, threadSafeSoundQueue, maxTotalDistance);
+                }
+            }, raycastExecutor);
+            rayTasks.add(task);
+        }
+
+        // Wait for all ray casting to complete
+        CompletableFuture.allOf(rayTasks.toArray(new CompletableFuture[0])).join();
+
+        // Calculate averages for each entity (this part is fast, so keep sequential)
+        Map<SoundData, AveragedSoundData> averagedResults = new ConcurrentHashMap<>();
         muffledAveragedResults.clear();
 
-
+        // Process normal ray hits
         for (Map.Entry<SoundData, List<RayHitData>> entry : rayHitsByEntity.entrySet()) {
             SoundData entity = entry.getKey();
             List<RayHitData> rayHits = entry.getValue();
-
             AveragedSoundData averagedData = calculateWeightedAverages(entity, rayHits);
             averagedResults.put(entity, averagedData);
         }
 
+        // Process permeated ray hits
         for (Map.Entry<SoundData, List<RayHitData>> entry : redRaysToTarget.entrySet()) {
             SoundData entity = entry.getKey();
             List<RayHitData> rayHits = entry.getValue();
-
             AveragedSoundData averagedData = calculateWeightedAverages(entity, rayHits);
             muffledAveragedResults.put(entity, averagedData);
         }
 
         return averagedResults;
+    }
+
+    public static RaycastResult castBouncingRay(World world, PlayerEntity player, Vec3d startPos, Vec3d direction,
+                                                Queue<SoundData> soundQueue, double maxTotalDistance) {
+        Vec3d currentPos = startPos;
+        Vec3d currentDirection = direction.normalize();
+        Vec3d initialDirection = currentDirection.normalize();
+        double remainingDistance = maxTotalDistance;
+        double totalDistanceTraveled = 0.0;
+
+        SoundData hitEntity = null;
+
+        for (int bounce = 0; bounce <= MAX_BOUNCES && remainingDistance > 0; bounce++) {
+            double BounceAbsMult = Math.pow(0.7, bounce);
+            double segmentDistance = Math.min(RAY_SEGMENT_LENGTH, remainingDistance);
+            Vec3d segmentEnd = currentPos.add(currentDirection.multiply(segmentDistance));
+
+            RaycastContext raycastContext = new RaycastContext(
+                    currentPos,
+                    segmentEnd,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
+
+            BlockHitResult blockHit = world.raycast(raycastContext);
+
+            Vec3d actualEnd = segmentEnd;
+            boolean hitBlock = false;
+
+            if (blockHit.getType() == HitResult.Type.BLOCK) {
+                actualEnd = blockHit.getPos();
+                hitBlock = true;
+            }
+
+            double segmentTraveled = currentPos.distanceTo(actualEnd);
+            totalDistanceTraveled += segmentTraveled;
+
+            if (hitBlock) {
+                castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled * BounceAbsMult, initialDirection);
+                if (ENABLE_REVERB)
+                    castBlueRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
+                if (ENABLE_PERMEATION)
+                    castRedRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
+            }
+
+            if (hitBlock) {
+                outdoorLeakDenom.incrementAndGet();
+                Vec3d hitPos = blockHit.getPos();
+                Direction hitSide = blockHit.getSide();
+
+                Vec3d reflectedDirection = calculateReflection(currentDirection, hitSide);
+
+                currentPos = hitPos.add(reflectedDirection.multiply(0.01));
+                currentDirection = reflectedDirection;
+                remainingDistance -= segmentTraveled;
+            } else {
+                for (SoundData soundEntity : weatherQueue) {
+                    double weight;
+                    if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
+                        weight = 1.0 / (Math.max(totalDistanceTraveled - segmentDistance, 0.1) * Math.max(totalDistanceTraveled - segmentDistance, 0.1));
+                    else
+                        weight = 1.0 / Math.max(totalDistanceTraveled - segmentDistance, 0.1);
+
+                    RaycastResult GreenRayResult = new RaycastResult(
+                            maxTotalDistance,
+                            initialDirection,
+                            soundEntity
+                    );
+
+                    RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight);
+
+                    rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
+                    entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
+                }
+
+                Vec3d toCenter = player.getPos().subtract(actualEnd);
+                Vec3d normal = toCenter.normalize();
+                Vec3d reflectedDirection = calculateReflection(currentDirection, normal);
+
+                currentPos = segmentEnd.add(reflectedDirection.multiply(0.01));
+                currentDirection = reflectedDirection;
+                remainingDistance -= segmentTraveled;
+
+                reverbDenom.incrementAndGet();
+                outdoorLeak.incrementAndGet();
+                outdoorLeakDenom.incrementAndGet();
+            }
+        }
+
+        return new RaycastResult(totalDistanceTraveled, initialDirection, hitEntity, currentPos);
+    }
+
+    private static void castGreenRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities,
+                                     double currentDistance, Vec3d initialDirection) {
+        for (SoundData soundEntity : entities) {
+            Vec3d entityCenter = soundEntity.position;
+            double distanceToEntity = currentPos.distanceTo(entityCenter);
+
+            if (distanceToEntity + currentDistance > 16 * soundEntity.sound.getVolume())
+                continue;
+
+            RaycastContext raycastContext = new RaycastContext(
+                    currentPos,
+                    entityCenter,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
+
+            BlockHitResult blockHit = world.raycast(raycastContext);
+
+            boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
+                    currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 1;
+
+            if (hasLineOfSight) {
+                double weight;
+                if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
+                    weight = 1.0 / (Math.max(distanceToEntity + currentDistance, 0.1) * Math.max(distanceToEntity + currentDistance, 0.1));
+                else
+                    weight = 1.0 / Math.max(distanceToEntity + currentDistance, 0.1);
+
+                RaycastResult GreenRayResult = new RaycastResult(
+                        distanceToEntity,
+                        initialDirection,
+                        soundEntity,
+                        entityCenter
+                );
+
+                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight);
+
+                rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
+                entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
+            }
+        }
+
+        // Handle tickable sounds
+        for (RedTickableInstance soundEntity : tickQueue) {
+            Vec3d entityCenter = soundEntity.getOriginalPosition();
+            double distanceToEntity = currentPos.distanceTo(entityCenter);
+
+            RaycastContext raycastContext = new RaycastContext(
+                    currentPos,
+                    entityCenter,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
+
+            BlockHitResult blockHit = world.raycast(raycastContext);
+
+            boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
+                    currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 1;
+
+            SoundData data = new TickableSoundData(soundEntity, soundEntity.getOriginalPosition(), soundEntity.getSound().getIdentifier().toString());
+
+            if (hasLineOfSight) {
+                double weight;
+                if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
+                    weight = 1.0 / (Math.max(distanceToEntity + currentDistance, 0.1) * Math.max(distanceToEntity + currentDistance, 0.1));
+                else
+                    weight = 1.0 / Math.max(distanceToEntity + currentDistance, 0.1);
+
+                RaycastResult GreenRayResult = new RaycastResult(
+                        distanceToEntity,
+                        initialDirection,
+                        data,
+                        entityCenter
+                );
+
+                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight);
+
+                rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
+                entityRayHitCounts.merge(data, 1, Integer::sum);
+            } else {
+                rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>());
+            }
+        }
+    }
+
+    private static boolean castBlueRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities,
+                                       double currentDistance, Vec3d initialDirection) {
+        Vec3d entityCenter = player.getBoundingBox().getCenter();
+        currentPos = currentPos.add(entityCenter.subtract(currentPos).multiply(0.87));
+        double distanceToEntity = currentPos.distanceTo(entityCenter);
+
+        RaycastContext raycastContext = new RaycastContext(
+                currentPos,
+                entityCenter,
+                RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE,
+                player
+        );
+
+        BlockHitResult blockHit = world.raycast(raycastContext);
+
+        boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
+                currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 0.6;
+
+        reverbDenom.incrementAndGet();
+
+        if (hasLineOfSight) {
+            distanceFromWallEcho.updateAndGet(current -> current + currentDistance);
+            distanceFromWallEchoDenom.updateAndGet(current -> current + 1.0);
+            reverbStrength.incrementAndGet();
+        }
+
+        return hasLineOfSight;
+    }
+
+    private static void castRedRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities,
+                                   double currentDistance, Vec3d initialDirection) {
+        for (SoundData soundEntity : entities) {
+            Vec3d entityCenter = soundEntity.position;
+            double distanceToEntity = currentPos.distanceTo(entityCenter);
+
+            if (distanceToEntity + currentDistance > 16 * soundEntity.sound.getVolume())
+                continue;
+
+            RaycastContext raycastContext = new RaycastContext(
+                    currentPos,
+                    entityCenter,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
+
+            BlockHitResult blockHit = world.raycast(raycastContext);
+            currentPos = blockHit.getPos();
+
+            int blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
+            if (blockCount == 0)
+                continue;
+
+            double blockAttenuation = Math.pow(0.4, blockCount);
+            double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
+
+            RaycastResult rayResult = new RaycastResult(
+                    distanceToEntity,
+                    initialDirection,
+                    soundEntity,
+                    entityCenter
+            );
+            RayHitData hitData = new RayHitData(rayResult, initialDirection, weight);
+
+            redRaysToTarget.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
+        }
     }
 
     // Helper method to calculate weighted averages for a single entity
@@ -344,338 +617,52 @@ public class RaycastingHelper {
                 totalWeight, rayHits.size(), rayHits);
     }
 
-    public static RaycastResult castBouncingRay(World world, PlayerEntity player, Vec3d startPos, Vec3d direction, Queue<SoundData> soundQueue, double maxTotalDistance) {
-        Vec3d currentPos = startPos;
-        Vec3d currentDirection = direction.normalize();
-        Vec3d initialDirection = currentDirection.normalize(); // Store the initial direction as unit vector
-        double remainingDistance = maxTotalDistance;
-        double totalDistanceTraveled = 0.0;
-
-        SoundData hitEntity = null;
-
-        for (int bounce = 0; bounce <= MAX_BOUNCES && remainingDistance > 0; bounce++) {
-            double BounceAbsMult = Math.pow(0.7,bounce); // Bounce Absoprtion
-            double segmentDistance = Math.min(RAY_SEGMENT_LENGTH, remainingDistance);
-            Vec3d segmentEnd = currentPos.add(currentDirection.multiply(segmentDistance));
-
-            // Cast ray for this segment
-            RaycastContext raycastContext = new RaycastContext(
-                    currentPos,
-                    segmentEnd,
-                    RaycastContext.ShapeType.COLLIDER,
-                    RaycastContext.FluidHandling.NONE,
-                    player
-            );
-
-            BlockHitResult blockHit = world.raycast(raycastContext);
-
-            // Determine actual end point of this segment
-            Vec3d actualEnd = segmentEnd;
-            boolean hitBlock = false;
-
-            if (blockHit.getType() == HitResult.Type.BLOCK) {
-                actualEnd = blockHit.getPos();
-                hitBlock = true;
-            }
-
-            // Calculate distance traveled in this segment
-            double segmentTraveled = currentPos.distanceTo(actualEnd);
-            totalDistanceTraveled += segmentTraveled;
-
-            // cast Green rays
-            if (hitBlock) {
-                castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled*BounceAbsMult, initialDirection);
-                if (ENABLE_REVERB)
-                    castBlueRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
-                if (ENABLE_PERMEATION)
-                    castRedRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
-            }
-            // Draw this segment
-//            drawBouncingRaySegment(world, currentPos, actualEnd, bounce);
-
-            // If we hit a block, calculate bounce
-            if (hitBlock) {
-                outdoorLeakDenom += 1;
-                Vec3d hitPos = blockHit.getPos();
-                Direction hitSide = blockHit.getSide();
-
-                // Calculate reflected direction based on hit face
-                Vec3d reflectedDirection = calculateReflection(currentDirection, hitSide);
-
-                // Update for next bounce
-                currentPos = hitPos.add(reflectedDirection.multiply(0.01)); // Small offset to avoid hitting same block
-                currentDirection = reflectedDirection;
-
-                // Reduce remaining distance
-                remainingDistance -= segmentTraveled;
-            } else {
-                // Ray reached maximum segment length without hitting anything, Outside/Outdoor Rays!!
-                for (SoundData soundEntity : weatherQueue) {
-                    double weight;
-                    if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
-                        weight = 1.0 / (Math.max(totalDistanceTraveled - segmentDistance, 0.1) * Math.max(totalDistanceTraveled - segmentDistance, 0.1)); // quadratic
-                    else
-                        weight = 1.0 / Math.max(totalDistanceTraveled - segmentDistance, 0.1); // linear
-
-                    RaycastResult GreenRayResult = new RaycastResult(
-                            maxTotalDistance,
-                            initialDirection,
-                            soundEntity
-                    );
-
-                    RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight);
-
-                    // Add to rayHitsByEntity map
-                    rayHitsByEntity.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
-
-                    // Increment ray hit count for this entity
-                    entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
-                }
-
-                // Calculate reflected direction based on hit face (spherical reflection)
-                Vec3d toCenter = player.getPos().subtract(actualEnd); // points towards player
-                Vec3d normal = toCenter.normalize();
-                Vec3d reflectedDirection = calculateReflection(currentDirection, normal);
-
-                // Update for next bounce
-                currentPos = segmentEnd.add(reflectedDirection.multiply(0.01)); // Small offset to avoid hitting same block
-                currentDirection = reflectedDirection;
-
-                // Reduce remaining distance
-                remainingDistance -= segmentTraveled;
-
-                reverbDenom += 1;
-                outdoorLeak += 1;
-                outdoorLeakDenom += 1;
-            }
-        }
-
-        // Return comprehensive result
-        return new RaycastResult(totalDistanceTraveled, initialDirection, hitEntity, currentPos);
-    }
-
-    private static void castGreenRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
-        // Cast rays directly towards each sound source to check line of sight
-        for (SoundData soundEntity : entities) {
-            Vec3d entityCenter = soundEntity.position;
-            double distanceToEntity = currentPos.distanceTo(entityCenter);
-
-            // Create raycast context for line of sight check
-            RaycastContext raycastContext = new RaycastContext(
-                    currentPos,
-                    entityCenter,
-                    RaycastContext.ShapeType.COLLIDER,
-                    RaycastContext.FluidHandling.NONE,
-                    player
-            );
-
-            BlockHitResult blockHit = world.raycast(raycastContext);
-
-            // Check if we have line of sight (no block hit or hit is beyond the entity)
-            boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
-                    currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 1;
-
-            if (hasLineOfSight) {
-                // Calculate weight based on distance (closer = higher weight)
-                double weight;
-                if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
-                    weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1)); // quadratic
-                else
-                    weight = 1.0 / Math.max(distanceToEntity+currentDistance, 0.1); // linear
-                // Create ray result for this direct line of sight
-                RaycastResult GreenRayResult = new RaycastResult(
-                        distanceToEntity,
-                        initalDirection,
-                        soundEntity,
-                        entityCenter
-                );
-
-                RayHitData hitData = new RayHitData(GreenRayResult, initalDirection, weight);
-
-                // Add to rayHitsByEntity map
-                rayHitsByEntity.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
-
-                // Increment ray hit count for this entity
-                entityRayHitCounts.put(soundEntity, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
-
-                // Draw Green ray visualization
-//                drawGreenRay(world, currentPos, entityCenter);
-            }
-        }
-
-        for (RedTickableInstance soundEntity : tickQueue) { // for ticking sounds (longer sounds)
-            Vec3d entityCenter = soundEntity.getOriginalPosition();
-            double distanceToEntity = currentPos.distanceTo(entityCenter);
-
-            // Create raycast context for line of sight check
-            RaycastContext raycastContext = new RaycastContext(
-                    currentPos,
-                    entityCenter,
-                    RaycastContext.ShapeType.COLLIDER,
-                    RaycastContext.FluidHandling.NONE,
-                    player
-            );
-
-            BlockHitResult blockHit = world.raycast(raycastContext);
-
-            // Check if we have line of sight (no block hit or hit is beyond the entity)
-            boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
-                    currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 1;
-            SoundData data = new TickableSoundData(soundEntity,soundEntity.getOriginalPosition(),soundEntity.getSound().getIdentifier().toString());
-            if (hasLineOfSight) {
-                // Calculate weight based on distance (closer = higher weight)
-                double weight;
-                if (ATTENUATION_TYPE == ATTENUATION_TYPE.INVERSE_SQUARE)
-                    weight = 1.0 / (Math.max(distanceToEntity+currentDistance, 0.1) * Math.max(distanceToEntity+currentDistance, 0.1)); // quadratic
-                else
-                    weight = 1.0 / Math.max(distanceToEntity+currentDistance, 0.1); // linear
-
-                // Create ray result for this direct line of sight
-                RaycastResult GreenRayResult = new RaycastResult(
-                        distanceToEntity,
-                        initalDirection,
-                        data,
-                        entityCenter
-                );
-
-                RayHitData hitData = new RayHitData(GreenRayResult, initalDirection, weight);
-
-                // Add to rayHitsByEntity map
-                rayHitsByEntity.computeIfAbsent(data, k -> new ArrayList<>()).add(hitData);
-
-                // Increment ray hit count for this entity
-                entityRayHitCounts.put(data, entityRayHitCounts.getOrDefault(soundEntity, 0) + 1);
-
-                // Draw Green ray visualization
-//                drawGreenRay(world, currentPos, entityCenter);
-            } else if (!rayHitsByEntity.containsKey(data)) { // create empty object to say that there was nothing hit
-                rayHitsByEntity.computeIfAbsent(data, k -> new ArrayList<>());
-            }
-        }
-    }
-
-    private static boolean castBlueRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
-        // Cast rays directly towards player to check line of sight
-        Vec3d entityCenter = player.getBoundingBox().getCenter();
-
-        // get currentPos out of a block
-        currentPos = currentPos.add(entityCenter.subtract(currentPos).multiply(0.87));
-        double distanceToEntity = currentPos.distanceTo(entityCenter);
-
-        // Create raycast context for line of sight check
-        RaycastContext raycastContext = new RaycastContext(
-                currentPos,
-                entityCenter,
-                RaycastContext.ShapeType.COLLIDER,
-                RaycastContext.FluidHandling.NONE,
-                player
-        );
-
-        BlockHitResult blockHit = world.raycast(raycastContext);
-
-        // Check if we have line of sight (no block hit or hit is beyond the entity)
-        boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
-                currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 0.6;
-        reverbDenom += 1;
-        if (hasLineOfSight) {
-//            int timeDelay = (int) Math.floor(currentDistance * SPEED_OF_SOUND_MS);
-            distanceFromWallEcho += currentDistance; // average
-            distanceFromWallEchoDenom += 1;
-            reverbStrength += 1; // get the MAXIMUM amount of reverb possible
-//            echoFac.putIfAbsent(timeDelay,0);
-//            echoFac.put(timeDelay,echoFac.get(timeDelay)+1);
-
-            // Draw Blue ray visualization
-//            drawBlueRay(world, currentPos, entityCenter);
-        }
-        return hasLineOfSight;
-    }
-
-    private static void castRedRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities, double currentDistance, Vec3d initalDirection) {
-        // Cast rays directly towards each sound source to check how many blocks are between the sources.
-        for (SoundData soundEntity : entities) {
-            Vec3d entityCenter = soundEntity.position;
-            double distanceToEntity = currentPos.distanceTo(entityCenter);
-//            if (distanceToEntity + currentDistance > SPEED_OF_SOUND_TICKS || distanceToEntity > SPEED_OF_SOUND_TICKS)
-//                continue;
-            RaycastContext raycastContext = new RaycastContext(
-                    currentPos,
-                    entityCenter,
-                    RaycastContext.ShapeType.COLLIDER,
-                    RaycastContext.FluidHandling.NONE,
-                    player
-            );
-
-            BlockHitResult blockHit = world.raycast(raycastContext);
-            currentPos = blockHit.getPos();
-            // Count blocks between player and sound source
-            int blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
-            if (blockCount == 0) // so green and red rays don't overlap
-                continue;
-
-            // apply attenuation based on number of blocks:
-            double blockAttenuation = Math.pow(0.4, blockCount); // Each block reduces sound by 60%
-
-            // Calculate weight based on distance and block count
-            double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
-
-            // Create ray result with block count information
-            RaycastResult rayResult = new RaycastResult(
-                    distanceToEntity,
-                    initalDirection,
-                    soundEntity,
-                    entityCenter
-            );
-            RayHitData hitData = new RayHitData(rayResult, initalDirection, weight);
-
-            // Add to rayHitsByEntity map
-            redRaysToTarget.computeIfAbsent(soundEntity, k -> new ArrayList<>()).add(hitData);
-
-            // Optional: Log block count for debugging
-            // System.out.println("Blocks between player and " + soundEntity + ": " + blockCount);
-        }
-    }
 
     private static int countBlocksBetween(World world, Vec3d start, Vec3d end, PlayerEntity player) {
         int blockCount = 0;
-        Vec3d direction = end.subtract(start).normalize();
-        double totalDistance = start.distanceTo(end);
-        double stepSize = 0.5; // Check every 0.5 blocks for accuracy
+        Vec3d currentStart = start;
 
-        for (double distance = stepSize; distance < totalDistance; distance += stepSize) {
-            Vec3d currentPos = start.add(direction.multiply(distance));
-            BlockPos blockPos = new BlockPos((int)Math.floor(currentPos.x),
-                    (int)Math.floor(currentPos.y),
-                    (int)Math.floor(currentPos.z));
+        while (blockCount < 3) {
+            // Cast a ray from current position to the end point
+            RaycastContext raycastContext = new RaycastContext(
+                    currentStart,
+                    end,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
 
-            BlockState blockState = world.getBlockState(blockPos);
+            BlockHitResult hit = world.raycast(raycastContext);
 
-            // Check if the block is solid and not air
+            // If we didn't hit anything or reached the end, we're done
+            if (hit.getType() != HitResult.Type.BLOCK) {
+                break;
+            }
+
+            BlockPos hitBlockPos = hit.getBlockPos();
+            BlockState blockState = world.getBlockState(hitBlockPos);
+
+            // Only count solid blocks (not air)
             if (!blockState.isAir()) {
-                // Create a small raycast to check if this specific block actually blocks the path
-                Vec3d blockCenter = Vec3d.ofCenter(blockPos);
-                RaycastContext raycastContext = new RaycastContext(
-                        start,
-                        blockCenter,
-                        RaycastContext.ShapeType.COLLIDER,
-                        RaycastContext.FluidHandling.NONE,
-                        player
-                );
+                blockCount++;
+            }
 
-                BlockHitResult hit = world.raycast(raycastContext);
-                if (hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(blockPos)) {
-                    blockCount++;
-                    // Skip ahead to avoid counting the same block multiple times
-                    distance += 1.0;
-                    if (blockCount > 3) return 3;
-                }
+            // Move 1 block forward past the hit block in the direction of travel
+            Vec3d direction = end.subtract(currentStart).normalize();
+            Vec3d hitPoint = hit.getPos();
+
+            // Move slightly past the hit block to avoid hitting the same block again
+            currentStart = hitPoint.add(direction.multiply(1.1));
+
+            // Check if we've passed the end point
+            if (currentStart.distanceTo(start) >= end.distanceTo(start)) {
+                break;
             }
         }
-
         return blockCount;
     }
 
-    public static void drawGreenRay (World world, Vec3d start, Vec3d end){
+    public static void drawGreenRay(World world, Vec3d start, Vec3d end) {
         if (world.isClient) {
             Vec3d direction = end.subtract(start).normalize();
             double distance = start.distanceTo(end);
@@ -691,7 +678,7 @@ public class RaycastingHelper {
         }
     }
 
-    public static void drawBlueRay (World world, Vec3d start, Vec3d end){
+    public static void drawBlueRay(World world, Vec3d start, Vec3d end) {
         if (world.isClient) {
             Vec3d direction = end.subtract(start).normalize();
             double distance = start.distanceTo(end);
@@ -825,5 +812,50 @@ public class RaycastingHelper {
         for (SoundInstance newSound : sound)
             client.getSoundManager().play(newSound);
         soundPlayingWaiting.remove(tsw);
+    }
+
+    // Utility methods to get atomic values safely
+    public static double getDistanceFromWallEcho() {
+        return distanceFromWallEcho.get();
+    }
+
+    public static double getDistanceFromWallEchoDenom() {
+        return distanceFromWallEchoDenom.get();
+    }
+
+    public static int getReverbStrength() {
+        return reverbStrength.get();
+    }
+
+    public static int getReverbDenom() {
+        return reverbDenom.get();
+    }
+
+    public static int getOutdoorLeak() {
+        return outdoorLeak.get();
+    }
+
+    public static int getOutdoorLeakDenom() {
+        return outdoorLeakDenom.get();
+    }
+
+    // I was told that cleanup is neccessary when using threads, but idk where to put this lmao
+    public static void shutdown() {
+        try {
+            raycastExecutor.shutdown();
+            soundProcessingExecutor.shutdown();
+
+            if (!raycastExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                raycastExecutor.shutdownNow();
+            }
+
+            if (!soundProcessingExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                soundProcessingExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            raycastExecutor.shutdownNow();
+            soundProcessingExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }
