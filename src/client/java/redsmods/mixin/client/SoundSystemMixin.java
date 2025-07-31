@@ -382,7 +382,6 @@ public abstract class SoundSystemMixin {
         }
         System.out.println("Sources currently in use: " + sourcesInUse);
     }
-
     private static float clamp(float a, float b, float c) {
         return Math.min(Math.max(a,b),c);
     }

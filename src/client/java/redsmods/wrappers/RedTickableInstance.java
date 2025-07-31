@@ -1,10 +1,10 @@
 package redsmods.wrappers;
 
-import me.shedaniel.cloth.clothconfig.shadowed.blue.endless.jankson.annotation.Nullable;
 import net.minecraft.client.sound.*;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
+import org.jetbrains.annotations.Nullable;
 import redsmods.RaycastingHelper;
 
 import static redsmods.RaycastingHelper.TICK_RATE;

@@ -26,9 +26,6 @@
 				"value": "redsmods.SoundPhysicsPerfectedClient",
 				"adapter": "kotlin"
 			}
-		],
-		"modmenu": [
-			"redsmods.ModMenuIntegration"
 		]
 	},
 	"mixins": [
@@ -53,7 +50,7 @@
 	},
 	"custom": {
 		"modmenu": {
-			"badges": [ "Client" ]
+			"badges": ["client"]
 		},
 		"mcb": [
 			{
