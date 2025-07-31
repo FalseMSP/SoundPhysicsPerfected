@@ -47,8 +47,5 @@
 	},
 	"suggests": {
 		"another-mod": "*"
-	},
-	"recommends": {
-		"modmenu-badges-lib": "*"
 	}
 }
