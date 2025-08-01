@@ -204,7 +204,7 @@ public class RaycastingHelper {
                 ((RedTickableInstance) originalSound).setPos(targetPosition);
                 ((RedTickableInstance) originalSound).setVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
                 return;
-            } else if (((RedSoundInstance) originalSound) instanceof TickableSoundInstance) {
+            } else if (((RedSoundInstance) originalSound).getOriginal() instanceof TickableSoundInstance) {
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound);
             } else {
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound);

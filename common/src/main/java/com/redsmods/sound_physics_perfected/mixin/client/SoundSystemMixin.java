@@ -182,6 +182,53 @@ public abstract class SoundSystemMixin {
         soundQueue.clear();
     }
 
+    private static void cleanupEFXResources() {
+        if (!efxInitialized) return;
+
+        try {
+            System.out.println("Cleaning up EFX resources...");
+
+            // Clear queues and maps
+            FXQueue.clear();
+            FXTickQueue.clear();
+            tickMap.clear();
+
+            // Delete OpenAL EFX objects if they exist
+            if (auxFXSlot != 0) {
+                EXTEfx.alDeleteAuxiliaryEffectSlots(auxFXSlot);
+                auxFXSlot = 0;
+            }
+
+            if (reverbEffect != 0) {
+                EXTEfx.alDeleteEffects(reverbEffect);
+                reverbEffect = 0;
+            }
+
+            if (muffleFilter != 0) {
+                EXTEfx.alDeleteFilters(muffleFilter);
+                muffleFilter = 0;
+            }
+
+            if (sendFilter != 0) {
+                EXTEfx.alDeleteFilters(sendFilter);
+                sendFilter = 0;
+            }
+
+            efxInitialized = false;
+            System.out.println("EFX resources cleaned up successfully");
+
+        } catch (Exception e) {
+            System.err.println("Error cleaning up EFX resources: " + e.getMessage());
+            // Reset everything anyway to prevent issues
+            auxFXSlot = 0;
+            reverbEffect = 0;
+            muffleFilter = 0;
+            sendFilter = 0;
+            efxInitialized = false;
+        }
+    }
+
+
     /**
      * Initialize EFX reverb system once
      */
@@ -374,6 +421,18 @@ public abstract class SoundSystemMixin {
         }
         System.out.println("Sources currently in use: " + sourcesInUse);
     }
+
+    @Inject(method = "stop()V", at = @At("HEAD"))
+    private void onAudioEngineStop(CallbackInfo ci) {
+        cleanupEFXResources();
+    }
+
+    @Inject(method = "start()V", at = @At("TAIL"))
+    private void onAudioEngineStart(CallbackInfo ci) {
+        efxInitialized = false;
+        initializeReverb();
+    }
+
 
     private static float clamp(float a, float b, float c) {
         return Math.min(Math.max(a,b),c);
