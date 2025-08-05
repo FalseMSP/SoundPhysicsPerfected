@@ -171,8 +171,14 @@ public abstract class SoundSystemMixin {
             sourceManager.run(Source::stop);
         }
 
+        // remove custom sounds
+        Channel.SourceManager sourceManagerNormal = sources.get(customSound);
+        if (sourceManagerNormal != null) {
+            sourceManagerNormal.run(Source::stop);
+        }
+
         // Return the custom sound if it exists, otherwise return the original
-        return customSound != null ? customSound : sound;
+        return sound; // if its null, welp. minecraft's code does handle if the custom sound ended up being ended properly so it should be fine, will fix null pointers hopefully though :)
     }
 
     // Add method to clean up orphaned sounds
@@ -270,7 +276,7 @@ public abstract class SoundSystemMixin {
             System.out.println("Reverb system initialized successfully");
 
         } catch (Exception e) {
-            // ignore failed reverb init
+            System.err.println("Failed to initialize reverb: " + e.getMessage());
         }
     }
 
@@ -297,7 +303,7 @@ public abstract class SoundSystemMixin {
      * This is a brute-force approach that works when source tracking is difficult
      */
     private static void updateActiveSources() {
-        // Check if OpenAL context is available'
+        // Check if OpenAL context is available
         long context = ALC10.alcGetCurrentContext();
         if (context == 0) {
             return; // No context available
@@ -328,7 +334,7 @@ public abstract class SoundSystemMixin {
 //                System.out.println(tickQueue.peek().getId());
             }
         } catch (Exception e) {
-            // ignore errors
+            // Ignore errors
         }
     }
     /**
@@ -431,7 +437,6 @@ public abstract class SoundSystemMixin {
         efxInitialized = false;
         initializeReverb();
     }
-
 
     private static float clamp(float a, float b, float c) {
         return Math.min(Math.max(a,b),c);

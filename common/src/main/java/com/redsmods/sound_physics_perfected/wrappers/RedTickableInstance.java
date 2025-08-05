@@ -14,6 +14,8 @@ public class RedTickableInstance implements TickableSoundInstance {
     private final Identifier soundID;
     private final Sound sound;
     private final SoundCategory category;
+    private final Vec3d originalPos;
+    private final float originalVolume;
     private SoundInstance wrapped;
     private double x;
     private double y;
@@ -24,9 +26,8 @@ public class RedTickableInstance implements TickableSoundInstance {
     private int tickCount;
     private Vec3d targetPosition;
     private float targetVolume;
-    private boolean wasWrappedDone = false; // Track previous state
 
-    public RedTickableInstance(Identifier soundID, Sound sound, SoundCategory category, Vec3d position, float volume, float pitch, SoundInstance wrapped) {
+    public RedTickableInstance(Identifier soundID, Sound sound, SoundCategory category, Vec3d position, float volume, float pitch, SoundInstance wrapped, Vec3d originalPos, float originalVolume) {
         this.soundID = soundID;
         this.sound = sound;
         this.category = category;
@@ -37,6 +38,8 @@ public class RedTickableInstance implements TickableSoundInstance {
         this.volume = volume;
         this.pitch = pitch;
         this.wrapped = wrapped;
+        this.originalPos = originalPos;
+        this.originalVolume = originalVolume;
         tickCount = 0;
         targetPosition = position;
         targetVolume = volume;
@@ -44,46 +47,17 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     @Override
     public boolean isDone() {
-        return this.done;
+        return done;
     }
 
     @Override
     public void tick() {
-        // First, tick the wrapped sound if it's tickable
-        if (wrapped instanceof TickableSoundInstance) {
-            TickableSoundInstance tickableWrapped = (TickableSoundInstance) wrapped;
-            tickableWrapped.tick();
-
-            boolean wrappedDone = tickableWrapped.isDone();
-            float wrappedVolume = wrapped.getVolume();
-
-            // Debug logging
-            System.out.println("Wrapped isDone: " + wrappedDone + ", Volume: " + wrappedVolume + ", Our done: " + this.done);
-
-            // If wrapped sound just became done, mark ourselves as done
-            if (wrappedDone && !wasWrappedDone) {
-                System.out.println("Wrapped sound is done, stopping our wrapper");
-                this.done = true;
-                wasWrappedDone = true;
-                return;
-            }
-            wasWrappedDone = wrappedDone;
-
-            // Also check if wrapped volume is 0 (another indication it should stop)
-            if (wrappedVolume <= 0.0f && !this.done) {
-                System.out.println("Wrapped volume is 0, stopping our wrapper");
-                this.done = true;
-                return;
-            }
-        }
-
-        // If we're done, don't continue processing
-        if (this.done) return;
-
         tickCount++;
-        if (TICK_RATE == 0) return;
-        if (tickCount % TICK_RATE == 0)
+        if (done || TICK_RATE == 0) return; // DONE or ticking sounds is off
+        if (tickCount % TICK_RATE == 0) // only update once every .1 second
             RaycastingHelper.tickQueue.add(this);
+        if (wrapped instanceof TickableSoundInstance)
+            ((TickableSoundInstance) wrapped).tick();
         updatePos();
         updateVolume();
     }
@@ -114,7 +88,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     }
 
     public Vec3d getOriginalPosition() {
-        return new Vec3d(wrapped.getX(),wrapped.getY(),wrapped.getZ());
+        return originalPos;
     }
 
     @Override
@@ -159,7 +133,7 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     @Override
     public AttenuationType getAttenuationType() {
-        return AttenuationType.LINEAR;
+        return AttenuationType.NONE;
     }
 
     public void stop() {
@@ -178,9 +152,10 @@ public class RedTickableInstance implements TickableSoundInstance {
 
         // Calculate the distance to the target
         double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+        double maxSpeed = 17.15; // m per tick, speed of sound
 
         // If we're already at the target or very close, set position directly
-        if (distance <= 0.001) {
+        if (distance <= 0.001 || distance > maxSpeed * TICK_RATE) {
             x = targetPosition.getX();
             y = targetPosition.getY();
             z = targetPosition.getZ();
@@ -188,7 +163,6 @@ public class RedTickableInstance implements TickableSoundInstance {
         }
 
         // Maximum speed in blocks per tick
-        double maxSpeed = 17.15; // m per tick, speed of sound
 
         // Calculate how far we can move this tick
         double moveDistance = Math.min(maxSpeed, distance);
@@ -209,19 +183,18 @@ public class RedTickableInstance implements TickableSoundInstance {
             this.targetVolume = targetVolume;
         }
     }
-
     public void updateVolume() {
         // Calculate the difference between current and target volume
         float deltaVolume = targetVolume - volume;
+        float maxVolumeChange = Math.abs(deltaVolume / TICK_RATE);
 
         // If we're already at the target or very close, set volume directly
-        if (Math.abs(deltaVolume) <= 0.001f) {
+        if (Math.abs(deltaVolume) <= 0.001f || Math.abs(deltaVolume) > maxVolumeChange * TICK_RATE) {
             volume = targetVolume;
             return;
         }
 
         // Maximum volume change per tick
-        float maxVolumeChange = 0.05f * TICK_RATE;
 
         // Calculate how much we can change this tick
         float volumeChange = Math.min(maxVolumeChange, Math.abs(deltaVolume));
@@ -239,6 +212,6 @@ public class RedTickableInstance implements TickableSoundInstance {
     }
 
     public float getOriginalVolume() {
-        return wrapped.getVolume();
+        return originalVolume;
     }
 }
