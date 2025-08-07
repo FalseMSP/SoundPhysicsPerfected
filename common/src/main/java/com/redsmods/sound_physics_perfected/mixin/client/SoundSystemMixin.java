@@ -40,8 +40,6 @@ public abstract class SoundSystemMixin {
     private static int muffleFilter = 0;
     private static int sendFilter = 0;
     private static boolean efxInitialized = false;
-
-    private static final Queue<SoundInstance> FXQueue = new LinkedList<>();
     private static final Queue<RedTickableInstance> FXTickQueue = new LinkedList<>();
     private static final Map<Integer, RedTickableInstance> tickMap = new HashMap<>();
 
@@ -96,7 +94,7 @@ public abstract class SoundSystemMixin {
 
                 ci.cancel();
             } else if (ENABLE_PERMEATION && sound instanceof RedPermeatedSoundInstance) {
-                FXQueue.add(sound);
+                FXQueue.add((RedPermeatedSoundInstance) sound);
             } else if (TICK_RATE == 0 && sound instanceof RedTickableInstance) {
                 FXTickQueue.add((RedTickableInstance) sound);
             }
@@ -125,14 +123,15 @@ public abstract class SoundSystemMixin {
         }
         while(!FXQueue.isEmpty()) {
             try {
-                SoundInstance sound = FXQueue.poll();
+                RedPermeatedSoundInstance sound = FXQueue.poll();
                 Channel.SourceManager manager = sources.get(sound);
                 SourceManagerAccessor accessor = (SourceManagerAccessor) manager;
                 Source source = accessor.getSource();
                 int id = ((SourceAccessor) source).getPointer();
-                applyMuffleToSource(id,1f);
+                sound.setSource(id);
+                sound.applyMuffleToSource(id,sound.getPermeationIndex());
             } catch (Exception e) {
-                System.out.println("sourceID is invalid for a sound, non-issue");
+                System.out.println("sourceID is invalid for a sound, non-issue" + e);
             }
         }
 
@@ -161,7 +160,9 @@ public abstract class SoundSystemMixin {
         if(sound == null) return sound; // sorry, if some other mod kills their sound by using a mixin, i am not finna be held responsible, that's their own fault.
         soundQueue.remove(sound);
         SoundInstance customSound = soundInstanceMap.get(sound);
-        SoundInstance soundPermeation = soundPermInstanceMap.get(sound);
+        RedPermeatedSoundInstance soundPermeation = soundPermInstanceMap.get(sound);
+        if (soundPermeation != null)
+            soundPermeation.setDone(true);
         soundInstanceMap.remove(sound);
         soundPermInstanceMap.remove(sound);
 
@@ -261,6 +262,7 @@ public abstract class SoundSystemMixin {
 
             muffleFilter = EXTEfx.alGenFilters();
             EXTEfx.alFilteri(muffleFilter, EXTEfx.AL_FILTER_TYPE, EXTEfx.AL_FILTER_LOWPASS);
+            RedPermeatedSoundInstance.muffleFilter = muffleFilter;
 
             // Create send filter
             sendFilter = EXTEfx.alGenFilters();
@@ -393,27 +395,6 @@ public abstract class SoundSystemMixin {
             alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN,   lateReverbGain);
             AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
         } catch (Exception e) {
-        }
-    }
-
-    private static void applyMuffleToSource(int sourceId, float muffleStrength) {
-        try {
-            // Clamp muffle strength between 0.0 (no muffling) and 1.0 (maximum muffling)
-            muffleStrength = clamp(muffleStrength, 0.0f, 1.0f);
-
-            // Calculate filter parameters based on muffle strength
-            float lowpassGain = lerp(1.0f, 0.2f, muffleStrength);     // Overall volume reduction
-            float lowpassGainHF = lerp(1.0f, 0.1f, muffleStrength);   // High frequency attenuation
-
-            // Apply low-pass filter (main muffling effect)
-            if (muffleFilter != -1) {
-                EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAIN, lowpassGain);
-                EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAINHF, lowpassGainHF);
-                AL11.alSourcei(sourceId, EXTEfx.AL_DIRECT_FILTER, muffleFilter);
-            }
-
-        } catch (Exception e) {
-            // Handle errors silently like the original function
         }
     }
 

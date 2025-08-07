@@ -10,8 +10,10 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 import com.redsmods.sound_physics_perfected.storageclasses.*;
@@ -35,6 +37,7 @@ public class RaycastingHelper {
     Thread Safety go brrrrrrrrrrrrr
      */
     public static final Queue<RedTickableInstance> tickQueue = new LinkedList<>();
+    public static final Queue<RedPermeatedSoundInstance> permeatedTickQueue = new LinkedList<>();
     private static final ConcurrentHashMap<SoundData, Integer> entityRayHitCounts = new ConcurrentHashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
     public static final Queue<SoundData> weatherQueue = new LinkedList<>();
@@ -53,7 +56,7 @@ public class RaycastingHelper {
     private static final ConcurrentHashMap<SoundData, List<RayHitData>> redRaysToTarget = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<SoundData, AveragedSoundData> muffledAveragedResults = new ConcurrentHashMap<>();
     public static final ConcurrentHashMap<SoundInstance, SoundInstance> soundInstanceMap = new ConcurrentHashMap<>();
-    public static final ConcurrentHashMap<SoundInstance, SoundInstance> soundPermInstanceMap = new ConcurrentHashMap<>();
+    public static final ConcurrentHashMap<SoundInstance, RedPermeatedSoundInstance> soundPermInstanceMap = new ConcurrentHashMap<>();
 
     // Thread pool for parallel ray processing
     private static final int THREAD_POOL_SIZE = Math.max(2, Runtime.getRuntime().availableProcessors() - 1);
@@ -68,6 +71,9 @@ public class RaycastingHelper {
     public static boolean ENABLE_PERMEATION = Config.getInstance().permeationEnabled;
     public static int TICK_RATE = Config.getInstance().tickRate;
     public static RedsAttenuationType ATTENUATION_TYPE = Config.getInstance().attenuationType;
+
+    // SoundSystemMixin Public static
+    public static final Queue<RedPermeatedSoundInstance> FXQueue = new LinkedList<>();
 
     public static void getConfig() {
         RAYS_CAST = Config.getInstance().raysCast;
@@ -92,7 +98,7 @@ public class RaycastingHelper {
                 return;
             }
 
-            if (soundQueue.isEmpty() && tickQueue.isEmpty())
+            if (soundQueue.isEmpty() && tickQueue.isEmpty() && permeatedTickQueue.isEmpty())
                 return; // no sounds to proc
 
             weatherQueue.clear();
@@ -118,6 +124,7 @@ public class RaycastingHelper {
 
             tickQueue.clear();
             soundQueue.clear();
+            permeatedTickQueue.clear();
 
         } catch (Exception e) {
             System.err.println("Error in player bouncing ray entity detection: " + e.getMessage());
@@ -228,38 +235,33 @@ public class RaycastingHelper {
             Vec3d targetPosition = playerPos.add(avgData.averageDirection.multiply(avgData.averageDistance));
 
             // Get original sound properties
-            RedSoundInstance originalSound = (RedSoundInstance) avgData.soundEntity.sound;
+            SoundInstance originalSound = avgData.soundEntity.sound;
             Identifier soundId = originalSound.getId();
 
             // Calculate adjusted volume based on ray count and weight (confidence-based)
-            float baseVolume = originalSound.getVolume();
+            float baseVolume;
+            if (originalSound instanceof RedTickableInstance)
+                baseVolume = ((RedTickableInstance) originalSound).getOriginalVolume();
+            else
+                baseVolume = ((RedSoundInstance) originalSound).original.getVolume();
             float confidenceMultiplier = (float) avgData.totalWeight / (float) RAYS_CAST*MAX_BOUNCES;
             float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier;
 
             // Calculate adjusted pitch
             float basePitch = originalSound.getPitch();
             float adjustedPitch = basePitch * pitchMultiplier;
-            SoundInstance newSound;
-            // Create positioned sound with adjustments
-            if (originalSound.getOriginal() instanceof TickableSoundInstance) {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, new Vec3d(originalSound.getX(), originalSound.getY(), originalSound.getZ()),baseVolume);
-            } else {
-                newSound = new RedPermeatedSoundInstance(
-                        soundId,                                    // Sound identifier
-                        originalSound.getCategory(),                // Sound category
-                        Math.max(0.01f, Math.min(1.0f, adjustedVolume)),  // Clamp volume between 0-1
-                        Math.max(0.5f, Math.min(2.0f, adjustedPitch)),   // Clamp pitch between 0.5-2.0
-                        SoundInstance.createRandom(),                           // Random instance
-                        originalSound.isRepeatable(),
-                        originalSound.getRepeatDelay(),              // Repeat delay
-                        originalSound.getAttenuationType(),         // attenuation on permeated sounds is linear bc a lot of the time they aren't heard.
-                        (float) targetPosition.x,                   // X position
-                        (float) targetPosition.y,                   // Y position
-                        (float) targetPosition.z,                   // Z position
-                        originalSound.isRelative()                  // Relative positioning
-                );
+
+            if (originalSound instanceof RedTickableInstance) { // update pos of sounds
+                ((RedPermeatedSoundInstance) originalSound).setPos(targetPosition);
+                ((RedPermeatedSoundInstance) originalSound).setVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
+                ((RedPermeatedSoundInstance) originalSound).setPermeationIndex(confidenceMultiplier);
+                return;
             }
-            soundPermInstanceMap.put(originalSound.getOriginal(),newSound);
+
+            RedPermeatedSoundInstance newSound;
+            // Create positioned sound with adjustments
+            newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, new Vec3d(originalSound.getX(), originalSound.getY(), originalSound.getZ()),baseVolume, confidenceMultiplier);
+            soundPermInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(), newSound);
             if (adjustedVolume <= 0.01)
                 return;
 
@@ -272,10 +274,6 @@ public class RaycastingHelper {
 
     private static void queueSound(SoundInstance newSound, int distance) {
         soundPlayingWaiting.computeIfAbsent((distance) + ticksSinceWorld + 1, k -> new ArrayList<>()).add(newSound);
-    }
-
-    private static void queueSound(RedPositionedSoundInstance newSound, int distance, int delay) {
-        soundPlayingWaiting.computeIfAbsent((distance) + ticksSinceWorld + 1 + delay, k -> new ArrayList<>()).add(newSound);
     }
 
     public static Map<SoundData, AveragedSoundData> processRaysWithAveraging(World world, PlayerEntity player,
@@ -353,7 +351,6 @@ public class RaycastingHelper {
             castRedRay(world, player, startPos, soundQueue, totalDistanceTraveled, initialDirection);
 
         for (int bounce = 0; bounce <= MAX_BOUNCES && remainingDistance > 0; bounce++) {
-            double BounceAbsMult = Math.pow(1.2, bounce);
             double segmentDistance = Math.min(RAY_SEGMENT_LENGTH, remainingDistance);
             Vec3d segmentEnd = currentPos.add(currentDirection.multiply(segmentDistance));
 
@@ -379,7 +376,7 @@ public class RaycastingHelper {
             totalDistanceTraveled += segmentTraveled;
 
             if (hitBlock) {
-                castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled * BounceAbsMult, initialDirection);
+                castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
                 if (ENABLE_REVERB)
                     castBlueRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
                 if (ENABLE_PERMEATION)
@@ -573,11 +570,11 @@ public class RaycastingHelper {
             BlockHitResult blockHit = world.raycast(raycastContext);
             currentPos = blockHit.getPos();
 
-            int blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
+            double blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
             if (blockCount == 0)
                 continue;
 
-            double blockAttenuation = Math.pow(0.4, blockCount);
+            double blockAttenuation = Math.pow(0.7, blockCount); // 0.7 is how much it'll lower the gain by, keep in mind the muffle fx is still seperate
             double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
 
             RaycastResult rayResult = new RaycastResult(
@@ -589,6 +586,42 @@ public class RaycastingHelper {
             RayHitData hitData = new RayHitData(rayResult, initialDirection, weight);
 
             redRaysToTarget.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
+        }
+        for (RedPermeatedSoundInstance soundEntity : permeatedTickQueue) {
+            Vec3d entityCenter = soundEntity.getOriginalPosition();
+            SoundData data = new TickableSoundData(soundEntity, soundEntity.getOriginalPosition(), soundEntity.getSound().getIdentifier().toString());
+            double distanceToEntity = currentPos.distanceTo(entityCenter);
+
+            if (distanceToEntity + currentDistance > 16 * soundEntity.getOriginalVolume())
+                continue;
+
+            RaycastContext raycastContext = new RaycastContext(
+                    currentPos,
+                    entityCenter,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            );
+
+            BlockHitResult blockHit = world.raycast(raycastContext);
+            currentPos = blockHit.getPos();
+
+            double blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
+            if (blockCount == 0)
+                continue;
+
+            double blockAttenuation = Math.pow(0.7, blockCount); // 0.7 is how much it'll lower the gain by, keep in mind the muffle fx is still seperate
+            double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
+
+            RaycastResult rayResult = new RaycastResult(
+                    distanceToEntity,
+                    initialDirection,
+                    data,
+                    entityCenter
+            );
+            RayHitData hitData = new RayHitData(rayResult, initialDirection, weight);
+
+            redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
         }
     }
 
@@ -622,11 +655,11 @@ public class RaycastingHelper {
     }
 
 
-    private static int countBlocksBetween(World world, Vec3d start, Vec3d end, PlayerEntity player) {
-        int blockCount = 0;
+    private static double countBlocksBetween(World world, Vec3d start, Vec3d end, PlayerEntity player) {
+        double totalDistanceInBlocks = 0;
         Vec3d currentStart = start;
 
-        while (blockCount < 3) {
+        while (totalDistanceInBlocks < 3) {
             // Cast a ray from current position to the end point
             RaycastContext raycastContext = new RaycastContext(
                     currentStart,
@@ -648,22 +681,37 @@ public class RaycastingHelper {
 
             // Only count solid blocks (not air)
             if (!blockState.isAir()) {
-                blockCount++;
+                // Calculate the distance traveled through this specific block
+                Vec3d direction = end.subtract(currentStart).normalize();
+
+                // Get the block's bounding box
+                VoxelShape blockShape = blockState.getOutlineShape(world, hitBlockPos);
+                Box blockBounds = blockShape.getBoundingBox().offset(hitBlockPos);
+
+                // Find the exit point by moving along the ray direction until we're outside the block
+                Vec3d exitPoint = hit.getPos();
+                double step = 0.01; // Small step size for precision
+
+                while (blockBounds.contains(exitPoint)) {
+                    exitPoint = exitPoint.add(direction.multiply(step));
+                }
+
+                // Calculate distance traveled within this block
+                double distanceInBlock = hit.getPos().distanceTo(exitPoint);
+                totalDistanceInBlocks += distanceInBlock;
+
+                // Add a small buffer to ensure we're clearly outside
+                currentStart = exitPoint.add(direction.multiply(0.01));
+            } else {
+                throw new RuntimeException("Why tf is the raycasting getting stuck within air... WHAT HAVE YOU DONE!!!");
             }
-
-            // Move 1 block forward past the hit block in the direction of travel
-            Vec3d direction = end.subtract(currentStart).normalize();
-            Vec3d hitPoint = hit.getPos();
-
-            // Move slightly past the hit block to avoid hitting the same block again
-            currentStart = hitPoint.add(direction.multiply(1.1));
 
             // Check if we've passed the end point
             if (currentStart.distanceTo(start) >= end.distanceTo(start)) {
                 break;
             }
         }
-        return blockCount;
+        return totalDistanceInBlocks;
     }
 
     public static void drawGreenRay(World world, Vec3d start, Vec3d end) {

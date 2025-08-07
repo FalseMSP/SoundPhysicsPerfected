@@ -214,4 +214,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     public float getOriginalVolume() {
         return originalVolume;
     }
+
+    protected SoundInstance getOriginal() { return wrapped;
+    }
 }
