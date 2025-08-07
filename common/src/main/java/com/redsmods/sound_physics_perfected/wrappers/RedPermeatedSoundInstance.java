@@ -21,6 +21,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     private int id;
     public static Integer muffleFilter = -1;
     private boolean sourceSet = false;
+    private float targetMuffle;
 
     public RedPermeatedSoundInstance(Identifier soundID, Sound sound, SoundCategory category, Vec3d position, float volume, float pitch, SoundInstance wrapped, Vec3d originalPos, float originalVolume,float permeationIndex) {
         super(soundID, sound, category,position, volume, pitch, wrapped, originalPos, originalVolume);
@@ -34,9 +35,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
 
     public void setPermeationIndex(float permeationIndex) {
         if (super.isDone()) return;
-        this.permeationIndex = permeationIndex;
-        if (sourceSet && AL10.alIsSource(id))
-            applyMuffleToSource(id,1-permeationIndex);
+        this.targetMuffle = permeationIndex;
     }
 
     @Override
@@ -48,6 +47,37 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
         }
         super.updatePos();
         super.updateVolume();
+        updateMuffle();
+    }
+
+    public void updateMuffle() {
+
+        // Calculate the difference between current and target volume
+        float deltaVolume = targetMuffle - permeationIndex;
+        float maxVolumeChange = Math.abs(deltaVolume / TICK_RATE);
+
+        // If we're already at the target or very close, set volume directly
+        if (Math.abs(deltaVolume) <= 0.001f || Math.abs(deltaVolume) > maxVolumeChange * TICK_RATE) {
+            permeationIndex = targetMuffle;
+            if (sourceSet && AL10.alIsSource(id))
+                applyMuffleToSource(id,1-permeationIndex);
+            return;
+        }
+
+        // Maximum volume change per tick
+
+        // Calculate how much we can change this tick
+        float volumeChange = Math.min(maxVolumeChange, Math.abs(deltaVolume));
+
+        // Apply the change in the correct direction
+        if (deltaVolume > 0) {
+            permeationIndex += volumeChange;
+        } else {
+            permeationIndex -= volumeChange;
+        }
+
+        if (sourceSet && AL10.alIsSource(id))
+            applyMuffleToSource(id,1-permeationIndex);
     }
 
     public void setSource(int id) {

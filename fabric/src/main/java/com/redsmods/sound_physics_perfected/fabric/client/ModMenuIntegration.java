@@ -36,8 +36,8 @@ public class ModMenuIntegration implements ModMenuApi {
         ConfigEntryBuilder entryBuilder = builder.entryBuilder();
 
         general.addEntry(entryBuilder
-                .startIntSlider(Text.translatable("Rays Cast"), config.raysCast, 64, 1029)
-                .setDefaultValue(256)
+                .startIntField(Text.translatable("Rays Cast"), config.raysCast)
+                .setDefaultValue(1000)
                 .setTooltip(Text.translatable("# of Rays to cast from players\nPERFORMANCE IMPACT: HIGH"))
                 .setSaveConsumer(newValue -> config.raysCast = newValue)
                 .build());
@@ -45,7 +45,7 @@ public class ModMenuIntegration implements ModMenuApi {
         general.addEntry(entryBuilder
                 .startIntSlider(Text.translatable("Ray Bounce #"), config.raysBounced, 1, 16)
                 .setDefaultValue(3)
-                .setTooltip(Text.translatable("Max # of times the ray will bounce before terminating\n(More accurate for hearing sounds after bouncing off walls)\nPERFORMANCE IMPACT: HIGH"))
+                .setTooltip(Text.translatable("Max # of times the ray will bounce before terminating\n(More accurate for hearing sounds after bouncing off walls, INCREASING THIS WILL INCREASE REVERB)\nPERFORMANCE IMPACT: HIGH"))
                 .setSaveConsumer(newValue -> config.raysBounced = newValue)
                 .build());
 
@@ -82,6 +82,13 @@ public class ModMenuIntegration implements ModMenuApi {
                 .setDefaultValue(true)
                 .setTooltip(Text.translatable("Cast Red (Permeating) Rays and add muffle dynamically to permeated sources\nPERFORMANCE IMPACT: MEDIUM"))
                 .setSaveConsumer(newValue -> config.permeationEnabled = newValue)
+                .build());
+
+        general.addEntry(entryBuilder
+                .startDoubleField(Text.translatable("Permeation Step Size: "), config.permeationStepSize)
+                .setDefaultValue(0.01)
+                .setTooltip(Text.translatable("Measured in Blocks, lower = more performance hurt\nPERFORMANCE IMPACT: HIGH"))
+                .setSaveConsumer(newValue -> config.permeationStepSize = newValue)
                 .build());
 
         general.addEntry(entryBuilder

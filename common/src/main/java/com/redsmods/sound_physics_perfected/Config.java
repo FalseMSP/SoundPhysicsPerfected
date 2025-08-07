@@ -23,6 +23,7 @@ public class Config {
     public float SoundMult = 1; // make it just work like default Minecraft for lag helping :)
     public int tickRate = 2; // once every 2 ticks bc i want poor people's pcs to burn
     public RedsAttenuationType attenuationType = RedsAttenuationType.INVERSE_SQUARE;
+    public double permeationStepSize = 0.01;
 
     public static Config getInstance() {
         if (INSTANCE == null) {

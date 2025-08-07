@@ -21,6 +21,7 @@ import com.redsmods.sound_physics_perfected.wrappers.*;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -62,6 +63,8 @@ public class RaycastingHelper {
     private static final int THREAD_POOL_SIZE = Math.max(2, Runtime.getRuntime().availableProcessors() - 1);
     private static final ExecutorService raycastExecutor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
     private static final ExecutorService soundProcessingExecutor = Executors.newFixedThreadPool(2);
+    private static final AtomicBoolean isRaytracing = new AtomicBoolean(false);
+    private static final AtomicBoolean freezeTickCounter = new AtomicBoolean(false);
 
     // Config Grabbed stuff
     private static int RAYS_CAST = Config.getInstance().raysCast;
@@ -71,6 +74,7 @@ public class RaycastingHelper {
     public static boolean ENABLE_PERMEATION = Config.getInstance().permeationEnabled;
     public static int TICK_RATE = Config.getInstance().tickRate;
     public static RedsAttenuationType ATTENUATION_TYPE = Config.getInstance().attenuationType;
+    public static double PERMEATION_STEP_SIZE = Config.getInstance().permeationStepSize;
 
     // SoundSystemMixin Public static
     public static final Queue<RedPermeatedSoundInstance> FXQueue = new LinkedList<>();
@@ -87,6 +91,11 @@ public class RaycastingHelper {
 
     public static void castBouncingRaysAndDetectSFX(World world, PlayerEntity player) {
         try {
+
+            if (!isRaytracing.compareAndSet(false, true)) {
+                return; // Already raytracing, ignore this call
+            }
+
             Vec3d playerEyePos = player.getEyePos();
             double maxTotalDistance = RAY_SEGMENT_LENGTH * MAX_BOUNCES; // Max total distance after all bounces
 
@@ -95,12 +104,14 @@ public class RaycastingHelper {
 
             MinecraftClient client = MinecraftClient.getInstance();
             if (client == null || client.getSoundManager() == null) {
+                isRaytracing.set(false);
                 return;
             }
 
-            if (soundQueue.isEmpty() && tickQueue.isEmpty() && permeatedTickQueue.isEmpty())
+            if (soundQueue.isEmpty() && tickQueue.isEmpty() && permeatedTickQueue.isEmpty()) {
+                isRaytracing.set(false);
                 return; // no sounds to proc
-
+            }
             weatherQueue.clear();
 
             // Process weather sounds
@@ -125,6 +136,7 @@ public class RaycastingHelper {
             tickQueue.clear();
             soundQueue.clear();
             permeatedTickQueue.clear();
+            isRaytracing.set(false);
 
         } catch (Exception e) {
             System.err.println("Error in player bouncing ray entity detection: " + e.getMessage());
@@ -143,7 +155,7 @@ public class RaycastingHelper {
         }
 
         List<CompletableFuture<Void>> soundTasks = new ArrayList<>();
-
+        freezeTickCounter.set(true);
         for (AveragedSoundData avgData : averagedResults.values()) {
             CompletableFuture<Void> task = CompletableFuture.runAsync(() ->
                             playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.0f, 1.0f),
@@ -159,6 +171,7 @@ public class RaycastingHelper {
                 soundTasks.add(task);
             }
         }
+        freezeTickCounter.set(false);
 
         // Wait for all sound processing to complete
         CompletableFuture.allOf(soundTasks.toArray(new CompletableFuture[0])).join();
@@ -246,6 +259,7 @@ public class RaycastingHelper {
                 baseVolume = ((RedSoundInstance) originalSound).original.getVolume();
             float confidenceMultiplier = (float) avgData.totalWeight / (float) RAYS_CAST*MAX_BOUNCES;
             float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier;
+            if (confidenceMultiplier > 0.9) adjustedVolume = 0;
 
             // Calculate adjusted pitch
             float basePitch = originalSound.getPitch();
@@ -572,8 +586,8 @@ public class RaycastingHelper {
             currentPos = blockHit.getPos();
 
             double blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
-            if (blockCount == 0)
-                continue;
+//            if (blockCount == 0)
+//                continue;
 
             double blockAttenuation = Math.pow(0.7, blockCount); // 0.7 is how much it'll lower the gain by, keep in mind the muffle fx is still seperate
             double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
@@ -608,8 +622,8 @@ public class RaycastingHelper {
             currentPos = blockHit.getPos();
 
             double blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
-            if (blockCount == 0)
-                continue;
+//            if (blockCount == 0)
+//                continue;
 
             double blockAttenuation = Math.pow(0.7, blockCount); // 0.7 is how much it'll lower the gain by, keep in mind the muffle fx is still seperate
             double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
@@ -691,7 +705,7 @@ public class RaycastingHelper {
 
                 // Find the exit point by moving along the ray direction until we're outside the block
                 Vec3d exitPoint = hit.getPos();
-                double step = 0.01; // Small step size for precision
+                double step = PERMEATION_STEP_SIZE; // Small step size for precision
 
                 while (blockBounds.contains(exitPoint)) {
                     exitPoint = exitPoint.add(direction.multiply(step));
@@ -856,7 +870,9 @@ public class RaycastingHelper {
     }
 
     public static void playQueuedObjects(int tsw) {
-        ticksSinceWorld = tsw;
+        if (freezeTickCounter.get())
+            return;
+        ticksSinceWorld++;
         if (!soundPlayingWaiting.containsKey((Integer) ticksSinceWorld))
             return;
 
