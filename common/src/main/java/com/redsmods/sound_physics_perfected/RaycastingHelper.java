@@ -273,7 +273,7 @@ public class RaycastingHelper {
     }
 
     private static void queueSound(SoundInstance newSound, int distance) {
-        soundPlayingWaiting.computeIfAbsent((distance) + ticksSinceWorld + 1, k -> new ArrayList<>()).add(newSound);
+        soundPlayingWaiting.computeIfAbsent(ticksSinceWorld + 1, k -> new ArrayList<>()).add(newSound); // removed speed of sound calculation for delay.
     }
 
     public static Map<SoundData, AveragedSoundData> processRaysWithAveraging(World world, PlayerEntity player,
@@ -862,8 +862,11 @@ public class RaycastingHelper {
 
         MinecraftClient client = MinecraftClient.getInstance();
         ArrayList<SoundInstance> sound = soundPlayingWaiting.get((Integer) ticksSinceWorld);
-        for (SoundInstance newSound : sound)
+        for (SoundInstance newSound : sound) {
+            if (newSound == null)
+                continue;
             client.getSoundManager().play(newSound);
+        }
         soundPlayingWaiting.remove(tsw);
     }
 
