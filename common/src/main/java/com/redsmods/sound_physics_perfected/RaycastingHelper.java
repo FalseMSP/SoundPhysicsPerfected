@@ -379,7 +379,7 @@ public class RaycastingHelper {
             if (hitBlock) {
                 if (ENABLE_REVERB)
                     castBlueRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
-                if (ENABLE_PERMEATION)
+                if (ENABLE_PERMEATION && bounce < 2) // only first 2 bounces cast permeating rays
                     castRedRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
                 castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
             }

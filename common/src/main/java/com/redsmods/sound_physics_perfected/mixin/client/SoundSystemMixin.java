@@ -360,27 +360,64 @@ public abstract class SoundSystemMixin {
             float dryFactor = 1.0f - outdoorLeakPercent; // 0 = fully outdoor, 1 = fully indoor
             float speedOfSound = 343.0f;
 
+            // ==== PHYSICS-BASED CHANGES ====
+
+            // 1. Volume-based decay time with Sabine formula
+            float distanceAttenuation = 1.0f / (1.0f + (distanceMeters - 1.0f) * 0.01f);
+            float volumeEstimate = distanceMeters * distanceMeters * distanceMeters; // Cubic relationship for room volume
+            float surfaceArea = 6.0f * distanceMeters * distanceMeters; // Approximate surface area for cube
+
+            // Sabine RT60 formula: RT60 = 0.161 * V / A (where A = surface_area * absorption_coefficient)
+            float materialAbsorption = lerp(0.25f, 0.05f, dryFactor); // Outdoor = more absorption, Indoor = less
+            float totalAbsorption = surfaceArea * materialAbsorption;
+            float salineRT60 = 0.161f * volumeEstimate / Math.max(totalAbsorption, 0.1f); // Prevent division by zero
+            float decayTime = clamp(salineRT60 * dryFactor, 0.1f, 8.0f);
+
+            // 2. Air absorption - high frequencies attenuate over distance
+            float airAbsorptionCoeff = 1.0f - (distanceMeters * 0.002f); // 0.2% loss per meter
+            airAbsorptionCoeff = clamp(airAbsorptionCoeff, 0.3f, 1.0f);
+
+            // 3. Early reflection timing based on actual sound travel time
             float wallDelay = (distanceMeters * 2.0f) / speedOfSound;
+            float earlyReflectionDelay = clamp(distanceMeters / speedOfSound, 0.001f, 0.03f);
+            float lateReverbBuildupTime = clamp(distanceMeters * 1.5f / speedOfSound, 0.01f, 0.08f);
 
-            float decayTime        = clamp(wallDelay * 5.0f * dryFactor, 0.1f, 6.0f);
-            float reflectionsDelay = clamp(wallDelay * 0.5f, 0.005f, 0.05f);
-            float lateReverbDelay  = clamp(wallDelay, 0.01f, 0.1f);
+            // Frequency-dependent absorption (high frequencies die faster in large spaces)
+            float airAbsorption = 1.0f - (distanceMeters * 0.001f); // Air absorbs highs over distance
+            float decayHfRatio = clamp(lerp(0.3f, 1.0f, (1.0f - occlusionPercent) * dryFactor * airAbsorption), 0.1f, 2.0f);
 
-            float decayHfRatio     = lerp(0.5f, 1.3f, (1.0f - occlusionPercent) * dryFactor);
-            float diffusion        = lerp(0.3f, 1.0f, dryFactor * (1.0f - occlusionPercent));
-            float gainHF           = lerp(0.05f, 0.9f, (1.0f - occlusionPercent) * dryFactor);
+            // Pre-delay based on room size (sound takes time to build up in large spaces)
+            float reflectionsDelay = clamp(earlyReflectionDelay * 0.3f, 0.005f, 0.03f);
+            float lateReverbDelay = clamp(earlyReflectionDelay * 1.5f, 0.01f, 0.08f);
 
-            float reflectionsGain  = lerp(0.0f, 0.7f, dryFactor);
-            float lateReverbGain   = lerp(0.0f, 1.0f, dryFactor);
+            // Diffusion: small rooms = more focused, large rooms = more diffuse
+            float sizeFactor = clamp(distanceMeters / 20.0f, 0.0f, 1.0f);
+            float diffusion = lerp(0.4f, 0.95f, sizeFactor * dryFactor * (1.0f - occlusionPercent));
 
-            float density          = lerp(0.3f, 1.0f, dryFactor);
-            float gain             = lerp(0.05f, 0.3f, dryFactor);
-            float airAbsorptionHF  = lerp(0.95f, 0.99f, dryFactor);
-            float roomRolloff      = 0.4f;
+            // High frequency rolloff (realistic material and air absorption)
+            float gainHF = lerp(0.1f, 0.8f, (1.0f - occlusionPercent) * dryFactor * airAbsorption);
+
+            // Distance and size-based gain adjustments
+            float sizeGainReduction = 1.0f / (1.0f + sizeFactor * 0.3f); // Large rooms spread energy
+            float reflectionsGain = lerp(0.0f, 0.6f, dryFactor * distanceAttenuation * sizeGainReduction);
+            float lateReverbGain = lerp(0.0f, 0.8f, dryFactor * distanceAttenuation * sizeGainReduction);
+
+            // Density: packed reflections in small rooms, sparse in large rooms
+            float density = lerp(0.8f, 0.4f, sizeFactor) * dryFactor;
+
+            // Overall gain with realistic distance falloff
+            float gain = lerp(0.02f, 0.25f, dryFactor * distanceAttenuation * sizeGainReduction);
+
+            // Enhanced air absorption for realism
+            float airAbsorptionHF = lerp(0.92f, 0.99f, dryFactor) * airAbsorption;
+
+            // Room rolloff: larger rooms have more gradual rolloff
+            float roomRolloff = lerp(0.6f, 0.2f, sizeFactor);
 
             // Apply to OpenAL effect
             EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAIN, gain);
-            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAINHF, 1.0f);
+            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAINHF, gainHF * 0.8f); // More realistic HF filtering
+
             alEffectf(reverbEffect, AL_EAXREVERB_DENSITY,                density);
             alEffectf(reverbEffect, AL_EAXREVERB_GAIN,                   gain);
             alEffectf(reverbEffect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF,  airAbsorptionHF);

@@ -1,5 +1,5 @@
 [Architectury Transformer] Architectury Runtime 5.2.87
-[Architectury Transformer DEBUG] Closed File Systems for C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.4.2-dev.jar
+[Architectury Transformer DEBUG] Closed File Systems for C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.5.0-alpha-dev.jar
 [Architectury Transformer DEBUG] Preparing tiny remapper prepared transformer: dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
 [Architectury Transformer DEBUG] Provided 113 classpath jar(s):
 [Architectury Transformer DEBUG]  - C:\Users\markp\.gradle\caches\modules-2\files-2.1\dev.architectury\architectury-injectables\1.0.10\62db2a366d662606d1b23ad02ccc3212ed37ec3\architectury-injectables-1.0.10.jar
@@ -115,15 +115,15 @@
 [Architectury Transformer DEBUG]  - C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\.gradle\loom-cache\remapped_mods\loom_mappings_1_21_1_layered_hash_477322616_v2\net\fabricmc\fabric-api\fabric-transitive-access-wideners-v1\6.2.0+45b9699719\fabric-transitive-access-wideners-v1-6.2.0+45b9699719.jar
 [Architectury Transformer DEBUG]  - C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\.gradle\loom-cache\remapped_mods\loom_mappings_1_21_1_layered_hash_477322616_v2\me\shedaniel\cloth\cloth-config-fabric\15.0.127\cloth-config-fabric-15.0.127-fabric.jar
 [Architectury Transformer DEBUG]  - C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\.gradle\loom-cache\remapped_mods\loom_mappings_1_21_1_layered_hash_477322616_v2\me\shedaniel\cloth\basic-math\0.6.1\basic-math-0.6.1.jar
-[Architectury Transformer] Read classpath in 899.4 ms
-[Architectury Transformer DEBUG] Closed File Systems for C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.4.2-dev.jar
-[Architectury Transformer DEBUG] Transforming 5 transformer(s) from C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.4.2-dev.jar to C:\Users\markp\AppData\Local\Temp\10954873116076075903.jar: 
+[Architectury Transformer] Read classpath in 901.4 ms
+[Architectury Transformer DEBUG] Closed File Systems for C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.5.0-alpha-dev.jar
+[Architectury Transformer DEBUG] Transforming 5 transformer(s) from C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.5.0-alpha-dev.jar to C:\Users\markp\AppData\Local\Temp\2013681693558509211.jar: 
 [Architectury Transformer DEBUG]  - dev.architectury.transformer.transformers.RuntimeMixinRefmapDetector@4575df15
 [Architectury Transformer DEBUG]  - dev.architectury.transformer.transformers.GenerateFakeFabricMod@2d17c0ab
 [Architectury Transformer DEBUG]  - dev.architectury.transformer.transformers.TransformExpectPlatform@506ec7ea
 [Architectury Transformer DEBUG]  - dev.architectury.transformer.transformers.RemapInjectables@5239d115
 [Architectury Transformer DEBUG]  - dev.architectury.transformer.transformers.TransformPlatformOnly@39df2130
-[Architectury Transformer DEBUG] Transforming from C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.4.2-dev.jar to C:\Users\markp\AppData\Local\Temp\10954873116076075903.jar with 5 transformer(s) on dev.architectury.transformer.handler.SimpleTransformerHandler
+[Architectury Transformer DEBUG] Transforming from C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.5.0-alpha-dev.jar to C:\Users\markp\AppData\Local\Temp\2013681693558509211.jar with 5 transformer(s) on dev.architectury.transformer.handler.SimpleTransformerHandler
 [Architectury Transformer DEBUG] Found class transformer
 [Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/Config with maxs=true frames=true
 [Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/mixin/client/PlayerEntityMixin with maxs=true frames=true
@@ -144,64 +144,36 @@
 [Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/wrappers/RedTickableInstance with maxs=true frames=true
 [Architectury Transformer DEBUG] Checking whether /sound_physics_perfected-common-common-refmap.json is a mixin config.
 [Architectury Transformer DEBUG] Checking whether /sound_physics_perfected.mixins.json is a mixin config.
-[Architectury Transformer DEBUG] Closed File Systems for C:\Users\markp\AppData\Local\Temp\10954873116076075903.jar
-[Architectury Transformer] Listening at C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.4.2-dev.jar
-[Architectury Transformer DEBUG] Temporary jar [C:\Users\markp\AppData\Local\Temp\10954873116076075903.jar] contains packages: com.redsmods.sound_physics_perfected.wrappers, com.redsmods.sound_physics_perfected.mixin.client, com.redsmods.sound_physics_perfected, com.redsmods.sound_physics_perfected.storageclasses
-[Architectury Transformer DEBUG] Closed File Systems for C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.4.2-dev.jar
+[Architectury Transformer DEBUG] Closed File Systems for C:\Users\markp\AppData\Local\Temp\2013681693558509211.jar
+[Architectury Transformer] Listening at C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.5.0-alpha-dev.jar
+[Architectury Transformer DEBUG] Temporary jar [C:\Users\markp\AppData\Local\Temp\2013681693558509211.jar] contains packages: com.redsmods.sound_physics_perfected.wrappers, com.redsmods.sound_physics_perfected.mixin.client, com.redsmods.sound_physics_perfected, com.redsmods.sound_physics_perfected.storageclasses
+[Architectury Transformer DEBUG] Closed File Systems for C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\common\build\devlibs\sound_physics_perfected-common-1.5.0-alpha-dev.jar
 [Architectury Transformer DEBUG] Classpath entry [C:\Users\markp\Downloads\SoundPhysicsPerfected-1.20.1\SoundPhysicsPerfected\fabric\build\resources\main] contains packages: 
 [Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/Config.class to com/redsmods/sound_physics_perfected/Config.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
 [Architectury Transformer DEBUG] Found class transformer
 [Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/Config with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/Config in 1.665 ms
+[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/Config in 1.631 ms
 [Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/RedsAttenuationType.class to com/redsmods/sound_physics_perfected/RedsAttenuationType.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
 [Architectury Transformer DEBUG] Found class transformer
 [Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/RedsAttenuationType with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/RedsAttenuationType in 506.4 μs
+[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/RedsAttenuationType in 471.6 μs
 [Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/wrappers/RedPermeatedSoundInstance.class to com/redsmods/sound_physics_perfected/wrappers/RedPermeatedSoundInstance.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
 [Architectury Transformer DEBUG] Found class transformer
 [Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/wrappers/RedPermeatedSoundInstance with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/wrappers/RedPermeatedSoundInstance in 1.019 ms
+[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/wrappers/RedPermeatedSoundInstance in 840.6 μs
 [Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/wrappers/RedTickableInstance.class to com/redsmods/sound_physics_perfected/wrappers/RedTickableInstance.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
 [Architectury Transformer DEBUG] Found class transformer
 [Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/wrappers/RedTickableInstance with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/wrappers/RedTickableInstance in 693.2 μs
+[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/wrappers/RedTickableInstance in 748.0 μs
 [Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/RaycastingHelper.class to com/redsmods/sound_physics_perfected/RaycastingHelper.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
 [Architectury Transformer DEBUG] Found class transformer
 [Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/RaycastingHelper with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/RaycastingHelper in 3.353 ms
+[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/RaycastingHelper in 3.451 ms
 [Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/storageclasses/SoundData.class to com/redsmods/sound_physics_perfected/storageclasses/SoundData.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
 [Architectury Transformer DEBUG] Found class transformer
 [Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/storageclasses/SoundData with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/storageclasses/SoundData in 451.9 μs
+[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/storageclasses/SoundData in 338.9 μs
 [Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/storageclasses/TickableSoundData.class to com/redsmods/sound_physics_perfected/storageclasses/TickableSoundData.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
 [Architectury Transformer DEBUG] Found class transformer
 [Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/storageclasses/TickableSoundData with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/storageclasses/TickableSoundData in 142.5 μs
-[Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/mixin/client/SourceAccessor.class to com/redsmods/sound_physics_perfected/mixin/client/SourceAccessor.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
-[Architectury Transformer DEBUG] Found class transformer
-[Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/mixin/client/SourceAccessor with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/mixin/client/SourceAccessor in 406.6 μs
-[Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/mixin/client/SourceManagerAccessor.class to com/redsmods/sound_physics_perfected/mixin/client/SourceManagerAccessor.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
-[Architectury Transformer DEBUG] Found class transformer
-[Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/mixin/client/SourceManagerAccessor with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/mixin/client/SourceManagerAccessor in 172.5 μs
-[Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/wrappers/RedPositionedSoundInstance.class to com/redsmods/sound_physics_perfected/wrappers/RedPositionedSoundInstance.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
-[Architectury Transformer DEBUG] Found class transformer
-[Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/wrappers/RedPositionedSoundInstance with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/wrappers/RedPositionedSoundInstance in 625.2 μs
-[Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/RedSoundInstance.class to com/redsmods/sound_physics_perfected/RedSoundInstance.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
-[Architectury Transformer DEBUG] Found class transformer
-[Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/RedSoundInstance with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/RedSoundInstance in 958.6 μs
-[Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/storageclasses/RaycastResult.class to com/redsmods/sound_physics_perfected/storageclasses/RaycastResult.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
-[Architectury Transformer DEBUG] Found class transformer
-[Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/storageclasses/RaycastResult with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/storageclasses/RaycastResult in 324.7 μs
-[Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/storageclasses/RayHitData.class to com/redsmods/sound_physics_perfected/storageclasses/RayHitData.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
-[Architectury Transformer DEBUG] Found class transformer
-[Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/storageclasses/RayHitData with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/storageclasses/RayHitData in 686.1 μs
-[Architectury Transformer DEBUG] Transforming from com/redsmods/sound_physics_perfected/storageclasses/AveragedSoundData.class to com/redsmods/sound_physics_perfected/storageclasses/AveragedSoundData.class with 5 transformer(s) on dev.architectury.transformer.handler.TinyRemapperPreparedTransformerHandler
-[Architectury Transformer DEBUG] Found class transformer
-[Architectury Transformer DEBUG] Writing com/redsmods/sound_physics_perfected/storageclasses/AveragedSoundData with maxs=true frames=true
-[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/storageclasses/AveragedSoundData in 356.2 μs
+[Architectury Transformer DEBUG] Transformed com/redsmods/sound_physics_perfected/storageclasses/TickableSoundData in 118.5 μs
