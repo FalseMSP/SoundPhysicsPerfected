@@ -7,6 +7,7 @@ import net.minecraft.client.sound.TickableSoundInstance;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
+import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
 import org.lwjgl.openal.EXTEfx;
 
@@ -34,8 +35,8 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     public void setPermeationIndex(float permeationIndex) {
         if (super.isDone()) return;
         this.permeationIndex = permeationIndex;
-        if (sourceSet)
-            applyMuffleToSource(id,permeationIndex);
+        if (sourceSet && AL10.alIsSource(id))
+            applyMuffleToSource(id,1-permeationIndex);
     }
 
     @Override
