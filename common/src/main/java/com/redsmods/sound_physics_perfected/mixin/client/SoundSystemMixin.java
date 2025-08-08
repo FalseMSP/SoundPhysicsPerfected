@@ -331,7 +331,7 @@ public abstract class SoundSystemMixin {
                 } else if (tickMap.containsKey(sourceId)){
                     tickMap.get(sourceId).stop();
                     tickMap.remove(sourceId);
-                    System.out.println(tickMap);
+//                    System.out.println(tickMap);
                 }
 //                System.out.println(tickMap);
 //                System.out.println(tickQueue.peek().getId());
