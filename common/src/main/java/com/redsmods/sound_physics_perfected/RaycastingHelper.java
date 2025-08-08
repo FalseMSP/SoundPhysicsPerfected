@@ -1,5 +1,8 @@
 package com.redsmods.sound_physics_perfected;
 
+import com.redsmods.sound_physics_perfected.ReverbHelpers.EnhancedReverbData;
+import com.redsmods.sound_physics_perfected.ReverbHelpers.ReverbSurfaceData;
+import com.redsmods.sound_physics_perfected.ReverbHelpers.RoomVolumeData;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.SoundInstance;
@@ -37,6 +40,8 @@ public class RaycastingHelper {
 
     Thread Safety go brrrrrrrrrrrrr
      */
+
+    // Queues and other lists that really aren't necessary lmao (i decided to care about readability rather than memory efficiency, sorry users' pcs
     public static final Queue<RedTickableInstance> tickQueue = new LinkedList<>();
     public static final Queue<RedPermeatedSoundInstance> permeatedTickQueue = new LinkedList<>();
     private static final ConcurrentHashMap<SoundData, Integer> entityRayHitCounts = new ConcurrentHashMap<>();
@@ -46,13 +51,26 @@ public class RaycastingHelper {
     private static final Map<Integer,ArrayList<SoundInstance>> soundPlayingWaiting = new ConcurrentHashMap<>();
     private static int ticksSinceWorld;
 
+    // Reverb Stuff
     private static final AtomicReference<Double> distanceFromWallEcho = new AtomicReference<>(0.0);
     private static final AtomicReference<Double> distanceFromWallEchoDenom = new AtomicReference<>(0.0);
     private static final AtomicInteger reverbStrength = new AtomicInteger(0);
     private static final AtomicInteger reverbDenom = new AtomicInteger(0);
     private static final AtomicInteger outdoorLeak = new AtomicInteger(0);
     private static final AtomicInteger outdoorLeakDenom = new AtomicInteger(0);
+    private static final ConcurrentHashMap<String, ReverbSurfaceData> surfaceMaterials = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Vec3d, RoomVolumeData> roomVolumeCache = new ConcurrentHashMap<>();
+    private static final AtomicInteger totalSurfaceArea = new AtomicInteger(0);
+    private static final AtomicReference<Double> averageAbsorption = new AtomicReference<>(0.0);
+    private static final AtomicReference<Double> roomVolume = new AtomicReference<>(0.0);
+    private static final AtomicReference<Double> surfaceToVolumeRatio = new AtomicReference<>(0.0);
+    private static final AtomicReference<Double> earlyReflectionStrength = new AtomicReference<>(0.0);
+    private static final AtomicReference<Double> lateReflectionStrength = new AtomicReference<>(0.0);
+    private static final AtomicReference<Double> weightedReverbStrength = new AtomicReference<>(0.0);
+    private static final AtomicInteger earlyReflectionCount = new AtomicInteger(0);
+    private static final AtomicInteger lateReflectionCount = new AtomicInteger(0);
 
+    // Ray data
     private static final ConcurrentHashMap<SoundData, List<RayHitData>> rayHitsByEntity = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<SoundData, List<RayHitData>> redRaysToTarget = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<SoundData, AveragedSoundData> muffledAveragedResults = new ConcurrentHashMap<>();
@@ -75,6 +93,10 @@ public class RaycastingHelper {
     public static int TICK_RATE = Config.getInstance().tickRate;
     public static RedsAttenuationType ATTENUATION_TYPE = Config.getInstance().attenuationType;
     public static double PERMEATION_STEP_SIZE = Config.getInstance().permeationStepSize;
+
+    static {
+        surfaceMaterials.put("default", new ReverbSurfaceData(0.05, 0.7, "medium"));
+    }
 
     // SoundSystemMixin Public static
     public static final Queue<RedPermeatedSoundInstance> FXQueue = new LinkedList<>();
@@ -392,7 +414,7 @@ public class RaycastingHelper {
 
             if (hitBlock) {
                 if (ENABLE_REVERB)
-                    castBlueRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
+                    castBlueRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection,bounce);
                 if (ENABLE_PERMEATION && bounce < 2) // only first 2 bounces cast permeating rays
                     castRedRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
                 castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
@@ -535,14 +557,15 @@ public class RaycastingHelper {
         }
     }
 
-    private static boolean castBlueRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities,
-                                       double currentDistance, Vec3d initialDirection) {
+    private static boolean castBlueRay(World world, PlayerEntity player, Vec3d currentPos,
+                                               Queue<SoundData> entities, double currentDistance,
+                                               Vec3d initialDirection, int bounceNumber) {
         Vec3d entityCenter = player.getBoundingBox().getCenter();
-        currentPos = currentPos.add(entityCenter.subtract(currentPos).multiply(0.87));
-        double distanceToEntity = currentPos.distanceTo(entityCenter);
+        Vec3d adjustedPos = currentPos.add(entityCenter.subtract(currentPos).multiply(0.87));
+        double distanceToEntity = adjustedPos.distanceTo(entityCenter);
 
         RaycastContext raycastContext = new RaycastContext(
-                currentPos,
+                adjustedPos,
                 entityCenter,
                 RaycastContext.ShapeType.COLLIDER,
                 RaycastContext.FluidHandling.NONE,
@@ -550,9 +573,23 @@ public class RaycastingHelper {
         );
 
         BlockHitResult blockHit = world.raycast(raycastContext);
-
         boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
-                currentPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 0.6;
+                adjustedPos.distanceTo(blockHit.getPos()) >= distanceToEntity - 0.6;
+
+        // Analyze surface material at bounce point
+        if (bounceNumber <= 2) { // Only for early reflections
+            analyzeSurfaceAtPosition(world, currentPos, currentDistance, hasLineOfSight);
+        }
+
+        // Calculate early vs late reflections
+        double reflectionDelay = currentDistance / SPEED_OF_SOUND_TICKS;
+        if (reflectionDelay < 0.05) { // Early reflections (< 50ms)
+            earlyReflectionStrength.updateAndGet(current -> current + (hasLineOfSight ? 1.0 : 0.0));
+            earlyReflectionCount.incrementAndGet();
+        } else { // Late reflections
+            lateReflectionStrength.updateAndGet(current -> current + (hasLineOfSight ? 0.6 : 0.0));
+            lateReflectionCount.incrementAndGet();
+        }
 
         reverbDenom.incrementAndGet();
 
@@ -560,9 +597,139 @@ public class RaycastingHelper {
             distanceFromWallEcho.updateAndGet(current -> current + currentDistance);
             distanceFromWallEchoDenom.updateAndGet(current -> current + 1.0);
             reverbStrength.incrementAndGet();
+
+            // Calculate reflection angle for more accurate reverb
+            Vec3d toPlayer = entityCenter.subtract(currentPos).normalize();
+            Vec3d reflectionAngle = initialDirection.subtract(toPlayer);
+            double angleDeviation = Math.abs(reflectionAngle.length());
+
+            // Weight reverb by reflection quality (direct vs scattered)
+            double reflectionQuality = Math.max(0.1, 1.0 - angleDeviation);
+            weightedReverbStrength.updateAndGet(current -> current + reflectionQuality);
         }
 
         return hasLineOfSight;
+    }
+
+    private static void analyzeSurfaceAtPosition(World world, Vec3d pos, double distance, boolean hasLineOfSight) {
+        BlockPos blockPos = new BlockPos((int)pos.x, (int)pos.y, (int)pos.z);
+        BlockState blockState = world.getBlockState(blockPos);
+
+        if (!blockState.isAir()) {
+            String materialName = blockState.getBlock().getName().getString().toLowerCase();
+            ReverbSurfaceData surfaceData = surfaceMaterials.getOrDefault(materialName,
+                    surfaceMaterials.get("default"));
+
+            // Weight by distance (closer surfaces have more impact)
+            double distanceWeight = 1.0 / Math.max(distance, 1.0);
+
+            averageAbsorption.updateAndGet(current -> current + (surfaceData.absorptionCoefficient * distanceWeight));
+            totalSurfaceArea.updateAndGet(current -> current + 1); // Simplified surface area counting
+
+            // Analyze room dimensions by checking surrounding blocks
+            if (hasLineOfSight) {
+                analyzeRoomDimensions(world, pos, blockPos);
+            }
+        }
+    }
+
+    private static void analyzeRoomDimensions(World world, Vec3d center, BlockPos hitPos) {
+        // Quick room volume estimation by checking 6 directions
+        double[] distances = new double[6];
+        Vec3d[] directions = {
+                new Vec3d(1, 0, 0), new Vec3d(-1, 0, 0),  // X axis
+                new Vec3d(0, 1, 0), new Vec3d(0, -1, 0),  // Y axis
+                new Vec3d(0, 0, 1), new Vec3d(0, 0, -1)   // Z axis
+        };
+
+        for (int i = 0; i < 6; i++) {
+            distances[i] = measureDistanceToWall(world, center, directions[i], 16.0);
+        }
+
+        // Estimate room volume (simplified box model)
+        double width = distances[0] + distances[1];
+        double height = distances[2] + distances[3];
+        double depth = distances[4] + distances[5];
+        double estimatedVolume = width * height * depth;
+
+        roomVolume.updateAndGet(current -> Math.max(current, estimatedVolume));
+
+        // Calculate surface area to volume ratio for RT60 estimation
+        double estimatedSurfaceArea = 2 * (width * height + width * depth + height * depth);
+        if (estimatedVolume > 0) {
+            surfaceToVolumeRatio.updateAndGet(current ->
+                    Math.max(current, estimatedSurfaceArea / estimatedVolume));
+        }
+    }
+
+    private static double measureDistanceToWall(World world, Vec3d start, Vec3d direction, double maxDistance) {
+        for (double d = 1.0; d < maxDistance; d += 1.0) {
+            Vec3d testPos = start.add(direction.multiply(d));
+            BlockPos blockPos = new BlockPos((int)testPos.x, (int)testPos.y, (int)testPos.z);
+
+            if (!world.getBlockState(blockPos).isAir()) {
+                return d;
+            }
+        }
+        return maxDistance; // Hit max distance, probably outdoor
+    }
+
+    // Enhanced reverb calculation method
+    public static EnhancedReverbData calculateEnhancedReverb() {
+        double totalSurface = totalSurfaceArea.get();
+        double avgAbsorption = totalSurface > 0 ? averageAbsorption.get() / totalSurface : 0.05;
+        double volume = roomVolume.get();
+        double surfaceToVolRatio = surfaceToVolumeRatio.get();
+
+        // Calculate RT60 using Sabine's formula: RT60 = 0.161 * V / A
+        // Where V is volume and A is total absorption
+        double totalAbsorption = totalSurface * avgAbsorption;
+        double rt60 = totalAbsorption > 0 ? (0.161 * volume) / totalAbsorption : 0.0;
+        rt60 = Math.min(rt60, 8.0); // Cap at 8 seconds for gameplay
+
+        // Early reflection delay based on room size
+        double roomRadius = Math.cbrt(volume * 3.0 / (4.0 * Math.PI)); // Sphere equivalent radius
+        double earlyReflectionDelay = roomRadius / SPEED_OF_SOUND_TICKS;
+
+        // Late reflection strength
+        double earlyStrength = earlyReflectionCount.get() > 0 ?
+                earlyReflectionStrength.get() / earlyReflectionCount.get() : 0.0;
+        double lateStrength = lateReflectionCount.get() > 0 ?
+                lateReflectionStrength.get() / lateReflectionCount.get() : 0.0;
+
+        // Determine acoustic profile
+        String acousticProfile = determineAcousticProfile(avgAbsorption, surfaceToVolRatio, volume);
+
+        // Determine if indoors (high surface to volume ratio indicates enclosed space)
+        boolean isIndoors = surfaceToVolRatio > 0.5 && volume < 8000;
+
+        return new EnhancedReverbData(rt60, earlyReflectionDelay, lateStrength,
+                roomRadius, avgAbsorption, acousticProfile, isIndoors);
+    }
+
+    private static String determineAcousticProfile(double absorption, double surfaceToVolRatio, double volume) {
+        if (volume > 10000) return "cathedral"; // Large reverberant space
+        if (absorption > 0.6) return "padded_room"; // Highly absorptive
+        if (absorption < 0.1 && surfaceToVolRatio < 0.3) return "gymnasium"; // Hard surfaces, large space
+        if (surfaceToVolRatio > 1.0) return "small_room"; // Cramped space
+        if (absorption > 0.3) return "living_room"; // Mixed materials
+        return "generic_room";
+    }
+
+    // Reverb getters
+    public static EnhancedReverbData getEnhancedReverbData() {
+        return calculateEnhancedReverb();
+    }
+
+    public static double getWeightedReverbStrength() {
+        return weightedReverbStrength.get();
+    }
+
+    public static double getEarlyReflectionRatio() {
+        int totalEarly = earlyReflectionCount.get();
+        int totalLate = lateReflectionCount.get();
+        int total = totalEarly + totalLate;
+        return total > 0 ? (double) totalEarly / total : 0.0;
     }
 
     private static void castRedRay(World world, PlayerEntity player, Vec3d currentPos, Queue<SoundData> entities,

@@ -2,6 +2,7 @@ package com.redsmods.sound_physics_perfected.mixin.client;
 
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
 import com.redsmods.sound_physics_perfected.RedSoundInstance;
+import com.redsmods.sound_physics_perfected.ReverbHelpers.EnhancedReverbData;
 import com.redsmods.sound_physics_perfected.storageclasses.SoundData;
 import com.redsmods.sound_physics_perfected.wrappers.RedPermeatedSoundInstance;
 import com.redsmods.sound_physics_perfected.wrappers.RedPositionedSoundInstance;
@@ -344,94 +345,159 @@ public abstract class SoundSystemMixin {
      */
     private static void applyReverbToSource(int sourceId) {
         try {
-            if (getDistanceFromWallEchoDenom() == 0 || getReverbDenom() == 0 || getOutdoorLeakDenom() == 0)
+            // Get enhanced reverb data
+            EnhancedReverbData reverbData = RaycastingHelper.getEnhancedReverbData();
+
+            if (RaycastingHelper.getDistanceFromWallEchoDenom() == 0 ||
+                    RaycastingHelper.getReverbDenom() == 0 ||
+                    RaycastingHelper.getOutdoorLeakDenom() == 0) {
                 return;
+            }
 
+            // Raw data extraction
             float wallDistance = (float) (RaycastingHelper.getDistanceFromWallEcho() / RaycastingHelper.getDistanceFromWallEchoDenom());
-            float occlusionPercent = (float) RaycastingHelper.getReverbStrength() / RaycastingHelper.getReverbDenom();
-            occlusionPercent = 1.0f - occlusionPercent;
+            float reverbStrength = (float) RaycastingHelper.getReverbStrength() / RaycastingHelper.getReverbDenom();
+            float weightedReverbStrength = (float) RaycastingHelper.getWeightedReverbStrength() / RaycastingHelper.getReverbDenom();
             float outdoorLeakPercent = (float) RaycastingHelper.getOutdoorLeak() / RaycastingHelper.getOutdoorLeakDenom();
-            outdoorLeakPercent = outdoorLeakPercent * 2;
+            float earlyReflectionRatio = (float) RaycastingHelper.getEarlyReflectionRatio();
 
-            float distanceMeters     = clamp(wallDistance, 1.0f, 100.0f);
-            occlusionPercent   = 1 - clamp(occlusionPercent+outdoorLeakPercent, 0.0f, 1.0f);
+            // Enhanced reverb parameters
+            float rt60 = (float) reverbData.rt60;
+            float roomSize = (float) reverbData.roomSize;
+            float absorption = (float) reverbData.absorption;
+            float earlyReflectionDelay = (float) reverbData.earlyReflectionDelay;
+            float lateReflectionStrength = (float) reverbData.lateReflectionStrength;
+            boolean isIndoors = reverbData.isIndoors;
+
+            // Normalize and clamp values
+            wallDistance = clamp(wallDistance, 0.5f, 200.0f);
+            reverbStrength = clamp(reverbStrength, 0.0f, 1.0f);
+            weightedReverbStrength = clamp(weightedReverbStrength, 0.0f, 1.0f);
             outdoorLeakPercent = clamp(outdoorLeakPercent, 0.0f, 1.0f);
+            earlyReflectionRatio = clamp(earlyReflectionRatio, 0.0f, 1.0f);
+            rt60 = clamp(rt60, 0.1f, 10.0f);
+            roomSize = clamp(roomSize, 1.0f, 100.0f);
+            absorption = clamp(absorption, 0.01f, 0.9f);
+            earlyReflectionDelay = clamp(earlyReflectionDelay, 0.001f, 0.1f);
+            lateReflectionStrength = clamp(lateReflectionStrength, 0.0f, 1.0f);
 
-            float dryFactor = 1.0f - outdoorLeakPercent; // 0 = fully outdoor, 1 = fully indoor
-            float speedOfSound = 343.0f;
+            // Calculate environmental factors
+            float enclosureFactor = isIndoors ? (1.0f - outdoorLeakPercent) :
+                    Math.max(0.0f, (reverbStrength - outdoorLeakPercent));
+            enclosureFactor = clamp(enclosureFactor, 0.0f, 1.0f);
 
-            // ==== PHYSICS-BASED CHANGES ====
+            float opennessFactor = 1.0f - enclosureFactor;
 
-            // 1. Volume-based decay time with Sabine formula
-            float distanceAttenuation = 1.0f / (1.0f + (distanceMeters - 1.0f) * 0.01f);
-            float volumeEstimate = distanceMeters * distanceMeters * distanceMeters; // Cubic relationship for room volume
-            float surfaceArea = 6.0f * distanceMeters * distanceMeters; // Approximate surface area for cube
+            // Size-based calculations (dynamic room volume estimation)
+            float estimatedVolume = roomSize * roomSize * roomSize * 0.7f; // More realistic volume estimation
+            float estimatedSurfaceArea = 6.0f * roomSize * roomSize;
+            float surfaceToVolumeRatio = estimatedSurfaceArea / Math.max(estimatedVolume, 1.0f);
+            surfaceToVolumeRatio = clamp(surfaceToVolumeRatio, 0.1f, 5.0f);
 
-            // Sabine RT60 formula: RT60 = 0.161 * V / A (where A = surface_area * absorption_coefficient)
-            float materialAbsorption = lerp(0.25f, 0.05f, dryFactor); // Outdoor = more absorption, Indoor = less
-            float totalAbsorption = surfaceArea * materialAbsorption;
-            float salineRT60 = 0.161f * volumeEstimate / Math.max(totalAbsorption, 0.1f); // Prevent division by zero
-            float decayTime = clamp(salineRT60 * dryFactor, 0.1f, 8.0f);
+            // Material-based absorption (dynamic based on measured absorption)
+            float dynamicAbsorption = absorption;
+            float totalAbsorption = estimatedSurfaceArea * dynamicAbsorption;
 
-            // 2. Air absorption - high frequencies attenuate over distance
-            float airAbsorptionCoeff = 1.0f - (distanceMeters * 0.002f); // 0.2% loss per meter
-            airAbsorptionCoeff = clamp(airAbsorptionCoeff, 0.3f, 1.0f);
+            // RT60 with fallback calculation if enhanced data is unreliable
+            float calculatedRT60 = rt60;
+            if (calculatedRT60 < 0.1f || calculatedRT60 > 10.0f) {
+                calculatedRT60 = 0.161f * estimatedVolume / Math.max(totalAbsorption, 0.1f);
+                calculatedRT60 = clamp(calculatedRT60, 0.1f, 8.0f);
+            }
 
-            // 3. Early reflection timing based on actual sound travel time
-            float wallDelay = (distanceMeters * 2.0f) / speedOfSound;
-            float earlyReflectionDelay = clamp(distanceMeters / speedOfSound, 0.001f, 0.03f);
-            float lateReverbBuildupTime = clamp(distanceMeters * 1.5f / speedOfSound, 0.01f, 0.08f);
+            // Apply enclosure effect to decay time
+            float effectiveDecayTime = calculatedRT60 * enclosureFactor;
+            effectiveDecayTime = clamp(effectiveDecayTime, 0.1f, 8.0f);
 
-            // Frequency-dependent absorption (high frequencies die faster in large spaces)
-            float airAbsorption = 1.0f - (distanceMeters * 0.001f); // Air absorbs highs over distance
-            float decayHfRatio = clamp(lerp(0.3f, 1.0f, (1.0f - occlusionPercent) * dryFactor * airAbsorption), 0.1f, 2.0f);
+            // Distance-based attenuation (more sophisticated)
+            float distanceAttenuation = 1.0f / (1.0f + wallDistance * 0.02f + wallDistance * wallDistance * 0.0001f);
 
-            // Pre-delay based on room size (sound takes time to build up in large spaces)
-            float reflectionsDelay = clamp(earlyReflectionDelay * 0.3f, 0.005f, 0.03f);
-            float lateReverbDelay = clamp(earlyReflectionDelay * 1.5f, 0.01f, 0.08f);
+            // Air absorption based on distance and humidity (simplified)
+            float airAbsorptionFactor = 1.0f - (wallDistance * 0.003f);
+            airAbsorptionFactor = clamp(airAbsorptionFactor, 0.2f, 1.0f);
 
-            // Diffusion: small rooms = more focused, large rooms = more diffuse
-            float sizeFactor = clamp(distanceMeters / 20.0f, 0.0f, 1.0f);
-            float diffusion = lerp(0.4f, 0.95f, sizeFactor * dryFactor * (1.0f - occlusionPercent));
+            // High frequency decay ratio (material and air absorption dependent)
+            float decayHfRatio = (1.0f - dynamicAbsorption) * airAbsorptionFactor * enclosureFactor;
+            decayHfRatio = clamp(decayHfRatio, 0.1f, 2.0f);
 
-            // High frequency rolloff (realistic material and air absorption)
-            float gainHF = lerp(0.1f, 0.8f, (1.0f - occlusionPercent) * dryFactor * airAbsorption);
+            // Early reflections timing and gain
+            float reflectionsDelay = earlyReflectionDelay;
+            float reflectionsGain = earlyReflectionRatio * reverbStrength * enclosureFactor * distanceAttenuation;
+            reflectionsGain = clamp(reflectionsGain, 0.0f, 0.8f);
 
-            // Distance and size-based gain adjustments
-            float sizeGainReduction = 1.0f / (1.0f + sizeFactor * 0.3f); // Large rooms spread energy
-            float reflectionsGain = lerp(0.0f, 0.6f, dryFactor * distanceAttenuation * sizeGainReduction);
-            float lateReverbGain = lerp(0.0f, 0.8f, dryFactor * distanceAttenuation * sizeGainReduction);
+            // Late reverb timing and gain
+            float lateReverbDelay = earlyReflectionDelay * 2.0f + (roomSize / 343.0f);
+            lateReverbDelay = clamp(lateReverbDelay, 0.005f, 0.2f);
 
-            // Density: packed reflections in small rooms, sparse in large rooms
-            float density = lerp(0.8f, 0.4f, sizeFactor) * dryFactor;
+            float lateReverbGain = lateReflectionStrength * enclosureFactor * distanceAttenuation;
+            lateReverbGain = clamp(lateReverbGain, 0.0f, 1.0f);
 
-            // Overall gain with realistic distance falloff
-            float gain = lerp(0.02f, 0.25f, dryFactor * distanceAttenuation * sizeGainReduction);
+            // Diffusion based on room shape complexity and size
+            float roomComplexity = Math.min(1.0f, surfaceToVolumeRatio / 2.0f); // Higher S/V ratio = more complex
+            float diffusion = lerp(0.3f, 0.95f, roomComplexity * enclosureFactor * weightedReverbStrength);
+            diffusion = clamp(diffusion, 0.1f, 1.0f);
 
-            // Enhanced air absorption for realism
-            float airAbsorptionHF = lerp(0.92f, 0.99f, dryFactor) * airAbsorption;
+            // Density based on reflection pattern
+            float density = lerp(0.3f, 1.0f, enclosureFactor * (1.0f - roomSize / 100.0f));
+            density = clamp(density, 0.1f, 1.0f);
 
-            // Room rolloff: larger rooms have more gradual rolloff
-            float roomRolloff = lerp(0.6f, 0.2f, sizeFactor);
+            // Overall gain with realistic falloff
+            float overallGain = enclosureFactor * distanceAttenuation * (0.1f + reverbStrength * 0.4f);
+            overallGain = clamp(overallGain, 0.0f, 0.5f);
 
-            // Apply to OpenAL effect
-            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAIN, gain);
-            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAINHF, gainHF * 0.8f); // More realistic HF filtering
+            // High frequency gain (affected by air absorption and materials)
+            float gainHF = (1.0f - dynamicAbsorption) * airAbsorptionFactor * enclosureFactor;
+            gainHF = clamp(gainHF, 0.1f, 1.0f);
 
-            alEffectf(reverbEffect, AL_EAXREVERB_DENSITY,                density);
-            alEffectf(reverbEffect, AL_EAXREVERB_GAIN,                   gain);
-            alEffectf(reverbEffect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF,  airAbsorptionHF);
-            alEffectf(reverbEffect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR,    roomRolloff);
-            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_TIME,         decayTime);
-            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_HFRATIO,      decayHfRatio);
-            alEffectf(reverbEffect, AL_EAXREVERB_DIFFUSION,          diffusion);
-            alEffectf(reverbEffect, AL_EAXREVERB_GAINHF,             gainHF);
-            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_DELAY,  reflectionsDelay);
-            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY,  lateReverbDelay);
-            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_GAIN,   reflectionsGain);
-            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN,   lateReverbGain);
+            // Air absorption high frequency
+            float airAbsorptionHF = airAbsorptionFactor * enclosureFactor + opennessFactor * 0.7f;
+            airAbsorptionHF = clamp(airAbsorptionHF, 0.5f, 1.0f);
+
+            // Room rolloff factor (how quickly sound drops off with distance in the room)
+            float roomRolloff = lerp(1.0f, 0.0f, enclosureFactor) * (roomSize / 50.0f);
+            roomRolloff = clamp(roomRolloff, 0.0f, 1.0f);
+
+            // Low-pass filtering for send (occlusion/obstruction effects)
+            float sendFilterGain = overallGain;
+            float sendFilterGainHF = gainHF * 0.7f; // Additional HF cut for realism
+
+            // Echo density (packed reflections in small rooms, sparse in large rooms)
+            float echoDensity = lerp(1.0f, 0.4f, roomSize / 100.0f) * enclosureFactor;
+            echoDensity = clamp(echoDensity, 0.1f, 1.0f);
+
+            // Modulation for more natural sound (subtle)
+            float modulationTime = clamp(roomSize * 0.01f, 0.04f, 4.0f);
+            float modulationDepth = clamp(enclosureFactor * 0.1f, 0.0f, 1.0f);
+
+            // Apply all parameters to OpenAL
+            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAIN, sendFilterGain);
+            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAINHF, sendFilterGainHF);
+
+            alEffectf(reverbEffect, AL_EAXREVERB_DENSITY, density);
+            alEffectf(reverbEffect, AL_EAXREVERB_DIFFUSION, diffusion);
+            alEffectf(reverbEffect, AL_EAXREVERB_GAIN, overallGain);
+            alEffectf(reverbEffect, AL_EAXREVERB_GAINHF, gainHF);
+            alEffectf(reverbEffect, AL_EAXREVERB_GAINLF, clamp(1.0f - dynamicAbsorption * 0.5f, 0.1f, 1.0f));
+            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_TIME, effectiveDecayTime);
+            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_HFRATIO, decayHfRatio);
+            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_LFRATIO, clamp(decayHfRatio * 1.2f, 0.1f, 2.0f));
+            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_GAIN, reflectionsGain);
+            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_DELAY, reflectionsDelay);
+            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN, lateReverbGain);
+            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY, lateReverbDelay);
+            alEffectf(reverbEffect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, airAbsorptionHF);
+            alEffectf(reverbEffect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, roomRolloff);
+            alEffectf(reverbEffect, AL_EAXREVERB_ECHO_TIME, clamp(roomSize * 0.002f, 0.075f, 0.25f));
+            alEffectf(reverbEffect, AL_EAXREVERB_ECHO_DEPTH, clamp(echoDensity * 0.1f, 0.0f, 1.0f));
+            alEffectf(reverbEffect, AL_EAXREVERB_MODULATION_TIME, modulationTime);
+            alEffectf(reverbEffect, AL_EAXREVERB_MODULATION_DEPTH, modulationDepth);
+            alEffectf(reverbEffect, AL_EAXREVERB_HFREFERENCE, clamp(5000.0f - roomSize * 20.0f, 1000.0f, 20000.0f));
+            alEffectf(reverbEffect, AL_EAXREVERB_LFREFERENCE, clamp(250.0f - roomSize * 2.0f, 20.0f, 1000.0f));
+
             AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
+
         } catch (Exception e) {
+            System.err.println("Error applying dynamic reverb: " + e.getMessage());
         }
     }
 
