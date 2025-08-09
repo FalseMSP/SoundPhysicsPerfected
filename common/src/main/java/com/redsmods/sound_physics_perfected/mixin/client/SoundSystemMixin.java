@@ -41,7 +41,6 @@ public abstract class SoundSystemMixin {
     private static int muffleFilter = 0;
     private static int sendFilter = 0;
     private static boolean efxInitialized = false;
-    private static final Queue<RedTickableInstance> FXTickQueue = new LinkedList<>();
     private static final Map<Integer, RedTickableInstance> tickMap = new HashMap<>();
 
     @Shadow
@@ -95,9 +94,10 @@ public abstract class SoundSystemMixin {
 
                 ci.cancel();
             } else if (ENABLE_PERMEATION && sound instanceof RedPermeatedSoundInstance) {
+                System.out.println(sound);
                 FXQueue.add((RedPermeatedSoundInstance) sound);
-            } else if (TICK_RATE == 0 && sound instanceof RedTickableInstance) {
-                FXTickQueue.add((RedTickableInstance) sound);
+            } else {
+                System.out.println(sound);
             }
         } catch (Exception e) {
             // Log error but don't crash
@@ -133,21 +133,6 @@ public abstract class SoundSystemMixin {
                 sound.applyMuffleToSource(id,sound.getPermeationIndex());
             } catch (Exception e) {
                 System.out.println("sourceID is invalid for a sound, non-issue" + e);
-            }
-        }
-
-        while(!FXTickQueue.isEmpty()) {
-            RedTickableInstance sound = FXTickQueue.poll();
-            try {
-                Channel.SourceManager manager = sources.get(sound);
-                SourceManagerAccessor accessor = (SourceManagerAccessor) manager;
-                Source source = accessor.getSource();
-                int id = ((SourceAccessor) source).getPointer();
-                tickMap.put(id,sound);
-            } catch (Exception e) {
-                if (tickMap.containsValue(sound))
-                    System.out.println("Critical error (mem leak prolly)");
-                System.out.println("sourceID is invalid for a sound, non-issue");
             }
         }
 
@@ -197,7 +182,6 @@ public abstract class SoundSystemMixin {
 
             // Clear queues and maps
             FXQueue.clear();
-            FXTickQueue.clear();
             tickMap.clear();
 
             // Delete OpenAL EFX objects if they exist
@@ -328,13 +312,7 @@ public abstract class SoundSystemMixin {
                         applyReverbToSource(sourceId);
 //                        System.out.println("Source ID: " + sourceId);
                     }
-                } else if (tickMap.containsKey(sourceId)){
-                    tickMap.get(sourceId).stop();
-                    tickMap.remove(sourceId);
-//                    System.out.println(tickMap);
                 }
-//                System.out.println(tickMap);
-//                System.out.println(tickQueue.peek().getId());
             }
         } catch (Exception e) {
             // Ignore errors
@@ -427,7 +405,7 @@ public abstract class SoundSystemMixin {
 
             // Late reverb timing and gain
             float lateReverbDelay = earlyReflectionDelay * 2.0f + (roomSize / 343.0f);
-            lateReverbDelay = clamp(lateReverbDelay, 0.005f, 0.2f);
+            lateReverbDelay = clamp(lateReverbDelay, 0.005f, 0.1f);
 
             float lateReverbGain = lateReflectionStrength * enclosureFactor * distanceAttenuation;
             lateReverbGain = clamp(lateReverbGain, 0.0f, 1.0f);
@@ -451,7 +429,7 @@ public abstract class SoundSystemMixin {
 
             // Air absorption high frequency
             float airAbsorptionHF = airAbsorptionFactor * enclosureFactor + opennessFactor * 0.7f;
-            airAbsorptionHF = clamp(airAbsorptionHF, 0.5f, 1.0f);
+            airAbsorptionHF = clamp(airAbsorptionHF, 0.892f, 1.0f);
 
             // Room rolloff factor (how quickly sound drops off with distance in the room)
             float roomRolloff = lerp(1.0f, 0.0f, enclosureFactor) * (roomSize / 50.0f);

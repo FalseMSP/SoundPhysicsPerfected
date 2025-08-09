@@ -298,8 +298,8 @@ public class RaycastingHelper {
             // Create positioned sound with adjustments
             newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getCategory(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, new Vec3d(originalSound.getX(), originalSound.getY(), originalSound.getZ()),baseVolume, confidenceMultiplier);
             soundPermInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(), newSound);
-            if (adjustedVolume <= 0.01)
-                return;
+//            if (adjustedVolume <= 0.01)
+//                return;
 
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
 
