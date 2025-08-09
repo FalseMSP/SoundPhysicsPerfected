@@ -1,5 +1,5 @@
 ## A Ray Traced audio implementation in Minecraft. 
-This was created as part of Summer of Making 2025 by RedDev (me). This is dissimilar to Sound Physics mod because the raycasting is cast from player rather than sound sources (which is theoretically more optimized). Reverb is as accurate as possible using OpenAL. Mod is developed based on the framework discussed in the video "A First look at Ray Traced Audio" by Vercidium.
+This is dissimilar to Sound Physics mod because the raycasting is cast from player rather than sound sources (which is theoretically more optimized). Reverb is as accurate as possible using OpenAL. Mod is developed based on the framework discussed in the video "A First look at Ray Traced Audio" by Vercidium.
 
 Modrinth: https://modrinth.com/mod/sound-physics-perfected
 
