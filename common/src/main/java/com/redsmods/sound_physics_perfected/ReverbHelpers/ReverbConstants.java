@@ -81,7 +81,7 @@ public class ReverbConstants {
     public static float MIN_EARLY_REFLECTION_DELAY = 0.001f;
     public static float MAX_EARLY_REFLECTION_DELAY = 0.1f;
     public static float MIN_LATE_REVERB_DELAY = 0.005f;
-    public static float MAX_LATE_REVERB_DELAY = 0.2f;
+    public static float MAX_LATE_REVERB_DELAY = 0.1f;
     public static float MIN_SURFACE_TO_VOLUME_RATIO = 0.1f;
     public static float MAX_SURFACE_TO_VOLUME_RATIO = 5.0f;
     public static float MIN_EFFECTIVE_DECAY_TIME = 0.1f;
@@ -92,7 +92,7 @@ public class ReverbConstants {
     public static float MAX_REFLECTIONS_GAIN = 0.8f;
     public static float MIN_LATE_REVERB_GAIN = 0.0f;
     public static float MAX_LATE_REVERB_GAIN = 1.0f;
-    public static float MIN_AIR_ABSORPTION_HF = 0.5f;
+    public static float MIN_AIR_ABSORPTION_HF = 0.892f;
     public static float MAX_AIR_ABSORPTION_HF = 1.0f;
     public static float MIN_ROOM_ROLLOFF = 0.0f;
     public static float MAX_ROOM_ROLLOFF = 1.0f;
