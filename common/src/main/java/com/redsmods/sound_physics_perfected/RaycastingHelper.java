@@ -868,7 +868,15 @@ public class RaycastingHelper {
 
                 // Get the block's bounding box
                 VoxelShape blockShape = blockState.getOutlineShape(world, hitBlockPos);
-                Box blockBounds = blockShape.getBoundingBox().offset(hitBlockPos);
+                Box blockBounds;
+                if (!blockShape.isEmpty()) {
+                    blockBounds = blockShape.getBoundingBox().offset(hitBlockPos);
+                } else {
+                    blockBounds = new Box(
+                            hitBlockPos.getX(), hitBlockPos.getY(), hitBlockPos.getZ(),
+                            hitBlockPos.getX() + 1, hitBlockPos.getY() + 1, hitBlockPos.getZ() + 1
+                    );
+                }
 
                 // Find the exit point by moving along the ray direction until we're outside the block
                 Vec3d exitPoint = hit.getPos();
