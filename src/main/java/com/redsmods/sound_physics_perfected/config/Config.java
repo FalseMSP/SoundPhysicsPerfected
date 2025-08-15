@@ -32,7 +32,7 @@ public class Config {
     @IntField(min = 0, max = 2000)
     @FormatTranslation("sound_physics_perfected.config.unit.rays")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.raysCast.description")
-    @SerialEntry public int raysCast = 1000;
+    @SerialEntry public int raysCast = 200;
 
     @AutoGen(category = "general", group = "main")
     @IntSlider(min = 0, max = 16, step = 1)
@@ -53,7 +53,7 @@ public class Config {
     @SerialEntry public int tickRate = 2; // once every 2 ticks bc i want poor people's pcs to burn
 
     @AutoGen(category = "general", group = "main")
-    @FloatSlider(min = 0, max = 100, step = 0.1f)
+    @FloatSlider(min = 0, max = 10, step = 0.1f)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.soundMult.description")
     @SerialEntry public float soundMult = 1; // make it just work like default Minecraft for lag helping :)
@@ -83,7 +83,7 @@ public class Config {
     @DoubleSlider(min = 1, max = 10, step = 0.05)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.rayBounce.description")
-    @SerialEntry public double rayBounceMult = 1.3;
+    @SerialEntry public double rayBounce = 1.3;
 
     // === REVERB TUNING CONSTANTS ===
     // Global Controls
