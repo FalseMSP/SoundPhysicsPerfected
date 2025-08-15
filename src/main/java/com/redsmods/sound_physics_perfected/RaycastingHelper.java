@@ -389,6 +389,8 @@ public class RaycastingHelper {
 
             double segmentTraveled = currentPos.distanceTo(actualEnd);
             totalDistanceTraveled += segmentTraveled;
+            // bounce mult
+            totalDistanceTraveled *= Config.getInstance().rayBounceMult;
 
             if (hitBlock) {
                 if (Config.getInstance().reverb) {

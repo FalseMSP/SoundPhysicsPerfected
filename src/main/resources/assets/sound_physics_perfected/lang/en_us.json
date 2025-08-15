@@ -63,6 +63,8 @@
       "permeationStepSize.description": "lower = more performance hurt\\nPERFORMANCE IMPACT: HIGH",
       "attenuationType": "Attenuation Mode",
       "attenuationType.description": "Inverse Square is realism, Linear is Minecraft\\nPERFORMANCE IMPACT: NONE",
+      "rayBounce": "Wall Bounce ",
+      "rayBounce.description": "Larger = less heavily the sound will be coming from walls (will make likely make sounds quieter)\\nPERFORMANCE IMPACT: NONE",
 
       "globalReverbIntensity": "Global Reverb Intensity",
       "globalReverbIntensity.description": "Overall reverb intensity multiplier\\nHigher = more intense reverb",

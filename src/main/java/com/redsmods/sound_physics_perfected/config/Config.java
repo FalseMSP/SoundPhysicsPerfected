@@ -56,7 +56,7 @@ public class Config {
     @FloatSlider(min = 0, max = 100, step = 0.1f)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.soundMult.description")
-    @SerialEntry public float soundMult = 2; // make it just work like default Minecraft for lag helping :)
+    @SerialEntry public float soundMult = 1; // make it just work like default Minecraft for lag helping :)
 
     @AutoGen(category = "general", group = "main")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
@@ -79,6 +79,11 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.attenuationType.description")
     @SerialEntry public RedsAttenuationType attenuationType = RedsAttenuationType.INVERSE_SQUARE;
 
+    @AutoGen(category = "general", group = "main")
+    @DoubleSlider(min = 1, max = 10, step = 0.05)
+    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.rayBounce.description")
+    @SerialEntry public double rayBounceMult = 1.3;
 
     // === REVERB TUNING CONSTANTS ===
     // Global Controls
