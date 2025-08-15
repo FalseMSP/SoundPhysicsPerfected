@@ -1,0 +1,43 @@
+{
+	"schemaVersion": 1,
+	"id": "${id}",
+	"version": "${version}",
+	"name": "${name}",
+	"description": "${description}",
+	"authors": [
+		"RedLife"
+	],
+	"contributors": [
+		"Souldbminer",
+		"Tellinq"
+	],
+	"contact": {
+		"homepage": "${modrinth}",
+		"sources": "${source}",
+		"issues": "${issues}"
+	},
+	"license": "${license}",
+	"icon": "assets/${id}/icon.png",
+	"environment": "client",
+	"depends": {
+		"fabricloader": ">=${fabric_loader_version}",
+		"minecraft": "${mcdep}",
+		"java": ">=17",
+		"fabric-api": "*",
+		"yet_another_config_lib_v3": ">=${yacl_version}"
+	},
+	"breaks": {
+		"feather": "*",
+		"labymod": "*",
+		"ichor": "*"
+	},
+	"custom": {
+		"modmenu": {
+			"links": {
+				"modmenu.discord": "${discord}",
+				"modmenu.modrinth": "${modrinth}"
+			},
+			"update_checker": true
+		}
+	}
+}
