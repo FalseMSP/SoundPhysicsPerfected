@@ -1,0 +1,33 @@
+modLoader = "javafml"
+loaderVersion = "*"
+issueTrackerURL = "${issues}"
+license = "${license}"
+
+[[mods]]
+modId = "${id}"
+version = "${version}"
+displayName = "${name}"
+authors = "RedLife"
+description = "${description}"
+logoFile = "assets/${id}/icon.png"
+
+[["dependencies.${id}"]]
+modId = "neoforge"
+type = "required"
+versionRange = "[${forge_version},)"
+ordering = "NONE"
+side = "CLIENT"
+
+[["dependencies.${id}"]]
+modId = "minecraft"
+type = "required"
+versionRange = "${mcdep}"
+ordering = "NONE"
+side = "CLIENT"
+
+[["dependencies.${id}"]]
+modId = "yet_another_config_lib_v3"
+type = "required"
+versionRange = "[${yacl_version},)"
+ordering = "BEFORE"
+side = "CLIENT"
