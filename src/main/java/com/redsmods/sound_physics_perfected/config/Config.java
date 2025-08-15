@@ -161,7 +161,7 @@ public class Config {
     @FloatField(min = 0, max = 10000)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.lateReverbDelayMultiplier.description")
-    @SerialEntry public float lateReverbDelayMultiplier = 2.0f;
+    @SerialEntry public float lateReverbDelayMultiplier = 1.0f;
 
     @AutoGen(category = "reverb_tuning", group = "reverb_timing")
     @FloatField(min = 0, max = 10000)
