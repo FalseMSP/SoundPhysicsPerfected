@@ -17,8 +17,6 @@ public class RedTickableInstance implements TickableSoundInstance {
     private final ResourceLocation location;
     private final Sound sound;
     private final SoundSource source;
-    private final Vec3 originalPosition;
-    private final float originalVolume;
     @Delegate private SoundInstance wrapped;
     private double x;
     private double y;
@@ -41,8 +39,6 @@ public class RedTickableInstance implements TickableSoundInstance {
         this.volume = volume;
         this.pitch = pitch;
         this.wrapped = wrapped;
-        this.originalPosition = originalPosition;
-        this.originalVolume = originalVolume;
         tickCount = 0;
         targetPosition = position;
         targetVolume = volume;
@@ -136,5 +132,13 @@ public class RedTickableInstance implements TickableSoundInstance {
     @Override
     public Sound getSound() {
         return this.sound;
+    }
+
+    public float getOriginalVolume() {
+        return wrapped.getVolume();
+    }
+
+    public Vec3 getOriginalPosition() {
+        return new Vec3(wrapped.getX(),wrapped.getY(),wrapped.getZ());
     }
 }

@@ -9,6 +9,7 @@ import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.resources.sounds.TickableSoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import com.redsmods.sound_physics_perfected.storageclasses.*;
 import com.redsmods.sound_physics_perfected.wrappers.*;
@@ -27,8 +28,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static com.redsmods.sound_physics_perfected.SoundPhysicsPerfected.DEBUG_LOGGER;
 
 public class RaycastingHelper {
     /*
@@ -191,6 +190,8 @@ public class RaycastingHelper {
         try {
             // Calculate the target position
             Vec3 targetPosition = playerPos.add(avgData.averageDirection.scale(avgData.averageDistance));
+            if (avgData.totalWeight == 0)
+                targetPosition = avgData.soundEntity.position; // make sound appear at its original source
 
             // Get original sound properties
             SoundInstance originalSound = avgData.soundEntity.sound;
@@ -224,13 +225,13 @@ public class RaycastingHelper {
                 ((RedTickableInstance) originalSound).setVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
                 return;
             } else if (((RedSoundInstance) originalSound) instanceof TickableSoundInstance) {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, new Vec3(originalSound.getX(), originalSound.getY(), originalSound.getZ()),baseVolume);
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, new Vec3(originalSound.getX(), originalSound.getY(), originalSound.getZ()),baseVolume);
             } else {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound,new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ()),baseVolume);
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound,new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ()),baseVolume);
             }
+
+            client.player.displayClientMessage(Component.literal("sound getting proc'd: " + newSound.getSound() + "     vol:" + newSound.getVolume()), false);
             soundInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(),newSound);
-            if (adjustedVolume <= 0.01)
-                return;
 
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
 
