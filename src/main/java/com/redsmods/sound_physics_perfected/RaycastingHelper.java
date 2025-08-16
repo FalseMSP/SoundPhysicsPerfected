@@ -909,7 +909,7 @@ public class RaycastingHelper {
     }
 
     public static void displayEntityRayHitCounts(Level world, Player player) {
-        if (world.isClientSide && !entityRayHitCounts.isEmpty()) {
+        if (world.isClientSide() && !entityRayHitCounts.isEmpty()) {
             for (Map.Entry<SoundData, Integer> entry : entityRayHitCounts.entrySet()) {
                 SoundData entity = entry.getKey();
                 int rayCount = entry.getValue();

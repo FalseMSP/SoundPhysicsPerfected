@@ -20,7 +20,7 @@ public class PlayerEntityMixin {
         Level world = player.level();
 
         // Only run on client side to avoid server lag
-        if (!world.isClientSide) {
+        if (!world.isClientSide()) {
             return;
         }
 
