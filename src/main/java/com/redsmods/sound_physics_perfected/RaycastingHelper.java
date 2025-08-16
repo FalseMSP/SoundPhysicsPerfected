@@ -28,6 +28,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.redsmods.sound_physics_perfected.SoundPhysicsPerfected.DEBUG_LOGGER;
+
 public class RaycastingHelper {
     /*
     Raycasting Helper for Red's Sounds (tbh this is what does all the work bc im lazy and don't know how to code lmao
@@ -265,6 +267,13 @@ public class RaycastingHelper {
             float basePitch = originalSound.getPitch();
             float adjustedPitch = basePitch * pitchMultiplier;
 
+            // make it so it mutes sounds when no rays make it
+            if(avgData.totalWeight == 0 && originalSound instanceof RedPermeatedSoundInstance) {
+                ((RedPermeatedSoundInstance) originalSound).setVolume(0);
+//                ((RedTickableInstance) originalSound).setPos(((RedTickableInstance) originalSound).getOriginalPosition());
+                return;
+            }
+
             if (originalSound instanceof RedTickableInstance) { // update pos of sounds
                 ((RedPermeatedSoundInstance) originalSound).setTargetPosition(targetPosition);
                 ((RedPermeatedSoundInstance) originalSound).setVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
@@ -363,7 +372,8 @@ public class RaycastingHelper {
 
         if (Config.getInstance().permeation)
             castRedRay(world, player, startPos, soundQueue, totalDistanceTraveled, initialDirection);
-        castGreenRay(world, player, startPos, soundQueue, totalDistanceTraveled, initialDirection);
+        else
+            castGreenRay(world, player, startPos, soundQueue, totalDistanceTraveled, initialDirection);
 
         for (int bounce = 0; bounce <= Config.getInstance().raysBounced && remainingDistance > 0; bounce++) {
             double segmentDistance = Math.min(16.0 * Config.getInstance().maxRayLength, remainingDistance);
@@ -404,7 +414,8 @@ public class RaycastingHelper {
                 }
                 if (Config.getInstance().permeation)
                     castRedRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
-                castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
+                else
+                    castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
             }
 
             if (hitBlock) {
@@ -458,6 +469,7 @@ public class RaycastingHelper {
     private static void castGreenRay(Level world, Player player, Vec3 currentPos, Queue<SoundData> entities,
                                      double currentDistance, Vec3 initialDirection) {
         for (SoundData soundEntity : entities) {
+            rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()); // make sure all sounds are proc'd even if they aren't audible at first (makes discs work lmao)
             Vec3 entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
 
@@ -722,6 +734,8 @@ public class RaycastingHelper {
     private static void castRedRay(Level world, Player player, Vec3 currentPos, Queue<SoundData> entities,
                                    double currentDistance, Vec3 initialDirection) {
         for (SoundData soundEntity : entities) {
+            rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()); // make sure all sounds are proc'd even if they aren't audible at first (makes discs work lmao)
+            redRaysToTarget.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>());
             Vec3 entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
 
@@ -740,8 +754,6 @@ public class RaycastingHelper {
             currentPos = blockHit.getLocation();
 
             double blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
-//            if (blockCount == 0)
-//                continue;
 
             double blockAttenuation = Math.pow(0.7, blockCount); // 0.7 is how much it'll lower the gain by, keep in mind the muffle fx is still seperate
             double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
@@ -751,13 +763,23 @@ public class RaycastingHelper {
                     initialDirection,
                     soundEntity
             );
-            RayHitData hitData = new RayHitData(rayResult, initialDirection, weight);
+
+
+                RayHitData hitData = new RayHitData(rayResult, initialDirection, weight);
+
+            if (blockCount == 0) {
+                rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
+                entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
+            }
 
             redRaysToTarget.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
         }
         for (RedPermeatedSoundInstance soundEntity : permeatedTickQueue) {
-            Vec3 entityCenter = soundEntity.getOriginalPosition();
             SoundData data = new TickableSoundData(soundEntity, soundEntity.getOriginalPosition(), soundEntity.getSound().getLocation().toString());
+            rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()); // make it so 0 ray hit sounds get muted
+            redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>());
+
+            Vec3 entityCenter = soundEntity.getOriginalPosition();
             double distanceToEntity = currentPos.distanceTo(entityCenter);
 
             if (distanceToEntity + currentDistance > 16 * soundEntity.getOriginalVolume())
@@ -775,8 +797,6 @@ public class RaycastingHelper {
             currentPos = blockHit.getLocation();
 
             double blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
-//            if (blockCount == 0)
-//                continue;
 
             double blockAttenuation = Math.pow(0.7, blockCount); // 0.7 is how much it'll lower the gain by, keep in mind the muffle fx is still seperate
             double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
@@ -787,6 +807,11 @@ public class RaycastingHelper {
                     data
             );
             RayHitData hitData = new RayHitData(rayResult, initialDirection, weight);
+
+            if (blockCount == 0) {
+                rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
+                entityRayHitCounts.merge(data, 1, Integer::sum);
+            }
 
             redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
         }
