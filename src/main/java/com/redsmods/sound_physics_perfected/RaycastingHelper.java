@@ -230,7 +230,6 @@ public class RaycastingHelper {
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound,new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ()),baseVolume);
             }
 
-            client.player.displayClientMessage(Component.literal("sound getting proc'd: " + newSound.getSound() + "     vol:" + newSound.getVolume()), false);
             soundInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(),newSound);
 
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
