@@ -105,7 +105,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     public void updateVolume() {
         // Calculate the difference between current and target volume
         float deltaVolume = targetVolume - volume;
-        float maxVolumeChange = Math.max(Math.abs(deltaVolume / Config.getInstance().tickRate),0.2f);
+        float maxVolumeChange = Math.max(Math.abs(deltaVolume / Config.getInstance().tickRate),0.05f);
 
         // If we're already at the target or very close, set volume directly
         if (Math.abs(deltaVolume) <= 0.001f || Math.abs(deltaVolume) > maxVolumeChange * Config.getInstance().tickRate) {
