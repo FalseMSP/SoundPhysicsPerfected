@@ -197,8 +197,8 @@ public class RaycastingHelper {
             SoundInstance originalSound = avgData.soundEntity.sound;
             ResourceLocation soundId = originalSound.getLocation();
             if(avgData.totalWeight == 0 && originalSound instanceof RedTickableInstance) {
-                ((RedTickableInstance) originalSound).setVolume(0);
-//                ((RedTickableInstance) originalSound).setPos(((RedTickableInstance) originalSound).getOriginalPosition());
+                ((RedTickableInstance) originalSound).setTargetVolume(0);
+                ((RedTickableInstance) originalSound).setTargetPosition(((RedTickableInstance) originalSound).getOriginalPosition());
                 return;
             }
             // Calculate adjusted volume based on ray count and weight (confidence-based)
@@ -222,7 +222,7 @@ public class RaycastingHelper {
             // Create positioned sound with adjustments
             if (originalSound instanceof RedTickableInstance) { // update pos of sounds
                 ((RedTickableInstance) originalSound).setTargetPosition(targetPosition);
-                ((RedTickableInstance) originalSound).setVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
+                ((RedTickableInstance) originalSound).setTargetVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
                 return;
             } else if (((RedSoundInstance) originalSound) instanceof TickableSoundInstance) {
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, new Vec3(originalSound.getX(), originalSound.getY(), originalSound.getZ()),baseVolume);
@@ -248,6 +248,8 @@ public class RaycastingHelper {
         try {
             // Calculate the target position
             Vec3 targetPosition = playerPos.add(avgData.averageDirection.scale(avgData.averageDistance));
+            if (avgData.totalWeight == 0)
+                targetPosition = avgData.soundEntity.position; // make sound appear at its original source
 
             // Get original sound properties
             SoundInstance originalSound = avgData.soundEntity.sound;
@@ -261,7 +263,6 @@ public class RaycastingHelper {
                 baseVolume = ((RedSoundInstance) originalSound).original.getVolume();
             float confidenceMultiplier = (float) avgData.totalWeight / (float) Config.getInstance().raysCast*Config.getInstance().raysBounced;
             float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier;
-            if (confidenceMultiplier > 0.9) adjustedVolume = 0;
 
             // Calculate adjusted pitch
             float basePitch = originalSound.getPitch();
@@ -269,14 +270,14 @@ public class RaycastingHelper {
 
             // make it so it mutes sounds when no rays make it
             if(avgData.totalWeight == 0 && originalSound instanceof RedPermeatedSoundInstance) {
-                ((RedPermeatedSoundInstance) originalSound).setVolume(0);
-//                ((RedTickableInstance) originalSound).setPos(((RedTickableInstance) originalSound).getOriginalPosition());
+                ((RedPermeatedSoundInstance) originalSound).setTargetVolume(0);
+                ((RedPermeatedSoundInstance) originalSound).setTargetPosition(((RedTickableInstance) originalSound).getOriginalPosition());
                 return;
             }
 
             if (originalSound instanceof RedTickableInstance) { // update pos of sounds
                 ((RedPermeatedSoundInstance) originalSound).setTargetPosition(targetPosition);
-                ((RedPermeatedSoundInstance) originalSound).setVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
+                ((RedPermeatedSoundInstance) originalSound).setTargetVolume(adjustedVolume);
                 ((RedPermeatedSoundInstance) originalSound).setPermeationIndex(confidenceMultiplier);
                 return;
             }
@@ -285,8 +286,6 @@ public class RaycastingHelper {
             // Create positioned sound with adjustments
             newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, new Vec3(originalSound.getX(), originalSound.getY(), originalSound.getZ()),baseVolume, confidenceMultiplier);
             soundPermInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(), newSound);
-//            if (adjustedVolume <= 0.01)
-//                return;
 
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
 
@@ -430,11 +429,7 @@ public class RaycastingHelper {
                 outdoorLeakDenom.incrementAndGet();
             } else {
                 for (SoundData soundEntity : weatherQueue) {
-                    double weight;
-                    if (Config.getInstance().attenuationType == RedsAttenuationType.INVERSE_SQUARE)
-                        weight = 1.0 / (Math.max(totalDistanceTraveled - segmentTraveled, 0.1) * Math.max(totalDistanceTraveled - segmentTraveled, 0.1));
-                    else
-                        weight = 1.0 / Math.max(totalDistanceTraveled - segmentTraveled, 0.1);
+                    double weight = getWeight(totalDistanceTraveled-segmentTraveled,0,0);
 
                     RaycastResult GreenRayResult = new RaycastResult(
                             maxTotalDistance,
@@ -490,11 +485,7 @@ public class RaycastingHelper {
                     currentPos.distanceTo(blockHit.getLocation()) >= distanceToEntity - 1;
 
             if (hasLineOfSight) {
-                double weight;
-                if (Config.getInstance().attenuationType == RedsAttenuationType.INVERSE_SQUARE)
-                    weight = 1.0 / (Math.max(distanceToEntity + currentDistance, 0.1) * Math.max(distanceToEntity + currentDistance, 0.1));
-                else
-                    weight = 1.0 / Math.max(distanceToEntity + currentDistance, 0.1);
+                double weight = getWeight(currentDistance,0,distanceToEntity);
 
                 RaycastResult GreenRayResult = new RaycastResult(
                         distanceToEntity,
@@ -511,7 +502,7 @@ public class RaycastingHelper {
 
         // Handle tickable sounds
         for (RedTickableInstance soundEntity : tickQueue) {
-            SoundData data = new TickableSoundData(soundEntity, soundEntity.getOriginalPosition(), soundEntity.getSound().getLocation().toString());
+            SoundData data = new TickableSoundData(soundEntity, soundEntity.getOriginalPosition(), soundEntity.getSound().toString());
             rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>());
 
             Vec3 entityCenter = soundEntity.getOriginalPosition();
@@ -534,11 +525,7 @@ public class RaycastingHelper {
                     currentPos.distanceTo(blockHit.getLocation()) >= distanceToEntity - 1;
 
             if (hasLineOfSight) {
-                double weight;
-                if (Config.getInstance().attenuationType == RedsAttenuationType.INVERSE_SQUARE)
-                    weight = 1.0 / (Math.max(distanceToEntity + currentDistance, 0.1) * Math.max(distanceToEntity + currentDistance, 0.1));
-                else
-                    weight = 1.0 / Math.max(distanceToEntity + currentDistance, 0.1);
+                double weight = getWeight(currentDistance,0,distanceToEntity);
 
                 RaycastResult GreenRayResult = new RaycastResult(
                         distanceToEntity,
@@ -742,21 +729,9 @@ public class RaycastingHelper {
             if (distanceToEntity + currentDistance > 16 * soundEntity.sound.getVolume())
                 continue;
 
-            ClipContext raycastContext = new ClipContext(
-                    currentPos,
-                    entityCenter,
-                    ClipContext.Block.COLLIDER,
-                    ClipContext.Fluid.NONE,
-                    player
-            );
-
-            BlockHitResult blockHit = world.clip(raycastContext);
-            currentPos = blockHit.getLocation();
-
             double blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
 
-            double blockAttenuation = Math.pow(0.7, blockCount); // 0.7 is how much it'll lower the gain by, keep in mind the muffle fx is still seperate
-            double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
+            double weight = getWeight(currentDistance,blockCount,distanceToEntity);
 
             RaycastResult rayResult = new RaycastResult(
                     distanceToEntity,
@@ -764,8 +739,7 @@ public class RaycastingHelper {
                     soundEntity
             );
 
-
-                RayHitData hitData = new RayHitData(rayResult, initialDirection, weight);
+            RayHitData hitData = new RayHitData(rayResult, initialDirection, weight);
 
             if (blockCount == 0) {
                 rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
@@ -775,8 +749,7 @@ public class RaycastingHelper {
             redRaysToTarget.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
         }
         for (RedPermeatedSoundInstance soundEntity : permeatedTickQueue) {
-            SoundData data = new TickableSoundData(soundEntity, soundEntity.getOriginalPosition(), soundEntity.getSound().getLocation().toString());
-            rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()); // make it so 0 ray hit sounds get muted
+            SoundData data = new TickableSoundData(soundEntity, soundEntity.getOriginalPosition(), soundEntity.getSound().toString());
             redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>());
 
             Vec3 entityCenter = soundEntity.getOriginalPosition();
@@ -785,21 +758,9 @@ public class RaycastingHelper {
             if (distanceToEntity + currentDistance > 16 * soundEntity.getOriginalVolume())
                 continue;
 
-            ClipContext context = new ClipContext(
-                    currentPos,
-                    entityCenter,
-                    ClipContext.Block.COLLIDER,
-                    ClipContext.Fluid.NONE,
-                    player
-            );
-
-            BlockHitResult blockHit = world.clip(context);
-            currentPos = blockHit.getLocation();
-
             double blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
 
-            double blockAttenuation = Math.pow(0.7, blockCount); // 0.7 is how much it'll lower the gain by, keep in mind the muffle fx is still seperate
-            double weight = blockAttenuation / (Math.max(distanceToEntity, 0.1) * Math.max(distanceToEntity, 0.1));
+            double weight = getWeight(currentDistance, blockCount, distanceToEntity);
 
             RaycastResult rayResult = new RaycastResult(
                     distanceToEntity,
@@ -807,14 +768,58 @@ public class RaycastingHelper {
                     data
             );
             RayHitData hitData = new RayHitData(rayResult, initialDirection, weight);
+            redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
+        }
 
-            if (blockCount == 0) {
+        // Handle tickable sounds (cast green ray for EXCLUSIVELY standard tick queue)
+        for (RedTickableInstance soundEntity : tickQueue) {
+            SoundData data = new TickableSoundData(soundEntity, soundEntity.getOriginalPosition(), soundEntity.getSound().toString());
+            rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>());
+
+            Vec3 entityCenter = soundEntity.getOriginalPosition();
+            double distanceToEntity = currentPos.distanceTo(entityCenter);
+
+            if (distanceToEntity + currentDistance > 16 * soundEntity.getOriginalVolume())
+                continue;
+
+            ClipContext raycastContext = new ClipContext(
+                    currentPos,
+                    entityCenter,
+                    ClipContext.Block.COLLIDER,
+                    ClipContext.Fluid.NONE,
+                    player
+            );
+
+            BlockHitResult blockHit = world.clip(raycastContext);
+
+            boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
+                    currentPos.distanceTo(blockHit.getLocation()) >= distanceToEntity - 1;
+
+            if (hasLineOfSight) {
+                double weight = getWeight(currentDistance,0,distanceToEntity); // 0 = no blocks in the way, green ray.
+
+                RaycastResult GreenRayResult = new RaycastResult(
+                        distanceToEntity,
+                        initialDirection,
+                        data
+                );
+
+                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight);
+
                 rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
                 entityRayHitCounts.merge(data, 1, Integer::sum);
             }
-
-            redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
         }
+    }
+
+    private static double getWeight(double currentDistance, double blockCount, double distanceToEntity) {
+        double blockAttenuation = Math.pow(0.7, blockCount); // 0.7 is how much it'll lower the gain by, keep in mind the muffle fx is still seperate
+        double weight;
+        if (Config.getInstance().attenuationType == RedsAttenuationType.INVERSE_SQUARE)
+            weight = blockAttenuation / (Math.max(distanceToEntity + currentDistance, 0.1) * Math.max(distanceToEntity + currentDistance, 0.1));
+        else
+            weight = blockAttenuation / Math.max(distanceToEntity + currentDistance, 0.1);
+        return weight;
     }
 
     // Helper method to calculate weighted averages for a single entity
@@ -851,6 +856,9 @@ public class RaycastingHelper {
         double totalDistanceInBlocks = 0;
         Vec3 currentStart = start;
 
+        // Calculate the block position that contains the end point
+        BlockPos endBlockPos = new BlockPos((int) Math.floor(end.x), (int) Math.floor(end.y), (int) Math.floor(end.z));
+
         while (totalDistanceInBlocks < 3) {
             // Cast a ray from current position to the end point
             ClipContext context = new ClipContext(
@@ -870,6 +878,11 @@ public class RaycastingHelper {
 
             BlockPos hitBlockPos = hit.getBlockPos();
             BlockState blockState = world.getBlockState(hitBlockPos);
+
+            // If we hit the block that contains the end position, break
+            if (hitBlockPos.equals(endBlockPos)) {
+                break;
+            }
 
             // Only count solid blocks (not air)
             if (!blockState.isAir()) {

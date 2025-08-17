@@ -22,11 +22,11 @@ public class RedTickableInstance implements TickableSoundInstance {
     private double y;
     private double z;
     @Setter private boolean stopped;
-    private float volume;
+    @Setter private float volume;
     private float pitch;
     private int tickCount;
     @Setter private Vec3 targetPosition;
-    private float targetVolume;
+    @Setter private float targetVolume;
 
     public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped, Vec3 originalPosition, float originalVolume) {
         this.location = location;
@@ -102,13 +102,10 @@ public class RedTickableInstance implements TickableSoundInstance {
         z += moveZ;
     }
 
-    public void setVolume(float targetVolume) {
-        this.targetVolume = targetVolume;
-    }
     public void updateVolume() {
         // Calculate the difference between current and target volume
         float deltaVolume = targetVolume - volume;
-        float maxVolumeChange = Math.abs(deltaVolume / Config.getInstance().tickRate);
+        float maxVolumeChange = Math.max(Math.abs(deltaVolume / Config.getInstance().tickRate),0.2f);
 
         // If we're already at the target or very close, set volume directly
         if (Math.abs(deltaVolume) <= 0.001f || Math.abs(deltaVolume) > maxVolumeChange * Config.getInstance().tickRate) {
