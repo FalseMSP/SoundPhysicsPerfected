@@ -1,6 +1,10 @@
 package com.redsmods.sound_physics_perfected.config;
 
+import dev.isxander.yacl3.api.Option;
+import dev.isxander.yacl3.api.controller.ControllerBuilder;
+import dev.isxander.yacl3.api.controller.StringControllerBuilder;
 import dev.isxander.yacl3.config.v2.api.ConfigClassHandler;
+import dev.isxander.yacl3.config.v2.api.ConfigField;
 import dev.isxander.yacl3.config.v2.api.SerialEntry;
 import dev.isxander.yacl3.config.v2.api.autogen.*;
 import dev.isxander.yacl3.config.v2.api.autogen.Boolean;
@@ -8,6 +12,11 @@ import dev.isxander.yacl3.config.v2.api.serializer.GsonConfigSerializerBuilder;
 import dev.isxander.yacl3.platform.YACLPlatform;
 import net.minecraft.client.gui.screens.Screen;
 import org.jetbrains.annotations.Nullable;
+
+import java.io.Serial;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class Config {
     public static final ConfigClassHandler<Config> CONFIG = ConfigClassHandler.createBuilder(Config.class)
@@ -88,6 +97,31 @@ public class Config {
     @EnumCycler
     @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
     @SerialEntry public DebugType debug = DebugType.OFF;
+
+
+    public static class StringValueFactory implements ListGroup.ValueFactory<String> {
+        @Override
+        public String provideNewValue() {
+            return ""; // Default value for new entries
+        }
+    }
+
+    public static class StringControllerFactory implements ListGroup.ControllerFactory<String> {
+        @Override
+        public ControllerBuilder<String> createController(ListGroup listGroup, ConfigField<List<String>> configField, OptionAccess optionAccess, Option<String> option) {
+            return StringControllerBuilder.create(option);
+        }
+    }
+
+    @AutoGen(category = "blacklist")
+    @ListGroup(valueFactory = StringValueFactory.class, controllerFactory = StringControllerFactory.class)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.soundBlacklist.description")
+    @SerialEntry public List<String> soundBlacklist = new ArrayList<>();
+
+    @AutoGen(category = "blacklist")
+    @ListGroup(valueFactory = StringValueFactory.class, controllerFactory = StringControllerFactory.class)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.soundTickBlacklist.description")
+    @SerialEntry public List<String> soundTickBlacklist = new ArrayList<>();
 
     // === REVERB TUNING CONSTANTS ===
     // Global Controls
@@ -317,5 +351,4 @@ public class Config {
     @FloatField(min = 0, max = 10000)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.diffusionReverbWeight.description")
     @SerialEntry public float diffusionReverbWeight = 1.0f;
-
 }

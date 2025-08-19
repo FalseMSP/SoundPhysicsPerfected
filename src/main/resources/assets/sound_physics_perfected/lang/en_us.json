@@ -48,7 +48,8 @@
           "rolloff": "Rolloff",
           "rt60": "RT60 Calculation",
           "interpolation_weights": "Interpolation Weights"
-        }
+        },
+        "blacklist": "Blacklist"
       },
       "raysCast": "Rays Cast",
       "raysCast.description": "# of Rays to cast from players\\nPERFORMANCE IMPACT: HIGH",
@@ -150,7 +151,12 @@
       "diffusionEnclosureWeight": "Diffusion Enclosure Weight",
       "diffusionEnclosureWeight.description": "Weight of enclosure in diffusion calculation\\nHigher = enclosure affects diffusion more",
       "diffusionReverbWeight": "Diffusion Reverb Weight",
-      "diffusionReverbWeight.description": "Weight of reverb strength in diffusion calculation\\nHigher = reverb strength affects diffusion more"
+      "diffusionReverbWeight.description": "Weight of reverb strength in diffusion calculation\\nHigher = reverb strength affects diffusion more",
+
+      "soundBlacklist": "Blacklist for Proccessing",
+      "soundBlacklist.description": "Does not have to be a full match, will blacklist anything that CONTAINS that name",
+      "soundTickBlacklist": "Blacklist for Ticking",
+      "soundTickBlacklist.description": "Does not have to be a full match, will blacklist anything that CONTAINS that name"
     }
   }
 }
