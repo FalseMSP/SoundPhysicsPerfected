@@ -4,6 +4,8 @@ import com.redsmods.sound_physics_perfected.ReverbHelpers.EnhancedReverbData;
 import com.redsmods.sound_physics_perfected.ReverbHelpers.ReverbSurfaceData;
 import com.redsmods.sound_physics_perfected.ReverbHelpers.RoomVolumeData;
 import com.redsmods.sound_physics_perfected.config.Config;
+import com.redsmods.sound_physics_perfected.config.DebugType;
+import com.redsmods.sound_physics_perfected.config.RedsAttenuationType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.resources.sounds.TickableSoundInstance;
@@ -231,6 +233,8 @@ public class RaycastingHelper {
             }
 
             soundInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(),newSound);
+            if (Config.getInstance().debug == DebugType.ACTION_BAR) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), true);
+            else if (Config.getInstance().debug == DebugType.CHAT) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), false);
 
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
 

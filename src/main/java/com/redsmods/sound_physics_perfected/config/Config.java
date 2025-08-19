@@ -1,6 +1,5 @@
 package com.redsmods.sound_physics_perfected.config;
 
-import com.redsmods.sound_physics_perfected.RedsAttenuationType;
 import dev.isxander.yacl3.config.v2.api.ConfigClassHandler;
 import dev.isxander.yacl3.config.v2.api.SerialEntry;
 import dev.isxander.yacl3.config.v2.api.autogen.*;
@@ -84,6 +83,11 @@ public class Config {
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.rayBounce.description")
     @SerialEntry public double rayBounce = 1.3;
+
+    @AutoGen(category = "general", group = "main")
+    @EnumCycler
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
+    @SerialEntry public DebugType debug = DebugType.OFF;
 
     // === REVERB TUNING CONSTANTS ===
     // Global Controls
