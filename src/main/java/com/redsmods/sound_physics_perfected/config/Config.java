@@ -164,7 +164,7 @@ public class Config {
     @AutoGen(category = "reverb_tuning", group = "distance_and_attenuation")
     @FloatField(min = 0, max = 10000)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.distanceAttenuationQuadratic.description")
-    @SerialEntry public float distanceAttenuationQuadratic = 0.0001f;
+    @SerialEntry public float distanceAttenuationQuadratic = 0.01f;
 
     @AutoGen(category = "reverb_tuning", group = "distance_and_attenuation")
     @FloatField(min = 0, max = 10000)
