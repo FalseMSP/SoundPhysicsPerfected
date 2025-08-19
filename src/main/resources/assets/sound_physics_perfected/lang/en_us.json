@@ -18,7 +18,8 @@
     "enum": {
       "RedsAttenuationType": {
         "inverse_square": "Inverse Square",
-        "linear": "Linear"
+        "linear": "Linear",
+        "none": "Vercidium"
       },
       "DebugType": {
         "off": "Off",
@@ -68,7 +69,7 @@
       "permeationStepSize": "Permeation Step Size",
       "permeationStepSize.description": "lower = more performance hurt\\nPERFORMANCE IMPACT: HIGH",
       "attenuationType": "Attenuation Mode",
-      "attenuationType.description": "Inverse Square is realism, Linear is Minecraft\\nPERFORMANCE IMPACT: NONE",
+      "attenuationType.description": "This setting is now largely irrelevant, if you liked the way the mod sounded in the past, this helps. otherwise ignore\\nPERFORMANCE IMPACT: NONE",
       "rayBounce": "Wall Bounce",
       "rayBounce.description": "Larger = less heavily the sound will be coming from walls (will make likely make sounds quieter)\\nPERFORMANCE IMPACT: NONE",
       "debug": "Debug Mode",

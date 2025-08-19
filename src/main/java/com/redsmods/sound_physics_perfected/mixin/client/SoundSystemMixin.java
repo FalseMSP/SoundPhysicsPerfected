@@ -6,6 +6,7 @@ import com.redsmods.sound_physics_perfected.RedSoundInstance;
 import com.redsmods.sound_physics_perfected.ReverbHelpers.EnhancedReverbData;
 import com.redsmods.sound_physics_perfected.ReverbHelpers.ReverbConstants;
 import com.redsmods.sound_physics_perfected.config.Config;
+import com.redsmods.sound_physics_perfected.config.DebugType;
 import com.redsmods.sound_physics_perfected.storageclasses.SoundData;
 import com.redsmods.sound_physics_perfected.wrappers.RedPermeatedSoundInstance;
 import com.redsmods.sound_physics_perfected.wrappers.RedPositionedSoundInstance;
@@ -149,7 +150,8 @@ public abstract class SoundSystemMixin {
                 sound.setSource(id);
                 sound.applyMuffleToSource(id,sound.getPermeationIndex());
             } catch (Exception e) {
-                System.out.println("sourceID is invalid for a sound, non-issue" + e);
+                if (Config.getInstance().debug != DebugType.OFF)
+                    System.out.println("sourceID is invalid for a sound, non-issue" + e);
             }
         }
 

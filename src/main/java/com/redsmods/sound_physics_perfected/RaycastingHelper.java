@@ -61,6 +61,7 @@ public class RaycastingHelper {
     private static final AtomicInteger reverbDenom = new AtomicInteger(0);
     private static final AtomicInteger outdoorLeak = new AtomicInteger(0);
     private static final AtomicInteger outdoorLeakDenom = new AtomicInteger(0);
+    private static final AtomicInteger totalRaysHitSurface = new AtomicInteger(0);
     private static final ConcurrentHashMap<String, ReverbSurfaceData> surfaceMaterials = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Vec3, RoomVolumeData> roomVolumeCache = new ConcurrentHashMap<>();
     private static final AtomicInteger totalSurfaceArea = new AtomicInteger(0);
@@ -211,10 +212,15 @@ public class RaycastingHelper {
             else
                 baseVolume = ((RedSoundInstance) originalSound).original.getVolume();
 
-            float confidenceMultiplier = (float) avgData.totalWeight / (float) Config.getInstance().raysCast*Config.getInstance().raysBounced;
-            confidenceMultiplier = Math.min(confidenceMultiplier,1.0f); // make it so it never makes the sound louder lol
-
-            float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier;
+            float confidenceMultiplier;
+            float attenuationMultiplier = 1;
+            if (Config.getInstance().attenuationType == RedsAttenuationType.NONE) {
+                confidenceMultiplier = (float) avgData.totalWeight / Math.max(totalRaysHitSurface.get(), 1);
+                attenuationMultiplier = 1.0f / (float) Math.pow(Math.max(avgData.averageDistance,0.01),2);
+            }
+            else // maintain old behavior if someone still wants it
+                confidenceMultiplier = (float) avgData.totalWeight / Config.getInstance().raysCast * Config.getInstance().raysBounced;
+            float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier * attenuationMultiplier;
 
             // Calculate adjusted pitch
             float basePitch = originalSound.getPitch();
@@ -265,8 +271,15 @@ public class RaycastingHelper {
                 baseVolume = ((RedTickableInstance) originalSound).getOriginalVolume();
             else
                 baseVolume = ((RedSoundInstance) originalSound).original.getVolume();
-            float confidenceMultiplier = (float) avgData.totalWeight / (float) Config.getInstance().raysCast*Config.getInstance().raysBounced;
-            float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier;
+            float confidenceMultiplier;
+            float attenuationMultiplier = 1;
+            if (Config.getInstance().attenuationType == RedsAttenuationType.NONE) {
+                confidenceMultiplier = (float) avgData.totalWeight / Math.max(totalRaysHitSurface.get(), 1);
+                attenuationMultiplier = 1.0f / (float) Math.pow(Math.max(avgData.averageDistance,0.01),2);
+            }
+            else // maintain old behavior if someone still wants it
+                confidenceMultiplier = (float) avgData.totalWeight / Config.getInstance().raysCast * Config.getInstance().raysBounced;
+            float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier * attenuationMultiplier;
 
             // Calculate adjusted pitch
             float basePitch = originalSound.getPitch();
@@ -299,6 +312,9 @@ public class RaycastingHelper {
     }
 
     private static void queueSound(SoundInstance newSound, int distance) {
+//        Minecraft client = Minecraft.getInstance();
+//        client.getSoundManager().play(newSound);
+//         removed this queue because speed of sound based calculation is currently borked, will re-add later MAYBE.
         soundPlayingWaiting.computeIfAbsent(ticksSinceWorld + 1, k -> new ArrayList<>()).add(newSound); // removed speed of sound calculation for delay.
     }
 
@@ -312,6 +328,7 @@ public class RaycastingHelper {
         reverbDenom.set(0);
         outdoorLeak.set(0);
         outdoorLeakDenom.set(0);
+        totalRaysHitSurface.set(0);
 
         final ConcurrentLinkedQueue<SoundData> threadSafeSoundQueue = new ConcurrentLinkedQueue<>(soundQueue); // deep copy so queue can be appended while sounds are proccessing without breakin shi
 
@@ -430,6 +447,7 @@ public class RaycastingHelper {
                 currentPos = hitPos.add(reflectedDirection.scale(0.01));
                 currentDirection = reflectedDirection;
                 remainingDistance -= segmentTraveled;
+                totalRaysHitSurface.incrementAndGet();
                 outdoorLeakDenom.incrementAndGet();
             } else {
                 for (SoundData soundEntity : weatherQueue) {
@@ -821,8 +839,10 @@ public class RaycastingHelper {
         double weight;
         if (Config.getInstance().attenuationType == RedsAttenuationType.INVERSE_SQUARE)
             weight = blockAttenuation / (Math.max(distanceToEntity + currentDistance, 0.1) * Math.max(distanceToEntity + currentDistance, 0.1));
-        else
+        else if (Config.getInstance().attenuationType == RedsAttenuationType.LINEAR)
             weight = blockAttenuation / Math.max(distanceToEntity + currentDistance, 0.1);
+        else
+            weight = blockAttenuation;
         return weight;
     }
 
@@ -989,21 +1009,55 @@ public class RaycastingHelper {
         return directions;
     }
 
+//    public static void playQueuedObjects(int tsw) {
+//        if (freezeTickCounter.get())
+//            return;
+//        ticksSinceWorld++;
+//
+//        Minecraft client = Minecraft.getInstance();
+//
+//        // Create a list to store keys that need to be removed after processing
+//        ArrayList<Integer> keysToRemove = new ArrayList<>();
+//
+//        // Iterate through all keys and play sounds for keys <= ticksSinceWorld
+//        for (Integer key : soundPlayingWaiting.keySet()) {
+//            if (key <= ticksSinceWorld) {
+//                ArrayList<SoundInstance> sound = soundPlayingWaiting.get(key);
+//                for (SoundInstance newSound : sound) {
+//                    if (newSound == null)
+//                        continue;
+//                    client.getSoundManager().play(newSound);
+//                }
+//                keysToRemove.add(key);
+//            }
+//        }
+//
+//        // Remove all processed keys
+//        for (Integer key : keysToRemove) {
+//            soundPlayingWaiting.remove(key);
+//        }
+//    }
     public static void playQueuedObjects(int tsw) {
         if (freezeTickCounter.get())
             return;
         ticksSinceWorld++;
-        if (!soundPlayingWaiting.containsKey((Integer) ticksSinceWorld))
+
+        if (soundPlayingWaiting.isEmpty())
             return;
 
         Minecraft client = Minecraft.getInstance();
-        ArrayList<SoundInstance> sound = soundPlayingWaiting.get((Integer) ticksSinceWorld);
-        for (SoundInstance newSound : sound) {
-            if (newSound == null)
-                continue;
-            client.getSoundManager().play(newSound);
+
+        // Play all sounds in the map
+        for (ArrayList<SoundInstance> soundList : soundPlayingWaiting.values()) {
+            for (SoundInstance newSound : soundList) {
+                if (newSound == null)
+                    continue;
+                client.getSoundManager().play(newSound);
+            }
         }
-        soundPlayingWaiting.remove(tsw);
+
+        // Clear the entire map after playing all sounds
+        soundPlayingWaiting.clear();
     }
 
     // Utility methods to get atomic values safely
