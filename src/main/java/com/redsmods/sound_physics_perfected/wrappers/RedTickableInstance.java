@@ -12,6 +12,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.List;
+
 @Getter
 public class RedTickableInstance implements TickableSoundInstance {
     private final ResourceLocation location;
@@ -27,6 +29,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     private int tickCount;
     @Setter private Vec3 targetPosition;
     @Setter private float targetVolume;
+    private boolean isBlacklisted;
 
     public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped, Vec3 originalPosition, float originalVolume) {
         this.location = location;
@@ -42,10 +45,16 @@ public class RedTickableInstance implements TickableSoundInstance {
         tickCount = 0;
         targetPosition = position;
         targetVolume = volume;
+        isBlacklisted = isSoundTickBlacklisted(sound.toString());
     }
 
     @Override
     public void tick() {
+        if (isBlacklisted) {
+            if (wrapped instanceof TickableSoundInstance)
+                ((TickableSoundInstance) wrapped).tick();
+            return;
+        }
         tickCount++;
         if (stopped || Config.getInstance().tickRate == 0) return; // DONE or ticking sounds is off
         if (!this.location.toString().contains("rain")) {
@@ -137,5 +146,21 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     public Vec3 getOriginalPosition() {
         return new Vec3(wrapped.getX(),wrapped.getY(),wrapped.getZ());
+    }
+
+    private boolean isSoundTickBlacklisted(String soundName) {
+        if (soundName == null || soundName.isEmpty()) {
+            return false;
+        }
+
+        List<String> blacklist = Config.getInstance().soundTickBlacklist;
+        if (blacklist == null || blacklist.isEmpty()) {
+            return false;
+        }
+
+        // Check if any blacklist entry is contained in the sound name
+        return blacklist.stream()
+                .filter(entry -> entry != null && !entry.trim().isEmpty()) // filter out null/empty entries
+                .anyMatch(entry -> soundName.toLowerCase().contains(entry.toLowerCase().trim()));
     }
 }

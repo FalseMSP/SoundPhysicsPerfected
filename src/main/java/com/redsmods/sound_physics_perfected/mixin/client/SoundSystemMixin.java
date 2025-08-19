@@ -32,6 +32,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static com.redsmods.sound_physics_perfected.RaycastingHelper.*;
@@ -70,6 +71,8 @@ public abstract class SoundSystemMixin {
         if (!efxInitialized) {
             initializeReverb();
         }
+
+        if (isSoundBlacklisted(sound.toString())) return; // skip if in the overall blacklist
 
         if (!efxInitialized) return; // Skip if initialization failed
 
@@ -516,5 +519,21 @@ public abstract class SoundSystemMixin {
 
     private static float clamp(float a, float b, float c) {
         return Math.min(Math.max(a,b),c);
+    }
+
+    private boolean isSoundBlacklisted(String soundName) {
+        if (soundName == null || soundName.isEmpty()) {
+            return false;
+        }
+
+        List<String> blacklist = Config.getInstance().soundBlacklist;
+        if (blacklist == null || blacklist.isEmpty()) {
+            return false;
+        }
+
+        // Check if any blacklist entry is contained in the sound name
+        return blacklist.stream()
+                .filter(entry -> entry != null && !entry.trim().isEmpty()) // filter out null/empty entries
+                .anyMatch(entry -> soundName.toLowerCase().contains(entry.toLowerCase().trim()));
     }
 }
