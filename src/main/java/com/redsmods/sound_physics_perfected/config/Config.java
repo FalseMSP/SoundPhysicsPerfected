@@ -76,7 +76,7 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeation.description")
     @SerialEntry public boolean permeation = true;
 
-    @AutoGen(category = "general", group = "main")
+    @AutoGen(category = "general", group = "permeation")
     @DoubleSlider(min = 0, max = 100, step = 0.05)
     @FormatTranslation("sound_physics_perfected.config.unit.blocks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeationStepSize.description")

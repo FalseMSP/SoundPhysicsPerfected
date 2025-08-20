@@ -32,7 +32,8 @@
       "category": {
         "general": "General Settings",
         "general.group": {
-          "main": "Main"
+          "main": "Main",
+          "permeation": "Permeation"
         },
         "reverb_tuning": "Reverb Tuning",
         "reverb_tuning.group": {
