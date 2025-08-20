@@ -848,7 +848,7 @@ public class RaycastingHelper {
         else if (Config.getInstance().attenuationType == RedsAttenuationType.VERCIDIUM_INVERSE_SQUARE)
             weight = permeationAbsorption / (Math.max(distanceToEntity + currentDistance, 0.1) * Math.max(distanceToEntity + currentDistance, 0.1));
         else if (Config.getInstance().attenuationType == RedsAttenuationType.VERCIDIUM_LINEAR)
-            weight = permeationAbsorption / Math.max(distanceToEntity + currentDistance, 0.1);
+            weight = permeationAbsorption / (Math.max(distanceToEntity + currentDistance, 0.1) * Math.max(distanceToEntity + currentDistance, 0.1));
         else
             weight = 0;
         return weight;
