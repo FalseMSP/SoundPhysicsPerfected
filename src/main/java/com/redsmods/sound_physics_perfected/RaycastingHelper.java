@@ -303,7 +303,7 @@ public class RaycastingHelper {
             if (originalSound instanceof RedTickableInstance) { // update pos of sounds
                 ((RedPermeatedSoundInstance) originalSound).setTargetPosition(targetPosition);
                 ((RedPermeatedSoundInstance) originalSound).setTargetVolume(adjustedVolume);
-                ((RedPermeatedSoundInstance) originalSound).setPermeationIndex(confidenceMultiplier);
+                ((RedPermeatedSoundInstance) originalSound).setPermeationIndex(permeationIndex);
                 return;
             }
 

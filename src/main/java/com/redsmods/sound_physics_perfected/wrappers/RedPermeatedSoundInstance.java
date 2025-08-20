@@ -7,6 +7,7 @@ import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.level.levelgen.Column;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
@@ -36,9 +37,10 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     @Override
     public void tick() {
         tickCount++;
-        if (super.isStopped() || Config.getInstance().tickRate == 0) return; // DONE or ticking sounds is off
-        if (tickCount % Config.getInstance().tickRate == 0) { // only update once every .1 second
-            RaycastingHelper.permeatedTickQueue.add(this);
+        if (super.isStopped() || Config.getInstance().permeatedTickRate == 0) return; // DONE or ticking sounds is off
+        if (tickCount % Config.getInstance().permeatedTickRate == 0) { // only update once every .1 second
+            if (!RaycastingHelper.permeatedTickQueue.contains(this))
+                RaycastingHelper.permeatedTickQueue.add(this);
         }
         super.updatePos();
         super.updateVolume();
@@ -49,7 +51,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
 
         // Calculate the difference between current and target volume
         float deltaVolume = targetMuffle - permeationIndex;
-        float maxVolumeChange = Math.abs(deltaVolume / Config.getInstance().tickRate);
+        float maxVolumeChange = Math.max(Math.abs(deltaVolume / Config.getInstance().tickRate),0.3f); // yay magic number
 
         // If we're already at the target or very close, set volume directly
         if (Math.abs(deltaVolume) <= 0.001f || Math.abs(deltaVolume) > maxVolumeChange * Config.getInstance().tickRate) {

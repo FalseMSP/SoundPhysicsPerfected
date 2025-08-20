@@ -59,9 +59,11 @@ public class RedTickableInstance implements TickableSoundInstance {
         if (stopped || Config.getInstance().tickRate == 0) return; // DONE or ticking sounds is off
         if (!this.location.toString().contains("rain")) {
             if(tickCount % Math.max(Config.getInstance().tickRate, 8) == 0) // no way I shouldn't be having nesting like this oh noes.
-                RaycastingHelper.tickQueue.add(this);
+                if (!RaycastingHelper.tickQueue.contains(this))
+                    RaycastingHelper.tickQueue.add(this);
         } else if (tickCount % Config.getInstance().tickRate == 0) // only update once every .1 second
-            RaycastingHelper.tickQueue.add(this);
+            if (!RaycastingHelper.tickQueue.contains(this))
+                RaycastingHelper.tickQueue.add(this);
         if (wrapped instanceof TickableSoundInstance)
             ((TickableSoundInstance) wrapped).tick();
         updatePos();
@@ -114,24 +116,27 @@ public class RedTickableInstance implements TickableSoundInstance {
     public void updateVolume() {
         // Calculate the difference between current and target volume
         float deltaVolume = targetVolume - volume;
-        float maxVolumeChange = Math.max(Math.abs(deltaVolume / Config.getInstance().tickRate),0.05f);
 
         // If we're already at the target or very close, set volume directly
-        if (Math.abs(deltaVolume) <= 0.001f || Math.abs(deltaVolume) > maxVolumeChange * Config.getInstance().tickRate) {
+        if (Math.abs(deltaVolume) <= 0.001f) {
             volume = targetVolume;
             return;
         }
 
-        // Maximum volume change per tick
+        // Exponential smoothing for natural audio feel
+        float ticksToTarget = Config.getInstance().tickRate; // number of ticks to reach target
+        float deltaTime = 1.0f / 20.0f; // time per tick (20 ticks per second)
+        float timeToTarget = ticksToTarget * deltaTime; // convert ticks to seconds
 
-        // Calculate how much we can change this tick
-        float volumeChange = Math.min(maxVolumeChange, Math.abs(deltaVolume));
+        // Use exponential interpolation - natural deceleration as we approach target
+        float smoothingFactor = 1.0f - (float)Math.pow(0.001, deltaTime / timeToTarget);
 
-        // Apply the change in the correct direction
-        if (deltaVolume > 0) {
-            volume += volumeChange;
-        } else {
-            volume -= volumeChange;
+        // Apply the smooth interpolation
+        volume += deltaVolume * smoothingFactor;
+
+        // Clamp to prevent overshooting due to floating point precision
+        if (Math.abs(targetVolume - volume) < 0.001f) {
+            volume = targetVolume;
         }
     }
 

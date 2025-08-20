@@ -77,10 +77,16 @@ public class Config {
     @SerialEntry public boolean permeation = true;
 
     @AutoGen(category = "general", group = "permeation")
-    @DoubleSlider(min = 0, max = 100, step = 0.05)
+    @DoubleSlider(min = 0.01, max = 2, step = 0.05)
     @FormatTranslation("sound_physics_perfected.config.unit.blocks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeationStepSize.description")
-    @SerialEntry public double permeationStepSize = 0.01;
+    @SerialEntry public double permeationStepSize = 0.0625; // changed to 1/16 of a block bc u don't *need* 0.01 precision lets be so fr
+
+    @AutoGen(category = "general", group = "permeation")
+    @IntSlider(min = 0, max = 20, step = 1)
+    @FormatTranslation("sound_physics_perfected.config.unit.ticks")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.permeatedTickRate.description")
+    @SerialEntry public int permeatedTickRate = 5; // once every 5 ticks to lower the choppiness
 
     @AutoGen(category = "general", group = "main")
     @EnumCycler

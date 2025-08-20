@@ -70,6 +70,8 @@
       "permeation.description": "Cast Red (Permeating) Rays and add muffle dynamically to permeated sources\\nPERFORMANCE IMPACT: MEDIUM",
       "permeationStepSize": "Permeation Step Size",
       "permeationStepSize.description": "lower = more performance hurt\\nPERFORMANCE IMPACT: HIGH",
+      "permeatedTickRate": "Permeated Sound Updates (Tickable)",
+      "permeatedTickRate.description": "How often permeated sounds' positions should be updated\\n(0 is off)\\n(1 = every tick -> 20 = every second)\\nPERFORMANCE IMPACT: MEDIUM (higher than normal tickrate)",
       "attenuationType": "Attenuation Mode",
       "attenuationType.description": "This setting is now largely irrelevant, if you liked the way the mod sounded in the past, this helps. otherwise ignore\\nPERFORMANCE IMPACT: NONE",
       "rayBounce": "Wall Bounce",
