@@ -98,6 +98,18 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
     @SerialEntry public DebugType debug = DebugType.OFF;
 
+    @AutoGen(category = "general", group = "permeation")
+    @DoubleSlider(min = 1, max = 10, step = 0.1)
+    @FormatTranslation("sound_physics_perfected.config.unit.blocks")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.maxBlocksPermeated.description")
+    @SerialEntry public double maxBlocksPermeated = 3;
+
+    @AutoGen(category = "general", group = "permeation")
+    @DoubleSlider(min = 0.001, max = 1, step = 0.01)
+    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.permeationAbsorption.description")
+    @SerialEntry public double permeationAbsorption = 0.7;
+
 
     public static class StringValueFactory implements ListGroup.ValueFactory<String> {
         @Override

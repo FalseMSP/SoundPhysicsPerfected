@@ -19,7 +19,8 @@
       "RedsAttenuationType": {
         "inverse_square": "Inverse Square",
         "linear": "Linear",
-        "none": "Vercidium"
+        "vercidium_linear": "Vercidium Linear",
+        "vercidium_inverse_square": "Vercidium Inverse Square"
       },
       "DebugType": {
         "off": "Off",
@@ -74,6 +75,10 @@
       "rayBounce.description": "Larger = less heavily the sound will be coming from walls (will make likely make sounds quieter)\\nPERFORMANCE IMPACT: NONE",
       "debug": "Debug Mode",
       "debug.description": "puts sound names in chat. \\nPERFORMANCE IMPACT: SMALL",
+      "maxBlocksPermeated": "Max Permeation Distance",
+      "maxBlocksPermeated.description": "Max blocks permeated in the calculation",
+      "permeationAbsorption": "Absorption Multiplier",
+      "permeationAbsorption.description": "Volume is multiplied by x^blocksTraveled where x is the value set here for muffle",
 
       "globalReverbIntensity": "Global Reverb Intensity",
       "globalReverbIntensity.description": "Overall reverb intensity multiplier\\nHigher = more intense reverb",

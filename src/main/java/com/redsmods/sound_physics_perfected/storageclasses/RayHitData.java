@@ -8,4 +8,5 @@ public class RayHitData {
     public final RaycastResult rayResult;
     public final Vec3 direction;
     public final double weight; // Based on inverse square law
+    public final double muffleFac;
 }

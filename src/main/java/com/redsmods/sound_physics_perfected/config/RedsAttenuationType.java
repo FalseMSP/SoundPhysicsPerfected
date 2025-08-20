@@ -3,5 +3,6 @@ package com.redsmods.sound_physics_perfected.config;
 public enum RedsAttenuationType {
     INVERSE_SQUARE,
     LINEAR,
-    NONE
+    VERCIDIUM_INVERSE_SQUARE,
+    VERCIDIUM_LINEAR
 }

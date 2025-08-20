@@ -2,6 +2,7 @@ package com.redsmods.sound_physics_perfected.wrappers;
 
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
 import com.redsmods.sound_physics_perfected.config.Config;
+import lombok.Getter;
 import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.resources.ResourceLocation;
@@ -14,7 +15,7 @@ import org.lwjgl.openal.EXTEfx;
 import static org.joml.Math.lerp;
 
 public class RedPermeatedSoundInstance extends RedTickableInstance {
-    float permeationIndex;
+    @Getter float permeationIndex;
     int tickCount = 0;
     private int id;
     public static Integer muffleFilter = -1;
@@ -25,10 +26,6 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
         super(soundID, sound, category,position, volume, pitch, wrapped, originalPos, originalVolume);
         this.permeationIndex = permeationIndex;
 
-    }
-
-    public float getPermeationIndex() {
-        return 1-permeationIndex;
     }
 
     public void setPermeationIndex(float permeationIndex) {
@@ -58,7 +55,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
         if (Math.abs(deltaVolume) <= 0.001f || Math.abs(deltaVolume) > maxVolumeChange * Config.getInstance().tickRate) {
             permeationIndex = targetMuffle;
             if (sourceSet && AL10.alIsSource(id))
-                applyMuffleToSource(id,1-permeationIndex);
+                applyMuffleToSource(id,permeationIndex);
             return;
         }
 
