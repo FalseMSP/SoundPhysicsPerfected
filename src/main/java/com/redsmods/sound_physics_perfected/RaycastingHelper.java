@@ -214,9 +214,12 @@ public class RaycastingHelper {
 
             float confidenceMultiplier;
             float attenuationMultiplier = 1;
-            if (Config.getInstance().attenuationType == RedsAttenuationType.VERCIDIUM_INVERSE_SQUARE || Config.getInstance().attenuationType == RedsAttenuationType.VERCIDIUM_LINEAR) {
-                confidenceMultiplier = (float) avgData.rayCount / Math.max(totalRaysHitSurface.get(), 1);
+            if (Config.getInstance().attenuationType == RedsAttenuationType.VERCIDIUM_INVERSE_SQUARE) {
+                confidenceMultiplier = (float) avgData.totalWeight / Math.max(totalRaysHitSurface.get(), 1);
                 attenuationMultiplier = 1.0f / (float) Math.pow(Math.max(avgData.averageDistance,0.01),2);
+            } else if (Config.getInstance().attenuationType == RedsAttenuationType.VERCIDIUM_LINEAR) {
+                confidenceMultiplier = (float) avgData.totalWeight / Math.max(totalRaysHitSurface.get(), 1);
+                attenuationMultiplier = 1.0f / (float) Math.max(avgData.averageDistance,0.01);
             }
             else // maintain old behavior if someone still wants it
                 confidenceMultiplier = (float) avgData.totalWeight / Config.getInstance().raysCast * Config.getInstance().raysBounced;
@@ -276,6 +279,9 @@ public class RaycastingHelper {
             if (Config.getInstance().attenuationType == RedsAttenuationType.VERCIDIUM_INVERSE_SQUARE) {
                 confidenceMultiplier = (float) avgData.totalWeight / Math.max(totalRaysHitSurface.get(), 1);
                 attenuationMultiplier = 1.0f / (float) Math.pow(Math.max(avgData.averageDistance,0.01),2);
+            } else if (Config.getInstance().attenuationType == RedsAttenuationType.VERCIDIUM_LINEAR) {
+                confidenceMultiplier = (float) avgData.totalWeight / Math.max(totalRaysHitSurface.get(), 1);
+                attenuationMultiplier = 1.0f / (float) Math.max(avgData.averageDistance,0.01);
             }
             else // maintain old behavior if someone still wants it
                 confidenceMultiplier = (float) avgData.totalWeight / Config.getInstance().raysCast * Config.getInstance().raysBounced;
