@@ -11,4 +11,22 @@ public class EnhancedReverbData {
     public final double absorption;
     public final String acousticProfile;
     public final boolean isIndoors;
+
+    @Override
+    public String toString() {
+        return String.format("Reverb Data: " +
+                        "rt60=%.3f, " +
+                        "earlyReflectionDelay=%.3f, " +
+                        "lateReflectionStrength=%.3f, " +
+                        "roomSize=%.3f, " +
+                        "absorption=%.3f, " +
+                        "isIndoors=%s" +
+                        "",
+                rt60,
+                earlyReflectionDelay,
+                lateReflectionStrength,
+                roomSize,
+                absorption,
+                isIndoors);
+    }
 }

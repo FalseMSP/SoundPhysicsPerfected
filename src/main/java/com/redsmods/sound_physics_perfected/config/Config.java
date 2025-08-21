@@ -143,6 +143,12 @@ public class Config {
 
     // === REVERB TUNING CONSTANTS ===
     // Global Controls
+
+    @AutoGen(category = "reverb_tuning", group = "main")
+    @EnumCycler
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
+    @SerialEntry public DebugType reverbTuning = DebugType.OFF;
+
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")

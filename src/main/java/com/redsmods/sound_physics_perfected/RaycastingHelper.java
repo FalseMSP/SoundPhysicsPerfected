@@ -121,14 +121,15 @@ public class RaycastingHelper {
             weatherQueue.clear();
 
             // Process weather sounds
-            Iterator<SoundData> iterator = soundQueue.iterator();
-            while (iterator.hasNext()) {
-                SoundData sound = iterator.next();
-                if (sound.soundId.contains("rain")) {
-                    weatherQueue.add(sound);
-                    iterator.remove();
-                }
-            }
+            // disable weather proc bc it borked
+//            Iterator<SoundData> iterator = soundQueue.iterator();
+//            while (iterator.hasNext()) {
+//                SoundData sound = iterator.next();
+//                if (sound.soundId.contains("rain")) {
+//                    weatherQueue.add(sound);
+//                    iterator.remove();
+//                }
+//            }
 
             // Generate ray directions
             Vec3[] rayDirections = RaycastingHelper.generateRayDirections();
@@ -334,9 +335,15 @@ public class RaycastingHelper {
         distanceFromWallEcho.set(0.0);
         distanceFromWallEchoDenom.set(0.0);
         reverbDenom.set(0);
+        lateReflectionCount.set(0);
+        earlyReflectionStrength.set(0.0);
+        lateReflectionStrength.set(0.0);
+        earlyReflectionCount.set(0);
         outdoorLeak.set(0);
         outdoorLeakDenom.set(0);
         totalRaysHitSurface.set(0);
+        totalSurfaceArea.set(0);
+        averageAbsorption.set(0.0);
 
         final ConcurrentLinkedQueue<SoundData> threadSafeSoundQueue = new ConcurrentLinkedQueue<>(soundQueue); // deep copy so queue can be appended while sounds are proccessing without breakin shi
 
@@ -641,60 +648,14 @@ public class RaycastingHelper {
 
             averageAbsorption.updateAndGet(current -> current + (surfaceData.absorptionCoefficient * distanceWeight));
             totalSurfaceArea.updateAndGet(current -> current + 1); // Simplified surface area counting
-
-            // Analyze room dimensions by checking surrounding blocks
-            if (hasLineOfSight) {
-                analyzeRoomDimensions(world, pos, blockPos);
-            }
         }
-    }
-
-    private static void analyzeRoomDimensions(Level world, Vec3 center, BlockPos hitPos) {
-        // Quick room volume estimation by checking 6 directions
-        double[] distances = new double[6];
-        Vec3[] directions = {
-                new Vec3(1, 0, 0), new Vec3(-1, 0, 0),  // X axis
-                new Vec3(0, 1, 0), new Vec3(0, -1, 0),  // Y axis
-                new Vec3(0, 0, 1), new Vec3(0, 0, -1)   // Z axis
-        };
-
-        for (int i = 0; i < 6; i++) {
-            distances[i] = measureDistanceToWall(world, center, directions[i], 16.0);
-        }
-
-        // Estimate room volume (simplified box model)
-        double width = distances[0] + distances[1];
-        double height = distances[2] + distances[3];
-        double depth = distances[4] + distances[5];
-        double estimatedVolume = width * height * depth;
-
-        roomVolume.updateAndGet(current -> Math.max(current, estimatedVolume));
-
-        // Calculate surface area to volume ratio for RT60 estimation
-        double estimatedSurfaceArea = 2 * (width * height + width * depth + height * depth);
-        if (estimatedVolume > 0) {
-            surfaceToVolumeRatio.updateAndGet(current ->
-                    Math.max(current, estimatedSurfaceArea / estimatedVolume));
-        }
-    }
-
-    private static double measureDistanceToWall(Level world, Vec3 start, Vec3 direction, double maxDistance) {
-        for (double d = 1.0; d < maxDistance; d += 1.0) {
-            Vec3 testPos = start.add(direction.scale(d));
-            BlockPos blockPos = new BlockPos((int)testPos.x, (int)testPos.y, (int)testPos.z);
-
-            if (!world.getBlockState(blockPos).isAir()) {
-                return d;
-            }
-        }
-        return maxDistance; // Hit max distance, probably outdoor
     }
 
     // Enhanced reverb calculation method
     public static EnhancedReverbData calculateEnhancedReverb() {
         double totalSurface = totalSurfaceArea.get();
         double avgAbsorption = totalSurface > 0 ? averageAbsorption.get() / totalSurface : 0.05;
-        double volume = roomVolume.get();
+        double volume = Math.pow((double) distanceFromWallEcho.get() / (double) distanceFromWallEchoDenom.get(),3); // just assume cube room.
         double surfaceToVolRatio = surfaceToVolumeRatio.get();
 
         // Calculate RT60 using Sabine's formula: RT60 = 0.161 * V / A
@@ -717,7 +678,7 @@ public class RaycastingHelper {
         String acousticProfile = determineAcousticProfile(avgAbsorption, surfaceToVolRatio, volume);
 
         // Determine if indoors (high surface to volume ratio indicates enclosed space)
-        boolean isIndoors = surfaceToVolRatio > 0.5 && volume < 8000;
+        boolean isIndoors = (double) outdoorLeak.get() / outdoorLeakDenom.get() < 0.05;
 
         return new EnhancedReverbData(rt60, earlyReflectionDelay, lateStrength,
                 roomRadius, avgAbsorption, acousticProfile, isIndoors);

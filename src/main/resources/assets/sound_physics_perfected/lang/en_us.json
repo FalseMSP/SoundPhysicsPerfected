@@ -83,6 +83,8 @@
       "permeationAbsorption": "Absorption Multiplier",
       "permeationAbsorption.description": "Volume is multiplied by x^blocksTraveled where x is the value set here for muffle",
 
+      "reverbTuning": "Reverb Debug",
+      "reverbTuning.description": "Debug for finding what values are coming out of Blue ray casting.",
       "globalReverbIntensity": "Global Reverb Intensity",
       "globalReverbIntensity.description": "Overall reverb intensity multiplier\\nHigher = more intense reverb",
       "indoorBias": "Indoor Bias",

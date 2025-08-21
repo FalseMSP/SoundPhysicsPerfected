@@ -18,6 +18,7 @@ import net.minecraft.client.sounds.ChannelAccess;
 import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
@@ -344,6 +345,13 @@ public abstract class SoundSystemMixin {
         try {
             // Get enhanced reverb data
             EnhancedReverbData reverbData = RaycastingHelper.getEnhancedReverbData();
+            if (Config.getInstance().reverbTuning == DebugType.CHAT) {
+                Minecraft client = Minecraft.getInstance();
+                client.player.displayClientMessage(Component.literal(reverbData.toString()), false);
+            } else if (Config.getInstance().reverbTuning == DebugType.ACTION_BAR) {
+                Minecraft client = Minecraft.getInstance();
+                client.player.displayClientMessage(Component.literal(reverbData.toString()), true);
+            }
 
             if (RaycastingHelper.getDistanceFromWallEchoDenom() == 0 ||
                     RaycastingHelper.getReverbDenom() == 0 ||
@@ -386,7 +394,7 @@ public abstract class SoundSystemMixin {
             float surfaceToVolumeRatio = estimatedSurfaceArea / Math.max(estimatedVolume, 1.0f);
             surfaceToVolumeRatio = clamp(surfaceToVolumeRatio, ReverbConstants.MIN_SURFACE_TO_VOLUME_RATIO, ReverbConstants.MAX_SURFACE_TO_VOLUME_RATIO);
 
-            // Material-based absorption (WIP)
+// Material-based absorption (WIP)
             float dynamicAbsorption = absorption;
             float totalAbsorption = estimatedSurfaceArea * dynamicAbsorption;
 
@@ -419,7 +427,42 @@ public abstract class SoundSystemMixin {
             lateReverbGain = clamp(lateReverbGain, ReverbConstants.MIN_LATE_REVERB_GAIN, ReverbConstants.MAX_LATE_REVERB_GAIN);
 
             float roomComplexity = Math.min(1.0f, surfaceToVolumeRatio / Config.getInstance().roomComplexityDivisor);
-            float roomSizeEmphasis = roomSize < 10.0f ? Config.getInstance().smallRoomEmphasis : Config.getInstance().largeRoomEmphasis;
+
+// NEW: Room size scaling factors
+            float roomSizeScaling = 1.0f;
+            float smallRoomReduction = 1.0f;
+            float volumeBasedReduction = 1.0f;
+
+            if (roomSize < 3.0f) {
+                // Tiny rooms (closets, small bathrooms): dramatic reduction
+                roomSizeScaling = 0.05f;
+                smallRoomReduction = 0.1f;
+                volumeBasedReduction = 0.1f;
+            } else if (roomSize < 6.0f) {
+                // Very small rooms: significant reduction
+                roomSizeScaling = 0.15f;
+                smallRoomReduction = 0.25f;
+                volumeBasedReduction = 0.3f;
+            } else if (roomSize < 10.0f) {
+                // Small rooms: moderate reduction
+                roomSizeScaling = 0.4f;
+                smallRoomReduction = 0.5f;
+                volumeBasedReduction = 0.6f;
+            } else if (roomSize < 20.0f) {
+                // Medium rooms: slight reduction
+                roomSizeScaling = 0.7f;
+                smallRoomReduction = 0.8f;
+                volumeBasedReduction = 0.8f;
+            }
+// Large rooms (20+): no reduction (values remain 1.0f)
+
+// Additional volume-based scaling
+            float actualVolumeReduction = Math.max(0.1f, Math.min(1.0f, estimatedVolume / 500.0f));
+            volumeBasedReduction *= actualVolumeReduction;
+
+// FIXED: Room size emphasis now properly reduces reverb for small rooms
+            float roomSizeEmphasis = roomSize < 10.0f ? Config.getInstance().smallRoomEmphasis * smallRoomReduction : Config.getInstance().largeRoomEmphasis;
+
             float diffusion = lerp(Config.getInstance().minDiffusion, Config.getInstance().maxDiffusion,
                     roomComplexity * Config.getInstance().diffusionComplexityWeight *
                             enclosureFactor * Config.getInstance().diffusionEnclosureWeight *
@@ -427,10 +470,14 @@ public abstract class SoundSystemMixin {
                             roomSizeEmphasis);
             diffusion = clamp(diffusion, 0.1f, 1.0f);
 
-            float density = lerp(Config.getInstance().minDensity, 1.0f, enclosureFactor * (1.0f - roomSize / Config.getInstance().densityRoomSizeFactor) * roomSizeEmphasis);
+            float density = lerp(Config.getInstance().minDensity, 1.0f,
+                    enclosureFactor * (1.0f - roomSize / Config.getInstance().densityRoomSizeFactor) * roomSizeEmphasis);
             density = clamp(density, 0.1f, 1.0f);
 
-            float overallGain = enclosureFactor * distanceAttenuation * (Config.getInstance().baseReverbGain + reverbStrength * Config.getInstance().reverbGainMultiplier) * Config.getInstance().globalReverbIntensity;
+// FIXED: Overall gain now properly scales with room size
+            float overallGain = enclosureFactor * distanceAttenuation * roomSizeScaling * volumeBasedReduction *
+                    (Config.getInstance().baseReverbGain + reverbStrength * Config.getInstance().reverbGainMultiplier) *
+                    Config.getInstance().globalReverbIntensity;
             overallGain = clamp(overallGain, 0.0f, Config.getInstance().maxOverallGain);
 
             float gainHF = (1.0f - dynamicAbsorption) * airAbsorptionFactor * enclosureFactor;
@@ -466,7 +513,17 @@ public abstract class SoundSystemMixin {
             float echoDepth = clamp(echoDensity * Config.getInstance().echoDepthMultiplier,
                     ReverbConstants.MIN_ECHO_DEPTH, ReverbConstants.MAX_ECHO_DEPTH);
 
-            // Apply all parameters to OpenAL
+            // FIXED: Apply room size scaling to reflection gains and decay time
+            reflectionsGain *= roomSizeScaling;
+            reflectionsGain = clamp(reflectionsGain, ReverbConstants.MIN_REFLECTIONS_GAIN, ReverbConstants.MAX_REFLECTIONS_GAIN);
+
+            lateReverbGain *= roomSizeScaling;
+            lateReverbGain = clamp(lateReverbGain, ReverbConstants.MIN_LATE_REVERB_GAIN, ReverbConstants.MAX_LATE_REVERB_GAIN);
+
+            effectiveDecayTime *= roomSizeScaling;
+            effectiveDecayTime = clamp(effectiveDecayTime, ReverbConstants.MIN_EFFECTIVE_DECAY_TIME, ReverbConstants.MAX_EFFECTIVE_DECAY_TIME);
+
+// Apply all parameters to OpenAL
             EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAIN, sendFilterGain);
             EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAINHF, sendFilterGainHF);
 
