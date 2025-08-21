@@ -24,6 +24,14 @@ body:
     validations:
       required: true
 
+   - type: input
+    id: gameVersion
+    attributes:
+      label: Game Version
+      placeholder: 1.21.1
+    validations:
+      required: true
+
   - type: textarea
     id: what-happened
     attributes:
@@ -45,4 +53,8 @@ body:
     attributes:
       label: Relevant log output
       description: Or crash report
-      render: shell
+
+  - type: textarea
+    id: modlist
+    attributes:
+      label: Mod List (not neccessary if you're lazy asf, but i will ask for it if i can't reproduce)
