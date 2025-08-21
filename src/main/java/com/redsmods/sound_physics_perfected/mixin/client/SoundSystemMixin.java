@@ -18,6 +18,7 @@ import net.minecraft.client.sounds.ChannelAccess;
 import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.openal.AL10;
@@ -73,12 +74,21 @@ public abstract class SoundSystemMixin {
         if (!efxInitialized) {
             initializeReverb();
         }
-
+        Minecraft client = Minecraft.getInstance();
+        if (sound instanceof TickableSoundInstance) {
+            client.particleEngine.createParticle(ParticleTypes.NOTE,
+                    sound.getX(), sound.getY(), sound.getZ(), 0.0D, 0.0D, 0.0D);
+            System.out.println("modified sound location" + sound.getX() + " " + sound.getY() + " " + sound.getZ());
+        } else {
+            client.particleEngine.createParticle(ParticleTypes.ANGRY_VILLAGER,
+                    sound.getX(), sound.getY(), sound.getZ(), 0.0D, 0.0D, 0.0D);
+            System.out.println("original sound location" + sound.getX() + " " + sound.getY() + " " + sound.getZ());
+        }
         if (isSoundBlacklisted(sound.toString())) return; // skip if in the overall blacklist
 
         if (!efxInitialized) return; // Skip if initialization failed
 
-        Minecraft client = Minecraft.getInstance();
+//        Minecraft client = Minecraft.getInstance();
         // Add null checks
         if (client == null || client.player == null || client.level == null || sound == null || soundManager == null) {
             return;

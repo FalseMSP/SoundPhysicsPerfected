@@ -490,8 +490,8 @@ public class RaycastingHelper {
 
                 outdoorLeak.incrementAndGet();
                 outdoorLeakDenom.incrementAndGet();
-
-                return null; // make it so it doesn't continue bouncing bc it just doesn't work currently.
+                if (bounce == 0)
+                    return null;
             }
         }
 
