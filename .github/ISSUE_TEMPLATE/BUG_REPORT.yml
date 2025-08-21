@@ -24,7 +24,7 @@ body:
     validations:
       required: true
 
-   - type: input
+  - type: input
     id: gameVersion
     attributes:
       label: Game Version
