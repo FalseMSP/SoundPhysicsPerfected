@@ -339,7 +339,11 @@ public abstract class SoundSystemMixin {
                     // Check if source is playing
                     int state = AL10.alGetSourcei(sourceId, AL10.AL_SOURCE_STATE);
                     if (state == AL10.AL_PLAYING || state == AL10.AL_PAUSED) {
-                        applyReverbToSource(sourceId);
+                        if (Config.getInstance().legacyReverb)
+                            applyLegacyReverbToSource(sourceId);
+                        else
+                            applyReverbToSource(sourceId);
+
 //                        System.out.println("Source ID: " + sourceId);
                     }
                 }
@@ -387,7 +391,7 @@ public abstract class SoundSystemMixin {
             weightedReverbStrength = clamp(weightedReverbStrength, 0.0f, 1.0f);
             outdoorLeakPercent = clamp(outdoorLeakPercent, 0.0f, 1.0f);
             earlyReflectionRatio = clamp(earlyReflectionRatio, 0.0f, 1.0f);
-            rt60 = clamp(rt60, ReverbConstants.MIN_RT60, ReverbConstants.MAX_RT60);
+//            rt60 = clamp(rt60, ReverbConstants.MIN_RT60, ReverbConstants.MAX_RT60);
             roomSize = clamp(roomSize, ReverbConstants.MIN_ROOM_SIZE, ReverbConstants.MAX_ROOM_SIZE);
             absorption = clamp(absorption, ReverbConstants.MIN_ABSORPTION, ReverbConstants.MAX_ABSORPTION);
             earlyReflectionDelay = clamp(earlyReflectionDelay, ReverbConstants.MIN_EARLY_REFLECTION_DELAY, ReverbConstants.MAX_EARLY_REFLECTION_DELAY);
@@ -464,13 +468,9 @@ public abstract class SoundSystemMixin {
                 smallRoomReduction = 0.8f;
                 volumeBasedReduction = 0.8f;
             }
-// Large rooms (20+): no reduction (values remain 1.0f)
-
-// Additional volume-based scaling
             float actualVolumeReduction = Math.max(0.1f, Math.min(1.0f, estimatedVolume / 500.0f));
             volumeBasedReduction *= actualVolumeReduction;
 
-// FIXED: Room size emphasis now properly reduces reverb for small rooms
             float roomSizeEmphasis = roomSize < 10.0f ? Config.getInstance().smallRoomEmphasis * smallRoomReduction : Config.getInstance().largeRoomEmphasis;
 
             float diffusion = lerp(Config.getInstance().minDiffusion, Config.getInstance().maxDiffusion,
@@ -484,7 +484,6 @@ public abstract class SoundSystemMixin {
                     enclosureFactor * (1.0f - roomSize / Config.getInstance().densityRoomSizeFactor) * roomSizeEmphasis);
             density = clamp(density, 0.1f, 1.0f);
 
-// FIXED: Overall gain now properly scales with room size
             float overallGain = enclosureFactor * distanceAttenuation * roomSizeScaling * volumeBasedReduction *
                     (Config.getInstance().baseReverbGain + reverbStrength * Config.getInstance().reverbGainMultiplier) *
                     Config.getInstance().globalReverbIntensity;
@@ -562,6 +561,62 @@ public abstract class SoundSystemMixin {
 
         } catch (Exception e) {
             System.err.println("Error applying dynamic reverb: " + e.getMessage());
+        }
+    }
+
+    private static void applyLegacyReverbToSource(int sourceId) {
+        try {
+            if (getDistanceFromWallEchoDenom() == 0 || getReverbDenom() == 0 || getOutdoorLeakDenom() == 0)
+                return;
+
+            float wallDistance = (float) (RaycastingHelper.getDistanceFromWallEcho() / RaycastingHelper.getDistanceFromWallEchoDenom());
+            float occlusionPercent = (float) RaycastingHelper.getReverbStrength() / RaycastingHelper.getReverbDenom();
+            occlusionPercent = 1.0f - occlusionPercent;
+            float outdoorLeakPercent = (float) RaycastingHelper.getOutdoorLeak() / RaycastingHelper.getOutdoorLeakDenom();
+            outdoorLeakPercent = outdoorLeakPercent * 2;
+
+            float distanceMeters     = clamp(wallDistance, 1.0f, 100.0f);
+            occlusionPercent   = 1 - clamp(occlusionPercent+outdoorLeakPercent, 0.0f, 1.0f);
+            outdoorLeakPercent = clamp(outdoorLeakPercent, 0.0f, 1.0f);
+
+            float dryFactor = 1.0f - outdoorLeakPercent; // 0 = fully outdoor, 1 = fully indoor
+            float speedOfSound = 343.0f;
+
+            float wallDelay = (distanceMeters * 2.0f) / speedOfSound;
+
+            float decayTime        = clamp(wallDelay * 5.0f * dryFactor, 0.1f, 6.0f);
+            float reflectionsDelay = clamp(wallDelay * 0.5f, 0.005f, 0.05f);
+            float lateReverbDelay  = clamp(wallDelay, 0.01f, 0.1f);
+
+            float decayHfRatio     = lerp(0.5f, 1.3f, (1.0f - occlusionPercent) * dryFactor);
+            float diffusion        = lerp(0.3f, 1.0f, dryFactor * (1.0f - occlusionPercent));
+            float gainHF           = lerp(0.05f, 0.9f, (1.0f - occlusionPercent) * dryFactor);
+
+            float reflectionsGain  = lerp(0.0f, 0.7f, dryFactor);
+            float lateReverbGain   = lerp(0.0f, 1.0f, dryFactor);
+
+            float density          = lerp(0.3f, 1.0f, dryFactor);
+            float gain             = lerp(0.05f, 0.3f, dryFactor);
+            float airAbsorptionHF  = lerp(0.95f, 0.99f, dryFactor);
+            float roomRolloff      = 0.4f;
+
+            // Apply to OpenAL effect
+            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAIN, gain);
+            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAINHF, 1.0f);
+            alEffectf(reverbEffect, AL_EAXREVERB_DENSITY,                density);
+            alEffectf(reverbEffect, AL_EAXREVERB_GAIN,                   gain);
+            alEffectf(reverbEffect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF,  airAbsorptionHF);
+            alEffectf(reverbEffect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR,    roomRolloff);
+            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_TIME,         decayTime);
+            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_HFRATIO,      decayHfRatio);
+            alEffectf(reverbEffect, AL_EAXREVERB_DIFFUSION,          diffusion);
+            alEffectf(reverbEffect, AL_EAXREVERB_GAINHF,             gainHF);
+            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_DELAY,  reflectionsDelay);
+            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY,  lateReverbDelay);
+            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_GAIN,   reflectionsGain);
+            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN,   lateReverbGain);
+            AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
+        } catch (Exception e) {
         }
     }
 

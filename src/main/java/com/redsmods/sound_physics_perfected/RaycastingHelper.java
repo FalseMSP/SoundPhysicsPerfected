@@ -662,7 +662,6 @@ public class RaycastingHelper {
         // Where V is volume and A is total absorption
         double totalAbsorption = totalSurface * avgAbsorption;
         double rt60 = totalAbsorption > 0 ? (0.161 * volume) / totalAbsorption : 0.0;
-        rt60 = Math.min(rt60, 8.0); // Cap at 8 seconds for gameplay
 
         // Early reflection delay based on room size
         double roomRadius = Math.cbrt(volume * 3.0 / (4.0 * Math.PI)); // Sphere equivalent radius

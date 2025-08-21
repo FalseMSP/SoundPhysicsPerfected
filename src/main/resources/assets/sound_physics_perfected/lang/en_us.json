@@ -85,6 +85,8 @@
 
       "reverbTuning": "Reverb Debug",
       "reverbTuning.description": "Debug for finding what values are coming out of Blue ray casting.",
+      "legacyReverb": "Legacy Reverb",
+      "legacyReverb.description": "Switches reverb mode to pre 1.6. THIS IS UN-TUNEABLE",
       "globalReverbIntensity": "Global Reverb Intensity",
       "globalReverbIntensity.description": "Overall reverb intensity multiplier\\nHigher = more intense reverb",
       "indoorBias": "Indoor Bias",

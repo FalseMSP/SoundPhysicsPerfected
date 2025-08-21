@@ -114,7 +114,7 @@ public class Config {
     @DoubleSlider(min = 0.001, max = 1, step = 0.01)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeationAbsorption.description")
-    @SerialEntry public double permeationAbsorption = 0.7;
+    @SerialEntry public double permeationAbsorption = 0.4;
 
 
     public static class StringValueFactory implements ListGroup.ValueFactory<String> {
@@ -149,11 +149,16 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
     @SerialEntry public DebugType reverbTuning = DebugType.OFF;
 
+    @AutoGen(category = "reverb_tuning", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
+    @SerialEntry public boolean legacyReverb = false;
+
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.globalReverbIntensity.description")
-    @SerialEntry public float globalReverbIntensity = 1.0f;
+    @SerialEntry public float globalReverbIntensity = 2.0f;
 
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)
@@ -183,12 +188,12 @@ public class Config {
     @AutoGen(category = "reverb_tuning", group = "distance_and_attenuation")
     @FloatField(min = 0, max = 10000)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.distanceAttenuationLinear.description")
-    @SerialEntry public float distanceAttenuationLinear = 0.02f;
+    @SerialEntry public float distanceAttenuationLinear = 0.0f;
 
     @AutoGen(category = "reverb_tuning", group = "distance_and_attenuation")
     @FloatField(min = 0, max = 10000)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.distanceAttenuationQuadratic.description")
-    @SerialEntry public float distanceAttenuationQuadratic = 0.01f;
+    @SerialEntry public float distanceAttenuationQuadratic = 0.0f;
 
     @AutoGen(category = "reverb_tuning", group = "distance_and_attenuation")
     @FloatField(min = 0, max = 10000)
@@ -198,7 +203,7 @@ public class Config {
     @AutoGen(category = "reverb_tuning", group = "distance_and_attenuation")
     @FloatField(min = 0, max = 10000)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.minAirAbsorption.description")
-    @SerialEntry public float minAirAbsorption = 0.2f;
+    @SerialEntry public float minAirAbsorption = 0.1f;
 
     // Room Size & Volume
     @AutoGen(category = "reverb_tuning", group = "room_size_and_volume")
@@ -223,7 +228,7 @@ public class Config {
     @FloatField(min = 0, max = 10000)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.lateReverbDelayMultiplier.description")
-    @SerialEntry public float lateReverbDelayMultiplier = 1.0f;
+    @SerialEntry public float lateReverbDelayMultiplier = 1.5f;
 
     @AutoGen(category = "reverb_tuning", group = "reverb_timing")
     @FloatField(min = 0, max = 10000)
@@ -246,7 +251,7 @@ public class Config {
     @AutoGen(category = "reverb_tuning", group = "gain_and_strength")
     @FloatField(min = 0, max = 10000)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.maxOverallGain.description")
-    @SerialEntry public float maxOverallGain = 0.5f;
+    @SerialEntry public float maxOverallGain = 1f;
 
     @AutoGen(category = "reverb_tuning", group = "gain_and_strength")
     @FloatField(min = 0, max = 10000)
@@ -279,7 +284,7 @@ public class Config {
     @AutoGen(category = "reverb_tuning", group = "frequency_response")
     @FloatField(min = 0, max = 10000)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.dynamicAbsorptionLfFactor.description")
-    @SerialEntry public float dynamicAbsorptionLfFactor = 0.5f;
+    @SerialEntry public float dynamicAbsorptionLfFactor = 3f;
 
     @AutoGen(category = "reverb_tuning", group = "frequency_response")
     @FloatField(min = 0, max = 10000)
