@@ -53,8 +53,12 @@ body:
     attributes:
       label: Relevant log output
       description: Or crash report
+    validations:
+      required: false
 
   - type: textarea
     id: modlist
     attributes:
       label: Mod List (not neccessary if you're lazy asf, but i will ask for it if i can't reproduce)
+    validations:
+      required: false
