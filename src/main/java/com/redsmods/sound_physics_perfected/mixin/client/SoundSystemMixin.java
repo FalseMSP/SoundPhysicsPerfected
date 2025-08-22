@@ -447,17 +447,17 @@ public abstract class SoundSystemMixin {
             float smallRoomReduction = 1.0f;
             float volumeBasedReduction = 1.0f;
 
-            if (roomSize < 3.0f) {
+            if (roomSize < 0.5f) {
                 // Tiny rooms (closets, small bathrooms): dramatic reduction
                 roomSizeScaling = 0.05f;
                 smallRoomReduction = 0.1f;
                 volumeBasedReduction = 0.1f;
-            } else if (roomSize < 6.0f) {
+            } else if (roomSize < 2.0f) {
                 // Very small rooms: significant reduction
                 roomSizeScaling = 0.15f;
                 smallRoomReduction = 0.25f;
                 volumeBasedReduction = 0.3f;
-            } else if (roomSize < 10.0f) {
+            } else if (roomSize < 5.0f) {
                 // Small rooms: moderate reduction
                 roomSizeScaling = 0.4f;
                 smallRoomReduction = 0.5f;

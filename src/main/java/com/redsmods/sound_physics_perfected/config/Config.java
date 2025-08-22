@@ -152,7 +152,7 @@ public class Config {
     @AutoGen(category = "reverb_tuning", group = "main")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
-    @SerialEntry public boolean legacyReverb = true;
+    @SerialEntry public boolean legacyReverb = false;
 
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)
@@ -164,13 +164,13 @@ public class Config {
     @FloatField(min = 0, max = 10000)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.indoorBias.description")
-    @SerialEntry public float indoorBias = 1.0f;
+    @SerialEntry public float indoorBias = 2.0f;
 
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.outdoorBias.description")
-    @SerialEntry public float outdoorBias = 1.0f;
+    @SerialEntry public float outdoorBias = 0.2f;
 
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)
