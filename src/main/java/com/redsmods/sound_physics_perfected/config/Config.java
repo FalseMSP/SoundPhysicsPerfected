@@ -134,7 +134,7 @@ public class Config {
     @AutoGen(category = "blacklist")
     @ListGroup(valueFactory = StringValueFactory.class, controllerFactory = StringControllerFactory.class)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.soundBlacklist.description")
-    @SerialEntry public List<String> soundBlacklist = new ArrayList<>(Arrays.asList("rain"));
+    @SerialEntry public List<String> soundBlacklist = new ArrayList<>(Arrays.asList("rain", "swim"));
 
     @AutoGen(category = "blacklist")
     @ListGroup(valueFactory = StringValueFactory.class, controllerFactory = StringControllerFactory.class)
@@ -152,7 +152,7 @@ public class Config {
     @AutoGen(category = "reverb_tuning", group = "main")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
-    @SerialEntry public boolean legacyReverb = false;
+    @SerialEntry public boolean legacyReverb = true;
 
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)
