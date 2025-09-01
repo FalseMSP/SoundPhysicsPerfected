@@ -4,6 +4,7 @@ import com.mojang.blaze3d.audio.Channel;
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
 import com.redsmods.sound_physics_perfected.RedSoundInstance;
 import com.redsmods.sound_physics_perfected.ReverbHelpers.EnhancedReverbData;
+import com.redsmods.sound_physics_perfected.ReverbHelpers.LegacyReverb;
 import com.redsmods.sound_physics_perfected.ReverbHelpers.ReverbConstants;
 import com.redsmods.sound_physics_perfected.config.Config;
 import com.redsmods.sound_physics_perfected.config.DebugType;
@@ -339,9 +340,11 @@ public abstract class SoundSystemMixin {
                     // Check if source is playing
                     int state = AL10.alGetSourcei(sourceId, AL10.AL_SOURCE_STATE);
                     if (state == AL10.AL_PLAYING || state == AL10.AL_PAUSED) {
-                        if (Config.getInstance().legacyReverb)
+                        if (Config.getInstance().legacyReverb == LegacyReverb.VERSION140)
                             applyLegacyReverbToSource(sourceId);
-                        else
+                        else if (Config.getInstance().legacyReverb == LegacyReverb.VERSION100) {
+                            applyInitalLegacyReverbToSource(sourceId);
+                        } else
                             applyReverbToSource(sourceId);
 
 //                        System.out.println("Source ID: " + sourceId);
@@ -617,6 +620,61 @@ public abstract class SoundSystemMixin {
             alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN,   lateReverbGain);
             AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
         } catch (Exception e) {
+        }
+    }
+
+    private static void applyInitalLegacyReverbToSource(int sourceId) {
+        try {
+            float wallDistance = (float) (RaycastingHelper.getDistanceFromWallEcho() / RaycastingHelper.getDistanceFromWallEchoDenom());
+            float occlusionPercent = (float) RaycastingHelper.getReverbStrength() / RaycastingHelper.getReverbDenom();
+            float outdoorLeakPercent = (float) RaycastingHelper.getOutdoorLeak() / RaycastingHelper.getOutdoorLeakDenom();
+
+//            System.out.println(occlusionPercent +" " + wallDistance + " " + outdoorLeakPercent);
+
+            float distanceMeters     = clamp(wallDistance, 1.0f, 100.0f);
+            occlusionPercent   = 1 - clamp(occlusionPercent+outdoorLeakPercent, 0.0f, 1.0f);
+            outdoorLeakPercent = clamp(outdoorLeakPercent, 0.0f, 1.0f);
+
+            float dryFactor = 1.0f - outdoorLeakPercent; // 0 = fully outdoor, 1 = fully indoor
+            float speedOfSound = 343.0f;
+
+            float wallDelay = (distanceMeters * 2.0f) / speedOfSound;
+
+            float decayTime        = clamp(wallDelay * 5.0f * dryFactor, 0.1f, 6.0f);
+            float reflectionsDelay = clamp(wallDelay * 0.5f, 0.005f, 0.05f);
+            float lateReverbDelay  = clamp(wallDelay, 0.01f, 0.1f);
+
+            float decayHfRatio     = lerp(0.5f, 1.3f, (1.0f - occlusionPercent) * dryFactor);
+            float diffusion        = lerp(0.3f, 1.0f, dryFactor * (1.0f - occlusionPercent));
+            float gainHF           = lerp(0.05f, 0.9f, (1.0f - occlusionPercent) * dryFactor);
+
+            float reflectionsGain  = lerp(0.0f, 0.7f, dryFactor);
+            float lateReverbGain   = lerp(0.0f, 1.0f, dryFactor);
+
+            float density          = lerp(0.3f, 1.0f, dryFactor);
+            float gain             = lerp(0.05f, 0.3f, dryFactor);
+            float airAbsorptionHF  = lerp(0.95f, 0.99f, dryFactor);
+            float roomRolloff      = 0.4f;
+
+            // Apply to OpenAL effect
+            AL11.alSourcef(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER_GAIN_AUTO, AL11.AL_FALSE);
+            AL11.alSourcef(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER_GAINHF_AUTO, AL11.AL_FALSE);
+            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAIN, gain);
+            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAINHF, 1.0f);
+            alEffectf(reverbEffect, AL_EAXREVERB_DENSITY,                density);
+            alEffectf(reverbEffect, AL_EAXREVERB_GAIN,                   gain);
+            alEffectf(reverbEffect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF,  airAbsorptionHF);
+            alEffectf(reverbEffect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR,    roomRolloff);
+            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_TIME,         decayTime);
+            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_HFRATIO,      decayHfRatio);
+            alEffectf(reverbEffect, AL_EAXREVERB_DIFFUSION,          diffusion);
+            alEffectf(reverbEffect, AL_EAXREVERB_GAINHF,             gainHF);
+            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_DELAY,  reflectionsDelay);
+            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY,  lateReverbDelay);
+            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_GAIN,   reflectionsGain);
+            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN,   lateReverbGain);
+            if (outdoorLeakPercent < 0.95)
+                AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);        } catch (Exception e) {
         }
     }
 

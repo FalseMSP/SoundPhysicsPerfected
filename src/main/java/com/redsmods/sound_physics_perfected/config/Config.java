@@ -1,5 +1,6 @@
 package com.redsmods.sound_physics_perfected.config;
 
+import com.redsmods.sound_physics_perfected.ReverbHelpers.LegacyReverb;
 import dev.isxander.yacl3.api.Option;
 import dev.isxander.yacl3.api.controller.ControllerBuilder;
 import dev.isxander.yacl3.api.controller.StringControllerBuilder;
@@ -50,7 +51,7 @@ public class Config {
 
     @AutoGen(category = "general", group = "main")
     @IntSlider(min = 2, max = 16, step = 1)
-    @FormatTranslation("sound_physics_perfected.config.unit.rays")
+    @FormatTranslation("sound_physics_perfected.config.unit.chunks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.maxRayLength.description")
     @SerialEntry public int maxRayLength = 8; // chunks
 
@@ -150,9 +151,9 @@ public class Config {
     @SerialEntry public DebugType reverbTuning = DebugType.OFF;
 
     @AutoGen(category = "reverb_tuning", group = "main")
-    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
-    @SerialEntry public boolean legacyReverb = false;
+    @EnumCycler
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.legacyReverb.description")
+    @SerialEntry public LegacyReverb legacyReverb = LegacyReverb.MODERN;
 
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)

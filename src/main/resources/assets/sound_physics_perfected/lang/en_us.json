@@ -10,7 +10,8 @@
         "blocks": "%s blocks",
         "ticks": "%s ticks",
         "steps": "%s steps",
-        "rays": "%s rays"
+        "rays": "%s rays",
+        "chunks": "%s chunks"
       }
     }
   },
@@ -26,6 +27,11 @@
         "off": "Off",
         "chat": "Chat",
         "action_bar": "Action Bar"
+      },
+      "LegacyReverb": {
+        "modern": "Modern",
+        "version140": "1.4.0",
+        "version100": "1.0.0"
       }
     },
     "${id}:config": {
@@ -59,7 +65,7 @@
       "raysBounced": "Ray Bounced #",
       "raysBounced.description": "Max # of times the ray will bounce before terminating\\n(More accurate for hearing sounds after bouncing off walls, INCREASING THIS WILL INCREASE REVERB)\\nPERFORMANCE IMPACT: HIGH",
       "maxRayLength": "Max Ray Length",
-      "maxRayLength.description": "Max Length of a singular ray, if you don't get reverb, turn this value up. if you get too much reverb, turn this down (this is in chunks)\\nPERFORMANCE IMPACT: LOW",
+      "maxRayLength.description": "Max Length of a singular ray, if you don't get reverb, turn this value up. if you get too much reverb, turn this down\\nPERFORMANCE IMPACT: LOW",
       "tickRate": "Sound Updates (Tickable)",
       "tickRate.description": "How often sounds' positions should be updated\\n(0 is off)\\n(1 = every tick -> 20 = every second)\\nPERFORMANCE IMPACT: MEDIUM",
       "soundMult": "Max Sound Distance Multiplier",
@@ -86,7 +92,7 @@
       "reverbTuning": "Reverb Debug",
       "reverbTuning.description": "Debug for finding what values are coming out of Blue ray casting.",
       "legacyReverb": "Legacy Reverb",
-      "legacyReverb.description": "Switches reverb mode to pre 1.6. THIS IS UN-TUNEABLE",
+      "legacyReverb.description": "Switches reverb mode to different versions TUNING IS NOT ALWAYS AVAILABLE",
       "globalReverbIntensity": "Global Reverb Intensity",
       "globalReverbIntensity.description": "Overall reverb intensity multiplier\\nHigher = more intense reverb",
       "indoorBias": "Indoor Bias",
