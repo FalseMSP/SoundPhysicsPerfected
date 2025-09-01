@@ -24,9 +24,9 @@ public class ReverbConstants {
     public static float MIN_DECAY_HF_RATIO = 0.1f;
     public static float MAX_DECAY_HF_RATIO = 2.0f;
     public static float MIN_REFLECTIONS_GAIN = 0.0f;
-    public static float MAX_REFLECTIONS_GAIN = 0.8f;
+    public static float MAX_REFLECTIONS_GAIN = 3f;
     public static float MIN_LATE_REVERB_GAIN = 0.0f;
-    public static float MAX_LATE_REVERB_GAIN = 1.0f;
+    public static float MAX_LATE_REVERB_GAIN = 10.0f;
     public static float MIN_AIR_ABSORPTION_HF = 0.892f;
     public static float MAX_AIR_ABSORPTION_HF = 1.0f;
     public static float MIN_ROOM_ROLLOFF = 0.0f;
