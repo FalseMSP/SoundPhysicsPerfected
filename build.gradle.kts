@@ -29,6 +29,7 @@ class Dependencies {
     val fabricLoaderVersion = property("deps.fabric_loader_version")
     val fabricApiVersion = property("deps.fabric_api_version")
     val modmenuVersion = property("deps.modmenu_version")
+    val voicechat_api_version = property("deps.voicechat_api_version")
     val yaclVersion = property("deps.yacl_version")
     val devauthVersion = property("deps.devauth_version")
     val mixinconstraintsVersion = property("deps.mixinconstraints_version")
@@ -113,6 +114,7 @@ repositories {
     maven("https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1") // DevAuth
     maven("https://maven.bawnorton.com/releases") // MixinSquared
     maven("https://api.modrinth.com/maven") // Modrinth
+    maven ("https://maven.maxhenkel.de/repository/public") // Simple Voice Chat API
 }
 
 dependencies {
@@ -130,6 +132,7 @@ dependencies {
     modRuntimeOnly("me.djtheredstoner:DevAuth-${loader.loader}:${deps.devauthVersion}")
     include(implementation("com.moulberry:mixinconstraints:${deps.mixinconstraintsVersion}")!!)!!
     include(implementation(annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-${loader.loader}:${deps.mixinsquaredVersion}")!!)!!)
+    modImplementation("de.maxhenkel.voicechat:voicechat-api:${deps.voicechat_api_version}")
 
     if (loader.isFabric) {
         modImplementation("net.fabricmc:fabric-loader:${deps.fabricLoaderVersion}")!!
@@ -247,6 +250,7 @@ tasks.processResources {
         put("modrinth", mod.modrinth)
         put("discord", mod.discord)
         put("yacl_version", deps.yaclVersion)
+        put("voicechat_api_version",deps.voicechat_api_version)
 
         if (loader.isFabric) {
             put("fabric_loader_version", deps.fabricLoaderVersion)

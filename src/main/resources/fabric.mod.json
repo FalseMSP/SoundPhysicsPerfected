@@ -31,6 +31,9 @@
 		"labymod": "*",
 		"ichor": "*"
 	},
+	"sugguests": {
+		"voicechat": ">=${mcdep}-${voicechat_api_version}"
+	},
 	"custom": {
 		"modmenu": {
 			"links": {
