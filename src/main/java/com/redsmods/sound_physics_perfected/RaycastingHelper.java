@@ -16,6 +16,7 @@ import net.minecraft.resources.ResourceLocation;
 import com.redsmods.sound_physics_perfected.storageclasses.*;
 import com.redsmods.sound_physics_perfected.wrappers.*;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -24,8 +25,10 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
+import javax.swing.text.html.BlockView;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -868,7 +871,15 @@ public class RaycastingHelper {
                     ClipContext.Block.COLLIDER,
                     ClipContext.Fluid.NONE,
                     player
-            );
+            ) {
+                @Override
+                public VoxelShape getBlockShape(BlockState blockState, BlockGetter level, BlockPos pos) {
+                    if (blockState.getBlock() == Blocks.BARRIER && Config.getInstance().barrierAsAir) {
+                        return Shapes.empty();
+                    }
+                    return super.getBlockShape(blockState, world, pos);
+                }
+            };
 
             BlockHitResult hit = world.clip(context);
 
@@ -912,7 +923,13 @@ public class RaycastingHelper {
 
                 // Calculate distance traveled within this block
                 double distanceInBlock = hit.getLocation().distanceTo(exitPoint);
-                if (world.getBlockState(hit.getBlockPos()).getBlock() != Blocks.BARRIER || !Config.getInstance().barrierAsAir) totalDistanceInBlocks += distanceInBlock; // don't add if the block is a barrier
+                double absorptionIndex = 1;
+//                if (world.getBlockState(hit.getBlockPos()).getBlock() == Blocks.BARRIER && Config.getInstance().barrierAsAir)
+//                    absorptionIndex = 0.01;
+                totalDistanceInBlocks += distanceInBlock * absorptionIndex;
+                //else
+                    // don't add if the block is a barrier
+
 
                 // Add a small buffer to ensure we're clearly outside
                 currentStart = exitPoint.add(direction.scale(0.01));

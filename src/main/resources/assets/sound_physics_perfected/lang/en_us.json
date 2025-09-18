@@ -88,8 +88,8 @@
       "maxBlocksPermeated.description": "Max blocks permeated in the calculation",
       "permeationAbsorption": "Absorption Multiplier",
       "permeationAbsorption.description": "Volume is multiplied by x^blocksTraveled where x is the value set here for muffle",
-      "barrier": "Treat Barriers As Air",
-      "barrier.description": "Make it so barriers do NOT absorb sound",
+      "barrierAsAir": "Treat Barriers As Air",
+      "barrierAsAir.description": "Make it so barriers do NOT absorb sound",
 
       "reverbTuning": "Reverb Debug",
       "reverbTuning.description": "Debug for finding what values are coming out of Blue ray casting.",

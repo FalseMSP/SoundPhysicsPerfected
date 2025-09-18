@@ -119,7 +119,7 @@ public class Config {
 
     @AutoGen(category = "general", group = "main")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.barrier.description")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.barrierAsAir.description")
     @SerialEntry public boolean barrierAsAir = true;
 
 
