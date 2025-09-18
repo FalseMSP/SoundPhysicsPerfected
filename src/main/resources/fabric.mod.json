@@ -19,6 +19,12 @@
 	"license": "${license}",
 	"icon": "assets/${id}/icon.png",
 	"environment": "client",
+	"entrypoints": {
+		"voicechat": [
+			"com.redsmods.sound_physics_perfected.integration.SVC"
+		]
+	},
+
 	"depends": {
 		"fabricloader": ">=${fabric_loader_version}",
 		"minecraft": "${mcdep}",
