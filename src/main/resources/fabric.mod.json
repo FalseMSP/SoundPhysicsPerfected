@@ -20,7 +20,6 @@
 	"icon": "assets/${id}/icon.png",
 	"environment": "client",
 
-
 	"depends": {
 		"fabricloader": ">=${fabric_loader_version}",
 		"minecraft": "${mcdep}",
