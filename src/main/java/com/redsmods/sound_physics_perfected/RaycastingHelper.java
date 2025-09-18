@@ -18,6 +18,7 @@ import com.redsmods.sound_physics_perfected.wrappers.*;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -452,8 +453,8 @@ public class RaycastingHelper {
                 else
                     castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
             }
-
-            if (hitBlock) {
+            boolean isBarrier = world.getBlockState(blockHit.getBlockPos()).getBlock() == Blocks.BARRIER && Config.getInstance().barrierAsAir;
+            if (hitBlock && !isBarrier) {
                 Vec3 hitPos = blockHit.getLocation();
                 Direction hitSide = blockHit.getDirection();
 
@@ -911,7 +912,7 @@ public class RaycastingHelper {
 
                 // Calculate distance traveled within this block
                 double distanceInBlock = hit.getLocation().distanceTo(exitPoint);
-                totalDistanceInBlocks += distanceInBlock;
+                if (world.getBlockState(hit.getBlockPos()).getBlock() != Blocks.BARRIER || !Config.getInstance().barrierAsAir) totalDistanceInBlocks += distanceInBlock; // don't add if the block is a barrier
 
                 // Add a small buffer to ensure we're clearly outside
                 currentStart = exitPoint.add(direction.scale(0.01));

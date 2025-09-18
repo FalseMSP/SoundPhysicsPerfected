@@ -117,6 +117,12 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeationAbsorption.description")
     @SerialEntry public double permeationAbsorption = 0.4;
 
+    @AutoGen(category = "general", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.barrier.description")
+    @SerialEntry public boolean barrierAsAir = true;
+
+
 
     public static class StringValueFactory implements ListGroup.ValueFactory<String> {
         @Override
