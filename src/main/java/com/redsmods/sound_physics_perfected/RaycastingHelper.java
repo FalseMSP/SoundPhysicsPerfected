@@ -424,7 +424,15 @@ public class RaycastingHelper {
                     ClipContext.Block.COLLIDER,
                     ClipContext.Fluid.NONE,
                     player
-            );
+            ) {
+                @Override
+                public VoxelShape getBlockShape(BlockState blockState, BlockGetter level, BlockPos pos) {
+                    if (blockState.getBlock() == Blocks.BARRIER && Config.getInstance().barrierAsAir) {
+                        return Shapes.empty();
+                    }
+                    return super.getBlockShape(blockState, world, pos);
+                }
+            };;
 
             BlockHitResult blockHit = world.clip(raycastContext);
 
@@ -456,8 +464,7 @@ public class RaycastingHelper {
                 else
                     castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
             }
-            boolean isBarrier = world.getBlockState(blockHit.getBlockPos()).getBlock() == Blocks.BARRIER && Config.getInstance().barrierAsAir;
-            if (hitBlock && !isBarrier) {
+            if (hitBlock) {
                 Vec3 hitPos = blockHit.getLocation();
                 Direction hitSide = blockHit.getDirection();
 
