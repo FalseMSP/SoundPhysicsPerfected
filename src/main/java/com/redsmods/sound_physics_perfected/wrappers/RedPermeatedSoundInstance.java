@@ -13,13 +13,13 @@ import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
 import org.lwjgl.openal.EXTEfx;
 
+import static com.redsmods.sound_physics_perfected.OpenALEffectsHandler.applyMuffleToSource;
 import static org.joml.Math.lerp;
 
 public class RedPermeatedSoundInstance extends RedTickableInstance {
     @Getter float permeationIndex;
     int tickCount = 0;
     private int id;
-    public static Integer muffleFilter = -1;
     private boolean sourceSet = false;
     private float targetMuffle;
 
@@ -61,8 +61,6 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
             return;
         }
 
-        // Maximum volume change per tick
-
         // Calculate how much we can change this tick
         float volumeChange = Math.min(maxVolumeChange, Math.abs(deltaVolume));
 
@@ -80,27 +78,6 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     public void setSource(int id) {
         sourceSet = true;
         this.id = id;
-    }
-
-    public void applyMuffleToSource(int sourceId, float muffleStrength) {
-        try {
-            // Clamp muffle strength between 0.0 (no muffling) and 1.0 (maximum muffling)
-            muffleStrength = clamp(muffleStrength, 0.0f, 1.0f);
-
-            // Calculate filter parameters based on muffle strength
-            float lowpassGain = lerp(1.0f, 0.2f, muffleStrength);     // Overall volume reduction
-            float lowpassGainHF = lerp(1.0f, 0.1f, muffleStrength);   // High frequency attenuation
-
-            // Apply low-pass filter (main muffling effect)
-            if (muffleFilter != -1) {
-                EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAIN, lowpassGain);
-                EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAINHF, lowpassGainHF);
-                AL11.alSourcei(sourceId, EXTEfx.AL_DIRECT_FILTER, muffleFilter);
-            }
-
-        } catch (Exception e) {
-            // Handle errors silently like the original function
-        }
     }
 
     private static float clamp(float a, float b, float c) {
