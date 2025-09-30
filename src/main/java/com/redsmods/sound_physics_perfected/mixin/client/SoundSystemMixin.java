@@ -1,6 +1,7 @@
 package com.redsmods.sound_physics_perfected.mixin.client;
 
 import com.mojang.blaze3d.audio.Channel;
+import com.redsmods.sound_physics_perfected.OpenALEffectsHandler;
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
 import com.redsmods.sound_physics_perfected.RedSoundInstance;
 import com.redsmods.sound_physics_perfected.ReverbHelpers.EnhancedReverbData;
@@ -28,6 +29,7 @@ import org.lwjgl.openal.ALC10;
 import org.lwjgl.openal.EXTEfx;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
@@ -49,7 +51,6 @@ public abstract class SoundSystemMixin {
 
     private static final int MAX_SOUNDS = 100; // Limit queue size to prevent memory issues
 
-
     @Shadow
     private SoundManager soundManager;
     @Shadow
@@ -66,8 +67,8 @@ public abstract class SoundSystemMixin {
     @Inject(method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)Lnet/minecraft/client/sounds/SoundEngine$PlayResult;", at = @At("HEAD"), cancellable = true)
     private void onSoundPlay(SoundInstance sound, CallbackInfoReturnable<SoundEngine.PlayResult> cir) {
      //?}
-        if (!efxInitialized) {
-            initializeReverb();
+        if (!fxHandler.efxInitialized) {
+            fxHandler.initializeReverb();
         }
 //        Minecraft client = Minecraft.getInstance();
 //        if (sound instanceof TickableSoundInstance) {
@@ -81,7 +82,7 @@ public abstract class SoundSystemMixin {
 //        }
         if (isSoundBlacklisted(sound.toString())) return; // skip if in the overall blacklist
 
-        if (!efxInitialized) return; // Skip if initialization failed
+        if (!fxHandler.efxInitialized) return; // Skip if initialization failed
 
         Minecraft client = Minecraft.getInstance();
         // Add null checks
@@ -137,11 +138,11 @@ public abstract class SoundSystemMixin {
             locals = LocalCapture.CAPTURE_FAILHARD
     )
     private void onSoundTick(boolean paused, CallbackInfo ci) {
-        if (!efxInitialized) {
-            initializeReverb();
+        if (!fxHandler.efxInitialized) {
+            fxHandler.initializeReverb();
         }
 
-        if (!efxInitialized) return; // Skip if initialization failed
+        if (!fxHandler.efxInitialized) return; // Skip if initialization failed
 
         if (paused) {
             return;
@@ -154,7 +155,7 @@ public abstract class SoundSystemMixin {
                 Channel source = accessor.getChannel();
                 int id = ((SourceAccessor) source).getSource();
                 sound.setSource(id);
-                applyMuffleToSource(id,sound.getPermeationIndex());
+                fxHandler.applyMuffleToSource(id,sound.getPermeationIndex());
             } catch (Exception e) {
                 if (Config.getInstance().debug != DebugType.OFF)
                     System.out.println("sourceID is invalid for a sound, non-issue" + e);
@@ -167,7 +168,7 @@ public abstract class SoundSystemMixin {
 
     @ModifyVariable(method = "stop(Lnet/minecraft/client/resources/sounds/SoundInstance;)V", at = @At("HEAD"), argsOnly = true)
     private SoundInstance modifySoundParameter(SoundInstance sound) {
-        if (!efxInitialized) return sound; // fx aren't init, most likely permeation isn't playing
+        if (!fxHandler.efxInitialized) return sound; // fx aren't init, most likely permeation isn't playing
         if(sound == null) return sound; // sorry, if some other mod kills their sound by using a mixin, i am not finna be held responsible, that's their own fault.
         soundQueue.remove(sound);
         SoundInstance customSound = soundInstanceMap.get(sound);
@@ -224,11 +225,11 @@ public abstract class SoundSystemMixin {
                     int state = AL10.alGetSourcei(sourceId, AL10.AL_SOURCE_STATE);
                     if (state == AL10.AL_PLAYING || state == AL10.AL_PAUSED) {
                         if (Config.getInstance().legacyReverb == LegacyReverb.VERSION140)
-                            applyLegacyReverbToSource(sourceId);
+                            fxHandler.applyLegacyReverbToSource(sourceId);
                         else if (Config.getInstance().legacyReverb == LegacyReverb.VERSION100) {
-                            applyInitalLegacyReverbToSource(sourceId);
+                            fxHandler.applyInitalLegacyReverbToSource(sourceId);
                         } else
-                            applyReverbToSource(sourceId);
+                            fxHandler.applyReverbToSource(sourceId);
 
 //                        System.out.println("Source ID: " + sourceId);
                     }
@@ -251,13 +252,13 @@ public abstract class SoundSystemMixin {
 
     @Inject(method = "destroy()V", at = @At("HEAD"))
     private void onAudioEngineStop(CallbackInfo ci) {
-        cleanupEFXResources();
+        fxHandler.cleanupEFXResources();
     }
 
     @Inject(method = "loadLibrary()V", at = @At("TAIL"))
     private void onAudioEngineStart(CallbackInfo ci) {
-        efxInitialized = false;
-        initializeReverb();
+        fxHandler.efxInitialized = false;
+        fxHandler.initializeReverb();
     }
 
     private boolean isSoundBlacklisted(String soundName) {

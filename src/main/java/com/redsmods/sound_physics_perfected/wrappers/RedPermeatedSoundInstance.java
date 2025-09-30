@@ -13,7 +13,7 @@ import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
 import org.lwjgl.openal.EXTEfx;
 
-import static com.redsmods.sound_physics_perfected.OpenALEffectsHandler.applyMuffleToSource;
+import static com.redsmods.sound_physics_perfected.RaycastingHelper.fxHandler;
 import static org.joml.Math.lerp;
 
 public class RedPermeatedSoundInstance extends RedTickableInstance {
@@ -57,7 +57,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
         if (Math.abs(deltaVolume) <= 0.001f || Math.abs(deltaVolume) > maxVolumeChange * Config.getInstance().tickRate) {
             permeationIndex = targetMuffle;
             if (sourceSet && AL10.alIsSource(id))
-                applyMuffleToSource(id,permeationIndex);
+                fxHandler.applyMuffleToSource(id,permeationIndex);
             return;
         }
 
@@ -72,7 +72,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
         }
 
         if (sourceSet && AL10.alIsSource(id))
-            applyMuffleToSource(id,1-permeationIndex);
+            fxHandler.applyMuffleToSource(id,1-permeationIndex);
     }
 
     public void setSource(int id) {

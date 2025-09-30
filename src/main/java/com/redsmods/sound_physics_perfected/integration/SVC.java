@@ -20,6 +20,7 @@ import com.redsmods.sound_physics_perfected.OpenALEffectsHandler;
 public class SVC implements VoicechatPlugin {
 
     private final Map<UUID, VoiceChannelData> audioChannels;
+    private final OpenALEffectsHandler VCfxHandler = new OpenALEffectsHandler();
 
     public SVC() {
         audioChannels = new HashMap<>();
@@ -34,8 +35,7 @@ public class SVC implements VoicechatPlugin {
     public void initialize(VoicechatApi api) {
         System.out.println("Initializing Sound Physics Perfected Voice Chat integration");
         audioChannels.clear();
-        // Initialize your effects handler
-        // effectsHandler = new OpenALEffectsHandler();
+//        fxHandler = new OpenALEffectsHandler();
     }
 
     @Override
@@ -50,7 +50,10 @@ public class SVC implements VoicechatPlugin {
         // Initialize your OpenAL effects when the context is created
         System.out.println("Initializing OpenAL effects for voice chat");
         // Your OpenAL initialization code here
-        // effectsHandler.initializeEffects(event.getContext());
+        long context = event.getContext();
+        long device = event.getDevice();
+        VCfxHandler.initializeReverb(context,device);
+        System.out.println("succ init openal yipee");
     }
 
     private void onConnection(ClientVoicechatConnectionEvent event) {
@@ -99,10 +102,9 @@ public class SVC implements VoicechatPlugin {
 
     private EnvironmentData analyzeEnvironment(Level level, Vec3 listener, Vec3 source) {
         float occlusionFactor = calculateOcclusion(level, listener, source);
-        ReverbType reverbType = determineReverbType(level, listener);
         float distance = (float) listener.distanceTo(source);
 
-        return new EnvironmentData(occlusionFactor, reverbType, distance);
+        return new EnvironmentData(occlusionFactor, distance);
     }
 
     private float calculateOcclusion(Level level, Vec3 listener, Vec3 source) {
@@ -149,74 +151,18 @@ public class SVC implements VoicechatPlugin {
         return 0.7f; // Default occlusion
     }
 
-    private ReverbType determineReverbType(Level level, Vec3 listenerPos) {
-        int checkRadius = 8;
-        int airBlocks = 0;
-        int totalBlocks = 0;
-        int hardSurfaces = 0;
-        int softSurfaces = 0;
-
-        // Analyze surrounding area
-        for (int x = -checkRadius; x <= checkRadius; x++) {
-            for (int y = -checkRadius; y <= checkRadius; y++) {
-                for (int z = -checkRadius; z <= checkRadius; z++) {
-                    BlockPos checkPos = new BlockPos(
-                            (int) listenerPos.x + x,
-                            (int) listenerPos.y + y,
-                            (int) listenerPos.z + z
-                    );
-
-                    BlockState blockState = level.getBlockState(checkPos);
-                    totalBlocks++;
-
-                    if (blockState.isAir()) {
-                        airBlocks++;
-                    } else {
-                        String blockName = blockState.getBlock().getDescriptionId();
-                        if (blockName.contains("stone") || blockName.contains("concrete") ||
-                                blockName.contains("metal") || blockName.contains("glass")) {
-                            hardSurfaces++;
-                        } else if (blockName.contains("wool") || blockName.contains("carpet") ||
-                                blockName.contains("leaves")) {
-                            softSurfaces++;
-                        }
-                    }
-                }
-            }
-        }
-
-        float roomSize = (float) airBlocks / totalBlocks;
-        float reflectivity = (float) hardSurfaces / (hardSurfaces + softSurfaces + 1);
-
-        // Determine environment type
-        if (roomSize > 0.8f) {
-            return ReverbType.OUTDOORS;
-        } else if (roomSize < 0.3f && reflectivity > 0.7f) {
-            return ReverbType.CAVE;
-        } else if (roomSize < 0.4f && reflectivity > 0.6f) {
-            return ReverbType.CATHEDRAL;
-        } else if (reflectivity < 0.3f) {
-            return ReverbType.PADDED_CELL;
-        } else if (roomSize < 0.5f) {
-            return ReverbType.ROOM;
-        }
-
-        return ReverbType.GENERIC;
-    }
-
     private void applyOpenALEffects(int openALSource, EnvironmentData envData) {
         // Here's where you call your existing OpenAL effects methods
         // Replace these with actual calls to your effects handler
 
         try {
             // Example calls - replace with your actual method signatures:
-            // effectsHandler.setReverbEffect(openALSource, envData.reverbType);
-            // effectsHandler.setOcclusionFilter(openALSource, envData.occlusionFactor);
+//            VCfxHandler.applyReverbToSource(openALSource);
+             VCfxHandler.applyMuffleToSource(openALSource, envData.occlusionFactor);
             // effectsHandler.setDistanceAttenuation(openALSource, envData.distance);
 
             System.out.println("Applying effects to OpenAL source: " + openALSource +
                     ", occlusion: " + String.format("%.2f", envData.occlusionFactor) +
-                    ", reverb: " + envData.reverbType +
                     ", distance: " + String.format("%.2f", envData.distance));
 
         } catch (Exception e) {
@@ -258,12 +204,10 @@ public class SVC implements VoicechatPlugin {
 
     public static class EnvironmentData {
         public final float occlusionFactor;
-        public final ReverbType reverbType;
         public final float distance;
 
-        public EnvironmentData(float occlusionFactor, ReverbType reverbType, float distance) {
+        public EnvironmentData(float occlusionFactor, float distance) {
             this.occlusionFactor = occlusionFactor;
-            this.reverbType = reverbType;
             this.distance = distance;
         }
     }

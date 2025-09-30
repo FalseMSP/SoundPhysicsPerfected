@@ -27,6 +27,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import org.spongepowered.asm.mixin.Unique;
 
 import javax.swing.text.html.BlockView;
 import java.util.*;
@@ -96,8 +97,10 @@ public class RaycastingHelper {
         surfaceMaterials.put("default", new ReverbSurfaceData(0.05, 0.7, "medium"));
     }
 
-    // SoundSystemMixin Public static
+    // SoundSystemMixin Public statics
     public static final Queue<RedPermeatedSoundInstance> FXQueue = new LinkedList<>();
+    @Unique
+    public static OpenALEffectsHandler fxHandler = new OpenALEffectsHandler();
 
     public static void castBouncingRaysAndDetectSFX(Level world, Player player) {
         try {

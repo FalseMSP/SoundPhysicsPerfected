@@ -16,16 +16,16 @@ import static org.joml.Math.lerp;
 import static org.lwjgl.openal.EXTEfx.*;
 
 public class OpenALEffectsHandler {
-    private static int auxFXSlot = 0;
-    private static int reverbEffect = 0;
-    private static int muffleFilter = 0;
-    private static int sendFilter = 0;
-    public static boolean efxInitialized = false;
+    private int auxFXSlot = 0;
+    private int reverbEffect = 0;
+    private int muffleFilter = 0;
+    private int sendFilter = 0;
+    public boolean efxInitialized = false;
 
     /**
      * Apply reverb settings to a specific OpenAL source
      */
-    public static void applyReverbToSource(int sourceId) {
+    public void applyReverbToSource(int sourceId) {
         try {
             // Get enhanced reverb data
             EnhancedReverbData reverbData = RaycastingHelper.getEnhancedReverbData();
@@ -234,7 +234,7 @@ public class OpenALEffectsHandler {
         }
     }
 
-    public static void applyLegacyReverbToSource(int sourceId) {
+    public void applyLegacyReverbToSource(int sourceId) {
         try {
             if (getDistanceFromWallEchoDenom() == 0 || getReverbDenom() == 0 || getOutdoorLeakDenom() == 0)
                 return;
@@ -290,7 +290,7 @@ public class OpenALEffectsHandler {
         }
     }
 
-    public static void applyInitalLegacyReverbToSource(int sourceId) {
+    public void applyInitalLegacyReverbToSource(int sourceId) {
         try {
             float wallDistance = (float) (RaycastingHelper.getDistanceFromWallEcho() / RaycastingHelper.getDistanceFromWallEchoDenom());
             float occlusionPercent = (float) RaycastingHelper.getReverbStrength() / RaycastingHelper.getReverbDenom();
@@ -348,14 +348,21 @@ public class OpenALEffectsHandler {
     /**
      * Initialize EFX reverb system once
      */
-    public static void initializeReverb() {
+
+    public void initializeReverb() { // get default context
+        if (efxInitialized) return;
+        try {
+            long currentContext = ALC10.alcGetCurrentContext();
+            long device = ALC10.alcGetContextsDevice(currentContext);
+            initializeReverb(currentContext, device);
+        } catch (Exception e) {
+            System.err.println("Failed to initialize reverb: " + e.getMessage());
+        }
+    }
+    public void initializeReverb(long currentContext, long currentDevice) {
         if (efxInitialized) return;
 
         try {
-            // Get current OpenAL context
-            long currentContext = ALC10.alcGetCurrentContext();
-            long currentDevice = ALC10.alcGetContextsDevice(currentContext);
-
             // Check if EFX is available
             if (!ALC10.alcIsExtensionPresent(currentDevice, "ALC_EXT_EFX")) {
                 System.out.println("EFX Extension not available - reverb disabled");
@@ -394,7 +401,7 @@ public class OpenALEffectsHandler {
     /**
      * Set basic reverb parameters for a medium-sized room
      */
-    private static void setBasicReverbParams() {
+    private void setBasicReverbParams() {
         // Basic medium room reverb settings
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_DENSITY, 0.5f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_DIFFUSION, 0.8f);
@@ -409,7 +416,7 @@ public class OpenALEffectsHandler {
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, 0.0f);
     }
 
-    public static void cleanupEFXResources() {
+    public void cleanupEFXResources() {
         if (!efxInitialized) return;
 
         try {
@@ -456,7 +463,7 @@ public class OpenALEffectsHandler {
     /**
     Muffle filter stuff
      **/
-    public static void applyMuffleToSource(int sourceId, float muffleStrength) {
+    public void applyMuffleToSource(int sourceId, float muffleStrength) {
         try {
             // Clamp muffle strength between 0.0 (no muffling) and 1.0 (maximum muffling)
             muffleStrength = clamp(muffleStrength, 0.0f, 1.0f);
