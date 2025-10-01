@@ -29,6 +29,7 @@ public class OpenALEffectsHandler {
         try {
             // Get enhanced reverb data
             EnhancedReverbData reverbData = RaycastingHelper.getEnhancedReverbData();
+
             if (Config.getInstance().reverbTuning == DebugType.CHAT) {
                 Minecraft client = Minecraft.getInstance();
                 client.player.displayClientMessage(Component.literal(reverbData.toString()), false);
@@ -40,6 +41,13 @@ public class OpenALEffectsHandler {
             if (RaycastingHelper.getDistanceFromWallEchoDenom() == 0 ||
                     RaycastingHelper.getReverbDenom() == 0 ||
                     RaycastingHelper.getOutdoorLeakDenom() == 0) {
+                return;
+            }
+
+            if (!EXTEfx.alIsAuxiliaryEffectSlot(auxFXSlot)) {
+                System.err.println("auxFXSlot " + auxFXSlot + " is not valid in the current context");
+                cleanupEFXResources();
+                initializeReverb();
                 return;
             }
 
@@ -350,7 +358,7 @@ public class OpenALEffectsHandler {
      */
 
     public void initializeReverb() { // get default context
-        if (efxInitialized) return;
+        if (efxInitialized) cleanupEFXResources();
         try {
             long currentContext = ALC10.alcGetCurrentContext();
             long device = ALC10.alcGetContextsDevice(currentContext);
@@ -360,7 +368,7 @@ public class OpenALEffectsHandler {
         }
     }
     public void initializeReverb(long currentContext, long currentDevice) {
-        if (efxInitialized) return;
+        if (efxInitialized) cleanupEFXResources(); // restart audio engine ig
 
         try {
             // Check if EFX is available
@@ -473,6 +481,13 @@ public class OpenALEffectsHandler {
             float lowpassGainHF = lerp(1.0f, 0.1f, muffleStrength);   // High frequency attenuation
 
             // Apply low-pass filter (main muffling effect)
+            if (!EXTEfx.alIsAuxiliaryEffectSlot(auxFXSlot)) { // smth aint right.
+                System.err.println("Muffle Filter isn't defined properly");
+                cleanupEFXResources();
+                initializeReverb();
+                return;
+            }
+
             if (muffleFilter != -1) {
                 EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAIN, lowpassGain);
                 EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAINHF, lowpassGainHF);

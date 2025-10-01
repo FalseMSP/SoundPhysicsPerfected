@@ -4,23 +4,24 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.redsmods.sound_physics_perfected.OpenALEffectsHandler;
 import de.maxhenkel.voicechat.api.events.*;
 import de.maxhenkel.voicechat.api.ForgeVoicechatPlugin;
 import de.maxhenkel.voicechat.api.Position;
 import de.maxhenkel.voicechat.api.VoicechatApi;
 import de.maxhenkel.voicechat.api.VoicechatPlugin;
+import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import com.redsmods.sound_physics_perfected.OpenALEffectsHandler;
 
 @ForgeVoicechatPlugin
 public class SVC implements VoicechatPlugin {
 
     private final Map<UUID, VoiceChannelData> audioChannels;
-    private final OpenALEffectsHandler VCfxHandler = new OpenALEffectsHandler();
+    private final OpenALEffectsHandler fxHandler = new OpenALEffectsHandler();
 
     public SVC() {
         audioChannels = new HashMap<>();
@@ -52,7 +53,7 @@ public class SVC implements VoicechatPlugin {
         // Your OpenAL initialization code here
         long context = event.getContext();
         long device = event.getDevice();
-        VCfxHandler.initializeReverb(context,device);
+        fxHandler.initializeReverb(context,device);
         System.out.println("succ init openal yipee");
     }
 
@@ -93,18 +94,11 @@ public class SVC implements VoicechatPlugin {
 
         Vec3 listenerPos = mc.player.position();
 
-        // Calculate environment data
-        EnvironmentData envData = analyzeEnvironment(mc.level, listenerPos, sourcePos);
+        // Calculate occlusion
+        float occlusion = calculateOcclusion(mc.level, listenerPos, sourcePos);
 
         // Apply your OpenAL effects using the source ID
-        applyOpenALEffects(openALSource, envData);
-    }
-
-    private EnvironmentData analyzeEnvironment(Level level, Vec3 listener, Vec3 source) {
-        float occlusionFactor = calculateOcclusion(level, listener, source);
-        float distance = (float) listener.distanceTo(source);
-
-        return new EnvironmentData(occlusionFactor, distance);
+        applyOpenALEffects(openALSource, occlusion);
     }
 
     private float calculateOcclusion(Level level, Vec3 listener, Vec3 source) {
@@ -151,19 +145,13 @@ public class SVC implements VoicechatPlugin {
         return 0.7f; // Default occlusion
     }
 
-    private void applyOpenALEffects(int openALSource, EnvironmentData envData) {
-        // Here's where you call your existing OpenAL effects methods
-        // Replace these with actual calls to your effects handler
-
+    private void applyOpenALEffects(int openALSource, float occlusion) {
         try {
-            // Example calls - replace with your actual method signatures:
-//            VCfxHandler.applyReverbToSource(openALSource);
-             VCfxHandler.applyMuffleToSource(openALSource, envData.occlusionFactor);
-            // effectsHandler.setDistanceAttenuation(openALSource, envData.distance);
+            fxHandler.applyReverbToSource(openALSource);
+            fxHandler.applyMuffleToSource(openALSource, occlusion);
 
-            System.out.println("Applying effects to OpenAL source: " + openALSource +
-                    ", occlusion: " + String.format("%.2f", envData.occlusionFactor) +
-                    ", distance: " + String.format("%.2f", envData.distance));
+//            System.out.println("Applying effects to OpenAL source: " + openALSource +
+//                    ", occlusion: " + String.format("%.2f", occlusion));
 
         } catch (Exception e) {
             System.err.println("Failed to apply OpenAL effects: " + e.getMessage());
@@ -173,9 +161,13 @@ public class SVC implements VoicechatPlugin {
 
     // Data classes
     public static class VoiceChannelData {
+        @Getter
         private final UUID channelId;
+        @Getter
         private int lastSource = -1;
+        @Getter
         private Vec3 lastPosition;
+        @Getter
         private String lastCategory;
         private long lastUpdateTime;
 
@@ -195,24 +187,5 @@ public class SVC implements VoicechatPlugin {
             // Remove if not updated for 5 seconds
             return System.currentTimeMillis() - lastUpdateTime > 5000;
         }
-
-        public UUID getChannelId() { return channelId; }
-        public int getLastSource() { return lastSource; }
-        public Vec3 getLastPosition() { return lastPosition; }
-        public String getLastCategory() { return lastCategory; }
-    }
-
-    public static class EnvironmentData {
-        public final float occlusionFactor;
-        public final float distance;
-
-        public EnvironmentData(float occlusionFactor, float distance) {
-            this.occlusionFactor = occlusionFactor;
-            this.distance = distance;
-        }
-    }
-
-    public enum ReverbType {
-        GENERIC, OUTDOORS, ROOM, CAVE, CATHEDRAL, PADDED_CELL, BATHROOM
     }
 }
