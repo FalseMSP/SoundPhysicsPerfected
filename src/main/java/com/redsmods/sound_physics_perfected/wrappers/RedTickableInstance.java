@@ -20,7 +20,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     private final ResourceLocation location;
     private final Sound sound;
     private final SoundSource source;
-    private final Vec3 direction;
+    @Setter private Vec3 direction;
     @Delegate private SoundInstance wrapped;
     private double x;
     private double y;
@@ -176,8 +176,8 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     public float getVolume() {
         if (!Config.getInstance().experimentalReverb) return volume;
-        if(direction.length() == 0) return volume;
-        if (Config.getInstance().attenuationType.equals(RedsAttenuationType.VERCIDIUM_LINEAR) || Config.getInstance().attenuationType.equals(RedsAttenuationType.LINEAR)) return (float) (volume / direction.length()); // get volume without attenuation LINEAR
-        return (float) (volume / Math.pow(direction.length(),2)); // get volume without attenuation INVERSE_SQUARE
+        if(direction.length() < 1) return volume;
+        if (Config.getInstance().attenuationType.equals(RedsAttenuationType.VERCIDIUM_LINEAR) || Config.getInstance().attenuationType.equals(RedsAttenuationType.LINEAR)) return (float) (volume * direction.length()); // get volume without attenuation LINEAR
+        return (float) (volume * Math.pow(direction.length(),2)); // get volume without attenuation INVERSE_SQUARE
     }
 }
