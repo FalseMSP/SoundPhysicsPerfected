@@ -488,7 +488,9 @@ public class RaycastingHelper {
                             soundEntity
                     );
 
-                    RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight,0,bounce);
+                    Vec3d direction = currentPos.subtract(entityCenter);
+                    Vec3d normalVector = direction.normalize();
+                    RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight,0,bounce);
 
                     rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
                     entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
@@ -544,7 +546,9 @@ public class RaycastingHelper {
                         soundEntity
                 );
 
-                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight, 0, bounces);
+                Vec3d direction = currentPos.subtract(entityCenter);
+                Vec3d normalVector = direction.normalize();
+                RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
                 entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
@@ -584,7 +588,9 @@ public class RaycastingHelper {
                         data
                 );
 
-                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight, 0, bounces);
+                Vec3d direction = currentPos.subtract(entityCenter);
+                Vec3d normalVector = direction.normalize();
+                RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
                 entityRayHitCounts.merge(data, 1, Integer::sum);
@@ -743,8 +749,9 @@ public class RaycastingHelper {
                     initialDirection,
                     soundEntity
             );
-
-            RayHitData hitData = new RayHitData(rayResult, initialDirection, weight, permeationAbsorption, bounces);
+            Vec3d direction = currentPos.subtract(entityCenter);
+            Vec3d normalVector = direction.normalize();
+            RayHitData hitData = new RayHitData(rayResult, normalVector, weight, permeationAbsorption, bounces);
 
             if (blockCount == 0) {
                 rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
@@ -773,7 +780,9 @@ public class RaycastingHelper {
                     initialDirection,
                     data
             );
-            RayHitData hitData = new RayHitData(rayResult, initialDirection, weight, permeationAbsorption, bounces);
+            Vec3d direction = currentPos.subtract(entityCenter);
+            Vec3d normalVector = direction.normalize();
+            RayHitData hitData = new RayHitData(rayResult, normalVector, weight, permeationAbsorption, bounces);
             redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
         }
 
@@ -809,8 +818,10 @@ public class RaycastingHelper {
                         initialDirection,
                         data
                 );
-
-                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight, 0, bounces);
+                
+                Vec3d direction = currentPos.subtract(entityCenter);
+                Vec3d normalVector = direction.normalize();
+                RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
                 entityRayHitCounts.merge(data, 1, Integer::sum);
