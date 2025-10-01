@@ -36,7 +36,7 @@
 		"labymod": "*",
 		"ichor": "*"
 	},
-	"sugguests": {
+	"suggests": {
 		"voicechat": ">=${mcdep}-${voicechat_api_version}"
 	},
 	"custom": {
