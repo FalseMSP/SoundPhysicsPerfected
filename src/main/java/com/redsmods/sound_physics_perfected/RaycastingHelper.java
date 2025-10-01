@@ -244,9 +244,9 @@ public class RaycastingHelper {
                 ((RedTickableInstance) originalSound).setTargetVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
                 return;
             } else if (((RedSoundInstance) originalSound) instanceof TickableSoundInstance) {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, new Vec3(originalSound.getX(), originalSound.getY(), originalSound.getZ()),baseVolume);
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, avgData.averageDirection.scale(avgData.averageDistance), baseVolume);
             } else {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound,new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ()),baseVolume);
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, avgData.averageDirection.scale(avgData.averageDistance),baseVolume);
             }
 
             soundInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(),newSound);
@@ -487,10 +487,7 @@ public class RaycastingHelper {
                             initialDirection,
                             soundEntity
                     );
-
-                    Vec3d direction = currentPos.subtract(entityCenter);
-                    Vec3d normalVector = direction.normalize();
-                    RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight,0,bounce);
+                    RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight,0,bounce);
 
                     rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
                     entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
@@ -546,8 +543,8 @@ public class RaycastingHelper {
                         soundEntity
                 );
 
-                Vec3d direction = currentPos.subtract(entityCenter);
-                Vec3d normalVector = direction.normalize();
+                Vec3 direction = currentPos.subtract(entityCenter);
+                Vec3 normalVector = direction.normalize();
                 RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
@@ -588,8 +585,8 @@ public class RaycastingHelper {
                         data
                 );
 
-                Vec3d direction = currentPos.subtract(entityCenter);
-                Vec3d normalVector = direction.normalize();
+                Vec3 direction = currentPos.subtract(entityCenter);
+                Vec3 normalVector = direction.normalize();
                 RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
@@ -749,8 +746,8 @@ public class RaycastingHelper {
                     initialDirection,
                     soundEntity
             );
-            Vec3d direction = currentPos.subtract(entityCenter);
-            Vec3d normalVector = direction.normalize();
+            Vec3 direction = currentPos.subtract(entityCenter);
+            Vec3 normalVector = direction.normalize();
             RayHitData hitData = new RayHitData(rayResult, normalVector, weight, permeationAbsorption, bounces);
 
             if (blockCount == 0) {
@@ -780,8 +777,8 @@ public class RaycastingHelper {
                     initialDirection,
                     data
             );
-            Vec3d direction = currentPos.subtract(entityCenter);
-            Vec3d normalVector = direction.normalize();
+            Vec3 direction = currentPos.subtract(entityCenter);
+            Vec3 normalVector = direction.normalize();
             RayHitData hitData = new RayHitData(rayResult, normalVector, weight, permeationAbsorption, bounces);
             redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
         }
@@ -819,8 +816,8 @@ public class RaycastingHelper {
                         data
                 );
                 
-                Vec3d direction = currentPos.subtract(entityCenter);
-                Vec3d normalVector = direction.normalize();
+                Vec3 direction = currentPos.subtract(entityCenter);
+                Vec3 normalVector = direction.normalize();
                 RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);

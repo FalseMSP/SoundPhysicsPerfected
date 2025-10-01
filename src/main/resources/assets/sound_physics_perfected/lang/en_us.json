@@ -102,6 +102,9 @@
       "reverbTuning.description": "Debug for finding what values are coming out of Blue ray casting.",
       "legacyReverb": "Legacy Reverb",
       "legacyReverb.description": "Switches reverb mode to different versions TUNING IS NOT ALWAYS AVAILABLE",
+      "experimentalReverb": "Experimental Reverb",
+      "experimentalReverb.description": "Enables an experimental reverb which allows reverb to be louder than ",
+
       "globalReverbIntensity": "Global Reverb Intensity",
       "globalReverbIntensity.description": "Overall reverb intensity multiplier\\nHigher = more intense reverb",
       "indoorBias": "Indoor Bias",

@@ -166,6 +166,11 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.legacyReverb.description")
     @SerialEntry public LegacyReverb legacyReverb = LegacyReverb.MODERN;
 
+    @AutoGen(category = "reverb_tuning", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.experimentalReverb.description")
+    @SerialEntry public boolean experimentalReverb = false;
+
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")

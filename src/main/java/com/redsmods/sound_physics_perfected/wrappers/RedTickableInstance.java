@@ -2,6 +2,7 @@ package com.redsmods.sound_physics_perfected.wrappers;
 
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
 import com.redsmods.sound_physics_perfected.config.Config;
+import com.redsmods.sound_physics_perfected.config.RedsAttenuationType;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Delegate;
@@ -19,6 +20,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     private final ResourceLocation location;
     private final Sound sound;
     private final SoundSource source;
+    private final Vec3 direction;
     @Delegate private SoundInstance wrapped;
     private double x;
     private double y;
@@ -29,9 +31,9 @@ public class RedTickableInstance implements TickableSoundInstance {
     private int tickCount;
     @Setter private Vec3 targetPosition;
     @Setter private float targetVolume;
-    private boolean isBlacklisted;
+    private final boolean isBlacklisted;
 
-    public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped, Vec3 originalPosition, float originalVolume) {
+    public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped, Vec3 direction, float originalVolume) {
         this.location = location;
         this.sound = sound;
         this.source = source;
@@ -42,6 +44,7 @@ public class RedTickableInstance implements TickableSoundInstance {
         this.volume = volume;
         this.pitch = pitch;
         this.wrapped = wrapped;
+        this.direction = direction;
         tickCount = 0;
         targetPosition = position;
         targetVolume = volume;
@@ -73,7 +76,8 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     @Override
     public Attenuation getAttenuation() {
-        return Attenuation.NONE;
+        if (Config.getInstance().experimentalReverb) return Attenuation.LINEAR;
+        else return Attenuation.NONE;
     }
 
     public void stop() {
@@ -168,5 +172,12 @@ public class RedTickableInstance implements TickableSoundInstance {
         return blacklist.stream()
                 .filter(entry -> entry != null && !entry.trim().isEmpty()) // filter out null/empty entries
                 .anyMatch(entry -> soundName.toLowerCase().contains(entry.toLowerCase().trim()));
+    }
+
+    public float getVolume() {
+        if (!Config.getInstance().experimentalReverb) return volume;
+        if(direction.length() == 0) return volume;
+        if (Config.getInstance().attenuationType.equals(RedsAttenuationType.VERCIDIUM_LINEAR) || Config.getInstance().attenuationType.equals(RedsAttenuationType.LINEAR)) return (float) (volume / direction.length()); // get volume without attenuation LINEAR
+        return (float) (volume / Math.pow(direction.length(),2)); // get volume without attenuation INVERSE_SQUARE
     }
 }
