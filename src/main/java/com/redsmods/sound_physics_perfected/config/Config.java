@@ -387,4 +387,14 @@ public class Config {
     @FloatField(min = 0, max = 10000)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.diffusionReverbWeight.description")
     @SerialEntry public float diffusionReverbWeight = 1.0f;
+
+    @AutoGen(category = "voicechat", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.voicechatReverb.description")
+    @SerialEntry public boolean voicechatReverb = true;
+
+    @AutoGen(category = "voicechat", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.voicechatMuffle.description")
+    @SerialEntry public boolean voicechatMuffle = true;
 }

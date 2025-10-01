@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.redsmods.sound_physics_perfected.OpenALEffectsHandler;
+import com.redsmods.sound_physics_perfected.config.Config;
 import de.maxhenkel.voicechat.api.events.*;
 import de.maxhenkel.voicechat.api.ForgeVoicechatPlugin;
 import de.maxhenkel.voicechat.api.Position;
@@ -147,8 +148,8 @@ public class SVC implements VoicechatPlugin {
 
     private void applyOpenALEffects(int openALSource, float occlusion) {
         try {
-            fxHandler.applyReverbToSource(openALSource);
-            fxHandler.applyMuffleToSource(openALSource, occlusion);
+            if(Config.getInstance().voicechatReverb)  fxHandler.applyReverbToSource(openALSource);
+            if(Config.getInstance().voicechatMuffle)  fxHandler.applyMuffleToSource(openALSource, occlusion);
 
 //            System.out.println("Applying effects to OpenAL source: " + openALSource +
 //                    ", occlusion: " + String.format("%.2f", occlusion));

@@ -43,6 +43,7 @@
         },
         "reverb_tuning": "Reverb Tuning",
         "reverb_tuning.group": {
+          "main": "Main",
           "global": "Global",
           "distance_and_attenuation": "Distance and Attenuation",
           "room_size_and_volume": "Room Size and Volume",
@@ -57,6 +58,10 @@
           "rolloff": "Rolloff",
           "rt60": "RT60 Calculation",
           "interpolation_weights": "Interpolation Weights"
+        },
+        "voicechat": "Voice Chat",
+        "voicechat.group": {
+          "main": "Main"
         },
         "blacklist": "Blacklist"
       },
@@ -177,7 +182,12 @@
       "soundBlacklist": "Blacklist for Proccessing",
       "soundBlacklist.description": "Does not have to be a full match, will blacklist anything that CONTAINS that name",
       "soundTickBlacklist": "Blacklist for Ticking",
-      "soundTickBlacklist.description": "Does not have to be a full match, will blacklist anything that CONTAINS that name"
+      "soundTickBlacklist.description": "Does not have to be a full match, will blacklist anything that CONTAINS that name",
+
+      "voicechatReverb": "Reverb",
+      "voicechatReverb.description": "Enables Reverb for Voicechat",
+      "voicechatMuffle": "Muffle",
+      "voicechatMuffle.description": "Muffle for Voicechat"
     }
   }
 }
