@@ -95,6 +95,8 @@
       "permeationAbsorption.description": "Volume is multiplied by x^blocksTraveled where x is the value set here for muffle",
       "barrierAsAir": "Treat Barriers As Air",
       "barrierAsAir.description": "Make it so barriers do NOT absorb sound",
+      "shortcutDirectionality": "Shortcut Directionality",
+      "shortcutDirectionality.description": "if direct LOS, use that directionality instead of ray traced \\n this removes weird audio panning when having directionality",
 
       "reverbTuning": "Reverb Debug",
       "reverbTuning.description": "Debug for finding what values are coming out of Blue ray casting.",

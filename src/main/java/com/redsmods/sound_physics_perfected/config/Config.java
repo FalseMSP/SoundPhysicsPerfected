@@ -122,6 +122,11 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.barrierAsAir.description")
     @SerialEntry public boolean barrierAsAir = true;
 
+    @AutoGen(category = "general", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.shortcutDirectionality.description")
+    @SerialEntry public boolean shortcutDirectionality = true;
+
 
 
     public static class StringValueFactory implements ListGroup.ValueFactory<String> {

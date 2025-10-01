@@ -413,9 +413,9 @@ public class RaycastingHelper {
 
 
         if (Config.getInstance().permeation)
-            castRedRay(world, player, startPos, soundQueue, totalDistanceTraveled, initialDirection);
+            castRedRay(world, player, startPos, soundQueue, totalDistanceTraveled, initialDirection, -1);
         else
-            castGreenRay(world, player, startPos, soundQueue, totalDistanceTraveled, initialDirection);
+            castGreenRay(world, player, startPos, soundQueue, totalDistanceTraveled, initialDirection, -1);
 
         for (int bounce = 0; bounce <= Config.getInstance().raysBounced && remainingDistance > 0; bounce++) {
             double segmentDistance = Math.min(16.0 * Config.getInstance().maxRayLength, remainingDistance);
@@ -463,9 +463,9 @@ public class RaycastingHelper {
                     }
                 }
                 if (Config.getInstance().permeation)
-                    castRedRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
+                    castRedRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection, bounce);
                 else
-                    castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection);
+                    castGreenRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection, bounce);
             }
             if (hitBlock) {
                 Vec3 hitPos = blockHit.getLocation();
@@ -488,7 +488,7 @@ public class RaycastingHelper {
                             soundEntity
                     );
 
-                    RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight,0);
+                    RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight,0,bounce);
 
                     rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
                     entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
@@ -513,7 +513,7 @@ public class RaycastingHelper {
     }
 
     private static void castGreenRay(Level world, Player player, Vec3 currentPos, Queue<SoundData> entities,
-                                     double currentDistance, Vec3 initialDirection) {
+                                     double currentDistance, Vec3 initialDirection, int bounces) {
         for (SoundData soundEntity : entities) {
             rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()); // make sure all sounds are proc'd even if they aren't audible at first (makes discs work lmao)
             Vec3 entityCenter = soundEntity.position;
@@ -544,7 +544,7 @@ public class RaycastingHelper {
                         soundEntity
                 );
 
-                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight, 0);
+                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
                 entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
@@ -584,7 +584,7 @@ public class RaycastingHelper {
                         data
                 );
 
-                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight, 0);
+                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
                 entityRayHitCounts.merge(data, 1, Integer::sum);
@@ -723,7 +723,7 @@ public class RaycastingHelper {
     }
 
     private static void castRedRay(Level world, Player player, Vec3 currentPos, Queue<SoundData> entities,
-                                   double currentDistance, Vec3 initialDirection) {
+                                   double currentDistance, Vec3 initialDirection, int bounces) {
         for (SoundData soundEntity : entities) {
             rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()); // make sure all sounds are proc'd even if they aren't audible at first (makes discs work lmao)
             redRaysToTarget.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>());
@@ -744,7 +744,7 @@ public class RaycastingHelper {
                     soundEntity
             );
 
-            RayHitData hitData = new RayHitData(rayResult, initialDirection, weight, permeationAbsorption);
+            RayHitData hitData = new RayHitData(rayResult, initialDirection, weight, permeationAbsorption, bounces);
 
             if (blockCount == 0) {
                 rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
@@ -773,7 +773,7 @@ public class RaycastingHelper {
                     initialDirection,
                     data
             );
-            RayHitData hitData = new RayHitData(rayResult, initialDirection, weight, permeationAbsorption);
+            RayHitData hitData = new RayHitData(rayResult, initialDirection, weight, permeationAbsorption, bounces);
             redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
         }
 
@@ -810,7 +810,7 @@ public class RaycastingHelper {
                         data
                 );
 
-                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight, 0);
+                RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
                 entityRayHitCounts.merge(data, 1, Integer::sum);
@@ -840,9 +840,13 @@ public class RaycastingHelper {
         double totalMuffle = 0.0;
         double weightedDistanceSum = 0.0;
         Vec3 weightedDirectionSum = Vec3.ZERO;
+        Vec3 absDirection = null;
 
         // Calculate weighted sums
         for (RayHitData rayHit : rayHits) {
+            if (rayHit.bounces == -1 && Config.getInstance().shortcutDirectionality) { // direct LOS means it is exactly where you think
+                absDirection = rayHit.direction;
+            }
             double weight = rayHit.weight;
             totalWeight += weight;
             totalMuffle += rayHit.muffleFac;
@@ -854,6 +858,11 @@ public class RaycastingHelper {
             Vec3 weightedDirection = rayHit.rayResult.initialDirection.scale(weight);
             weightedDirectionSum = weightedDirectionSum.add(weightedDirection);
         }
+
+        if (absDirection != null) {
+            weightedDirectionSum = absDirection;
+        }
+
         if (totalWeight == 0.0)
             return new AveragedSoundData(entity, weightedDirectionSum, weightedDistanceSum,
                     totalWeight, rayHits.size(), rayHits);
