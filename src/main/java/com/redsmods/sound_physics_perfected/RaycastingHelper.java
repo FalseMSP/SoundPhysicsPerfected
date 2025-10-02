@@ -927,46 +927,41 @@ public class RaycastingHelper {
                 break;
             }
 
-            // Only count solid blocks (not air)
-            if (!blockState.isAir()) {
-                // Calculate the distance traveled through this specific block
-                Vec3 direction = end.subtract(currentStart).normalize();
+            // Calculate the distance traveled through this specific block
+            Vec3 direction = end.subtract(currentStart).normalize();
 
-                // Get the block's bounding box
-                VoxelShape blockShape = blockState.getShape(world, hitBlockPos);
-                AABB blockBounds;
-                if (!blockShape.isEmpty()) {
-                    blockBounds = blockShape.bounds().move(hitBlockPos);
-                } else {
-                    blockBounds = new AABB(
-                            hitBlockPos.getX(), hitBlockPos.getY(), hitBlockPos.getZ(),
-                            hitBlockPos.getX() + 1, hitBlockPos.getY() + 1, hitBlockPos.getZ() + 1
-                    );
-                }
+            // Get the block's bounding box
+            VoxelShape blockShape = blockState.getShape(world, hitBlockPos);
+            AABB blockBounds;
+            if (!blockShape.isEmpty()) {
+                blockBounds = blockShape.bounds().move(hitBlockPos);
+            } else {
+                blockBounds = new AABB(
+                        hitBlockPos.getX(), hitBlockPos.getY(), hitBlockPos.getZ(),
+                        hitBlockPos.getX() + 1, hitBlockPos.getY() + 1, hitBlockPos.getZ() + 1
+                );
+            }
 
-                // Find the exit point by moving along the ray direction until we're outside the block
-                Vec3 exitPoint = hit.getLocation();
-                double step = Config.getInstance().permeationStepSize; // Small step size for precision
+            // Find the exit point by moving along the ray direction until we're outside the block
+            Vec3 exitPoint = hit.getLocation();
+            double step = Config.getInstance().permeationStepSize; // Small step size for precision
 
-                while (blockBounds.contains(exitPoint)) {
-                    exitPoint = exitPoint.add(direction.scale(step));
-                }
+            while (blockBounds.contains(exitPoint)) {
+                exitPoint = exitPoint.add(direction.scale(step));
+            }
 
-                // Calculate distance traveled within this block
-                double distanceInBlock = hit.getLocation().distanceTo(exitPoint);
-                double absorptionIndex = 1;
+            // Calculate distance traveled within this block
+            double distanceInBlock = hit.getLocation().distanceTo(exitPoint);
+            double absorptionIndex = 1;
 //                if (world.getBlockState(hit.getBlockPos()).getBlock() == Blocks.BARRIER && Config.getInstance().barrierAsAir)
 //                    absorptionIndex = 0.01;
-                totalDistanceInBlocks += distanceInBlock * absorptionIndex;
-                //else
-                    // don't add if the block is a barrier
+            totalDistanceInBlocks += distanceInBlock * absorptionIndex;
+            //else
+                // don't add if the block is a barrier
 
 
-                // Add a small buffer to ensure we're clearly outside
-                currentStart = exitPoint.add(direction.scale(0.01));
-            } else {
-                throw new RuntimeException("Why tf is the raycasting getting stuck within air... WHAT HAVE YOU DONE!!!");
-            }
+            // Add a small buffer to ensure we're clearly outside
+            currentStart = exitPoint.add(direction.scale(0.01));
 
             // Check if we've passed the end point
             if (currentStart.distanceTo(start) >= end.distanceTo(start)) {

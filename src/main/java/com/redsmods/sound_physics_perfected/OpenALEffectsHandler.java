@@ -32,10 +32,10 @@ public class OpenALEffectsHandler {
 
             if (Config.getInstance().reverbTuning == DebugType.CHAT) {
                 Minecraft client = Minecraft.getInstance();
-                client.player.displayClientMessage(Component.literal(reverbData.toString()), false);
+                if (client.player != null) client.player.displayClientMessage(Component.literal(reverbData.toString()), false);
             } else if (Config.getInstance().reverbTuning == DebugType.ACTION_BAR) {
                 Minecraft client = Minecraft.getInstance();
-                client.player.displayClientMessage(Component.literal(reverbData.toString()), true);
+                if (client.player != null) client.player.displayClientMessage(Component.literal(reverbData.toString()), true);
             }
 
             if (RaycastingHelper.getDistanceFromWallEchoDenom() == 0 ||
