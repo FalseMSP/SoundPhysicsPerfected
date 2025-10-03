@@ -547,7 +547,7 @@ public class RaycastingHelper {
                         soundEntity
                 );
 
-                Vec3 direction = currentPos.subtract(entityCenter);
+                Vec3 direction = entityCenter.subtract(currentPos);
                 Vec3 normalVector = direction.normalize();
                 RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
@@ -589,7 +589,7 @@ public class RaycastingHelper {
                         data
                 );
 
-                Vec3 direction = currentPos.subtract(entityCenter);
+                Vec3 direction = entityCenter.subtract(currentPos);
                 Vec3 normalVector = direction.normalize();
                 RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
@@ -750,7 +750,7 @@ public class RaycastingHelper {
                     initialDirection,
                     soundEntity
             );
-            Vec3 direction = currentPos.subtract(entityCenter);
+            Vec3 direction = entityCenter.subtract(currentPos);
             Vec3 normalVector = direction.normalize();
             RayHitData hitData = new RayHitData(rayResult, normalVector, weight, permeationAbsorption, bounces);
 
@@ -781,7 +781,7 @@ public class RaycastingHelper {
                     initialDirection,
                     data
             );
-            Vec3 direction = currentPos.subtract(entityCenter);
+            Vec3 direction = entityCenter.subtract(currentPos);
             Vec3 normalVector = direction.normalize();
             RayHitData hitData = new RayHitData(rayResult, normalVector, weight, permeationAbsorption, bounces);
             redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
@@ -819,8 +819,8 @@ public class RaycastingHelper {
                         initialDirection,
                         data
                 );
-                
-                Vec3 direction = currentPos.subtract(entityCenter);
+
+                Vec3 direction = entityCenter.subtract(currentPos);
                 Vec3 normalVector = direction.normalize();
                 RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
