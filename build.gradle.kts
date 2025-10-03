@@ -86,7 +86,6 @@ loom.runs {
 
         configureEach {
             vmArg("-javaagent:$mixinJarFile") // Mixin Hotswap doesn't work on NeoForge, but doesn't hurt to keep
-            vmArg("-XX:+AllowEnhancedClassRedefinition")
 
             property("mixin.hotSwap", "true")
             property("mixin.debug.export", "true") // Puts mixin outputs in /run/.mixin.out
