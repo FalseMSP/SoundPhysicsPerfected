@@ -853,11 +853,13 @@ public class RaycastingHelper {
         double weightedDistanceSum = 0.0;
         Vec3 weightedDirectionSum = Vec3.ZERO;
         Vec3 absDirection = null;
+        double absDistance = -1;
 
         // Calculate weighted sums
         for (RayHitData rayHit : rayHits) {
             if (rayHit.bounces == -1 && Config.getInstance().shortcutDirectionality) { // direct LOS means it is exactly where you think
                 absDirection = rayHit.direction;
+                absDistance = rayHit.rayResult.totalDistance;
             }
             double weight = rayHit.weight;
             totalWeight += weight;
@@ -873,6 +875,7 @@ public class RaycastingHelper {
 
         if (absDirection != null) {
             weightedDirectionSum = absDirection;
+            weightedDistanceSum = absDistance;
         }
 
         if (totalWeight == 0.0)
