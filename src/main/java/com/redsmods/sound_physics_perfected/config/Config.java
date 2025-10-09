@@ -68,6 +68,12 @@ public class Config {
     @SerialEntry public float soundMult = 1; // make it just work like default Minecraft for lag helping :)
 
     @AutoGen(category = "general", group = "main")
+    @FloatSlider(min = 0, max = 10, step = 0.1f)
+    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.volumeMultiplier.description")
+    @SerialEntry public float volumeMultiplier = 1;
+
+    @AutoGen(category = "general", group = "main")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.reverb.description")
     @SerialEntry public boolean reverb = true;

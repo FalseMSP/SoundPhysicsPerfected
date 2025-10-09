@@ -175,9 +175,10 @@ public class RedTickableInstance implements TickableSoundInstance {
     }
 
     public float getVolume() {
-        if (!Config.getInstance().experimentalReverb) return volume;
-        if(direction.length() < 1) return volume;
-        if (Config.getInstance().attenuationType.equals(RedsAttenuationType.VERCIDIUM_LINEAR) || Config.getInstance().attenuationType.equals(RedsAttenuationType.LINEAR)) return (float) (volume * direction.length()); // get volume without attenuation LINEAR
-        return (float) (volume * Math.pow(direction.length(),2)); // get volume without attenuation INVERSE_SQUARE
+        float vol = volume * Config.getInstance().volumeMultiplier;
+        if (!Config.getInstance().experimentalReverb) return vol;
+        if(direction.length() < 1) return vol;
+        if (Config.getInstance().attenuationType.equals(RedsAttenuationType.VERCIDIUM_LINEAR) || Config.getInstance().attenuationType.equals(RedsAttenuationType.LINEAR)) return (float) (vol * direction.length()); // get volume without attenuation LINEAR
+        return (float) (vol * Math.pow(direction.length(),2)); // get volume without attenuation INVERSE_SQUARE
     }
 }

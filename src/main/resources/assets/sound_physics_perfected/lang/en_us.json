@@ -75,6 +75,8 @@
       "tickRate.description": "How often sounds' positions should be updated\\n(0 is off)\\n(1 = every tick -> 20 = every second)\\nPERFORMANCE IMPACT: MEDIUM",
       "soundMult": "Max Sound Distance Multiplier",
       "soundMult.description": "1 is just default Minecraft sound dist\\nPERFORMANCE IMPACT: HIGH",
+      "volumeMultiplier": "Volume Multiplier",
+      "volumeMultiplier.description": "exactly what it sounds like, you can make sounds louder if u want ig.",
       "reverb": "Reverb",
       "reverb.description": "Cast Blue (Reverb Detecting) Rays and add reverb dynamically to sources\\nPERFORMANCE IMPACT: MEDIUM",
       "permeation": "Permeation",
