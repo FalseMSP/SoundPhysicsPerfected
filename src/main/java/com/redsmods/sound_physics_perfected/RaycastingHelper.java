@@ -890,7 +890,7 @@ public class RaycastingHelper {
     }
 
 
-    private static double countBlocksBetween(Level world, Vec3 start, Vec3 end, Player player) {
+    public static double countBlocksBetween(Level world, Vec3 start, Vec3 end, Player player) {
         double totalDistanceInBlocks = 0;
         Vec3 currentStart = start;
 

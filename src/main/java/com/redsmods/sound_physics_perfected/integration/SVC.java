@@ -18,6 +18,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
+import static com.redsmods.sound_physics_perfected.RaycastingHelper.countBlocksBetween;
+
 @ForgeVoicechatPlugin
 public class SVC implements VoicechatPlugin {
 
@@ -96,33 +98,10 @@ public class SVC implements VoicechatPlugin {
         Vec3 listenerPos = mc.player.position();
 
         // Calculate occlusion
-        float occlusion = calculateOcclusion(mc.level, listenerPos, sourcePos);
+        float occlusion = Math.pow(Config.getInstance().permeationAbsorption,countBlocksBetween(mc.level, listenerPos, sourcePos,mc.player));
 
         // Apply your OpenAL effects using the source ID
         applyOpenALEffects(openALSource, occlusion);
-    }
-
-    private float calculateOcclusion(Level level, Vec3 listener, Vec3 source) {
-        float occlusionFactor = 0.0f;
-        float distance = (float) listener.distanceTo(source);
-
-        // Raycast between listener and source
-        int steps = Math.max(1, (int) distance);
-        Vec3 direction = source.subtract(listener).normalize();
-
-        for (int i = 1; i <= steps; i++) {
-            Vec3 checkPos = listener.add(direction.scale(i));
-            BlockPos blockPos = new BlockPos((int) checkPos.x, (int) checkPos.y, (int) checkPos.z);
-            BlockState blockState = level.getBlockState(blockPos);
-
-            if (!blockState.isAir()) {
-                // Get material occlusion factor
-                float materialOcclusion = getMaterialOcclusion(blockState);
-                occlusionFactor = Math.min(1.0f, occlusionFactor + materialOcclusion);
-            }
-        }
-
-        return occlusionFactor;
     }
 
     private float getMaterialOcclusion(BlockState blockState) {
