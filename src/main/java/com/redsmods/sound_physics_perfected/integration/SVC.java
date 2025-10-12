@@ -95,7 +95,7 @@ public class SVC implements VoicechatPlugin {
             return;
         }
 
-        Vec3 listenerPos = mc.player.position();
+        Vec3 listenerPos = mc.player.getEyePosition();
 
         // Calculate occlusion
         float occlusion = (float) Math.pow(Config.getInstance().permeationAbsorption,countBlocksBetween(mc.level, listenerPos, sourcePos,mc.player));
