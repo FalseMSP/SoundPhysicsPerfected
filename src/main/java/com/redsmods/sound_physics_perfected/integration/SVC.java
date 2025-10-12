@@ -98,7 +98,7 @@ public class SVC implements VoicechatPlugin {
         Vec3 listenerPos = mc.player.position();
 
         // Calculate occlusion
-        float occlusion = Math.pow(Config.getInstance().permeationAbsorption,countBlocksBetween(mc.level, listenerPos, sourcePos,mc.player));
+        float occlusion = (float) Math.pow(Config.getInstance().permeationAbsorption,countBlocksBetween(mc.level, listenerPos, sourcePos,mc.player));
 
         // Apply your OpenAL effects using the source ID
         applyOpenALEffects(openALSource, occlusion);
