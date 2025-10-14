@@ -98,7 +98,7 @@ public class Config {
     @AutoGen(category = "general", group = "main")
     @EnumCycler
     @CustomDescription("yacl3.config.sound_physics_perfected:config.attenuationType.description")
-    @SerialEntry public RedsAttenuationType attenuationType = RedsAttenuationType.INVERSE_SQUARE;
+    @SerialEntry public RedsAttenuationType attenuationType = RedsAttenuationType.VERCIDIUM_LINEAR;
 
     @AutoGen(category = "general", group = "main")
     @DoubleSlider(min = 1, max = 10, step = 0.05)
