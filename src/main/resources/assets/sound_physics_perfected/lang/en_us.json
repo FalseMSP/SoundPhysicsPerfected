@@ -99,6 +99,8 @@
       "barrierAsAir.description": "Make it so barriers do NOT absorb sound",
       "shortcutDirectionality": "Shortcut Directionality",
       "shortcutDirectionality.description": "if direct LOS, use that directionality instead of ray traced \\n this removes weird audio panning when having directionality",
+      "maxSounds": "Max Sounds",
+      "maxSounds.description": "Maximum # of sounds the mod is allowed to process",
 
       "reverbTuning": "Reverb Debug",
       "reverbTuning.description": "Debug for finding what values are coming out of Blue ray casting.",

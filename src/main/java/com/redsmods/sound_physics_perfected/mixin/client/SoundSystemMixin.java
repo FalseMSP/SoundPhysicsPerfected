@@ -49,8 +49,6 @@ import static org.lwjgl.openal.EXTEfx.*;
 @Mixin(SoundEngine.class)
 public abstract class SoundSystemMixin {
 
-    private static final int MAX_SOUNDS = 100; // Limit queue size to prevent memory issues
-
     @Shadow
     private SoundManager soundManager;
     @Shadow
@@ -110,7 +108,7 @@ public abstract class SoundSystemMixin {
                 soundQueue.offer(soundData);
 
                 // Remove the oldest sounds if queue is too large
-                while (soundQueue.size() > MAX_SOUNDS) {
+                while (soundQueue.size() > Config.getInstance().maxSounds) {
                     soundQueue.poll();
                 }
 

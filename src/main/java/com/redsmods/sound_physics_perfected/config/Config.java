@@ -28,6 +28,7 @@ public class Config {
                     .build())
             .build();
 
+
     public static Screen configScreen(@Nullable Screen parent) {
         return CONFIG.generateGui().generateScreen(parent);
     }
@@ -131,9 +132,11 @@ public class Config {
     @AutoGen(category = "general", group = "main")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.shortcutDirectionality.description")
-    @SerialEntry public boolean shortcutDirectionality = true;
-
-
+    @SerialEntry public boolean shortcutDirectionality = false; // way too many bugs coming from this.
+    @AutoGen(category = "general", group = "main")
+    @IntField(min = 0)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.maxSounds.description")
+    @SerialEntry public int maxSounds = 100;
 
     public static class StringValueFactory implements ListGroup.ValueFactory<String> {
         @Override
