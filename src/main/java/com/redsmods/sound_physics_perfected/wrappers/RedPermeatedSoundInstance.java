@@ -57,7 +57,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
         if (Math.abs(deltaVolume) <= 0.001f || Math.abs(deltaVolume) > maxVolumeChange * Config.getInstance().tickRate) {
             permeationIndex = targetMuffle;
             if (sourceSet && AL10.alIsSource(id))
-                fxHandler.applyMuffleToSource(id,permeationIndex);
+                fxHandler.applyMuffleToSource(id,1-permeationIndex);
             return;
         }
 
