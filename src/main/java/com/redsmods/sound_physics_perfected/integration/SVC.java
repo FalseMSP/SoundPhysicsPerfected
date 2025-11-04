@@ -101,7 +101,7 @@ public class SVC implements VoicechatPlugin {
         float occlusion = (float) Math.pow(Config.getInstance().permeationAbsorption,countBlocksBetween(mc.level, listenerPos, sourcePos,mc.player));
 
         // Apply your OpenAL effects using the source ID
-        applyOpenALEffects(openALSource, occlusion);
+        applyOpenALEffects(openALSource, 1-occlusion);
     }
 
     private float getMaterialOcclusion(BlockState blockState) {
