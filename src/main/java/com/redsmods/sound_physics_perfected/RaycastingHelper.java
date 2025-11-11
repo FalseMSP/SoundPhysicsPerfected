@@ -461,7 +461,7 @@ public class RaycastingHelper {
                     BlueRayResult blueRayResult = castBlueRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection, bounce);
                     if (blueRayResult.arrived) { // cast blue ray and if it makes it back to the player
                         // make it update that as initial direction + set totalDistance
-//                        initialDirection = blueRayResult.directionFromPlayer;
+                        initialDirection = blueRayResult.directionFromPlayer;
                         totalDistanceTraveled = blueRayResult.distance;
                         totalDistanceTraveled *= 1.0/Config.getInstance().bounceAbsorptionMultiplier; // make it so bounce mult is whatever doesn't get absorbed (hmm realism?!)
                     }
@@ -603,11 +603,12 @@ public class RaycastingHelper {
                                                Queue<SoundData> entities, double currentDistance,
                                                Vec3 initialDirection, int bounceNumber) {
         Vec3 entityCenter = player.getBoundingBox().getCenter();
-        Vec3 adjustedPos = currentPos.add(entityCenter.subtract(currentPos).scale(0.87));
-        double distanceToEntity = adjustedPos.distanceTo(entityCenter);
+        Vec3 toPlayer = entityCenter.subtract(currentPos).normalize();
+        Vec3 rayStartPos = currentPos.add(toPlayer.scale(0.1));
+        double distanceToEntity = rayStartPos.distanceTo(entityCenter);
 
         ClipContext raycastContext = new ClipContext(
-                adjustedPos,
+                rayStartPos,
                 entityCenter,
                 ClipContext.Block.COLLIDER,
                 ClipContext.Fluid.NONE,
@@ -615,8 +616,7 @@ public class RaycastingHelper {
         );
 
         BlockHitResult blockHit = world.clip(raycastContext);
-        boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
-                adjustedPos.distanceTo(blockHit.getLocation()) >= distanceToEntity - 0.6;
+        boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK;
 
         // Analyze surface material at bounce point
         if (bounceNumber <= 2) { // Only for early reflections
@@ -641,15 +641,14 @@ public class RaycastingHelper {
             reverbStrength.incrementAndGet();
 
             // Calculate reflection angle for more accurate reverb
-            Vec3 toPlayer = entityCenter.subtract(currentPos).normalize();
-            Vec3 playerToAdjustedPos = adjustedPos.subtract(entityCenter);
+            Vec3 playerToAdjustedPos = rayStartPos.subtract(entityCenter);
             Vec3 reflectionAngle = initialDirection.subtract(toPlayer);
             double angleDeviation = Math.abs(reflectionAngle.length());
 
             // Weight reverb by reflection quality (direct vs scattered)
             double reflectionQuality = Math.max(0.1, 1.0 - angleDeviation);
             weightedReverbStrength.updateAndGet(current -> current + reflectionQuality);
-            return new BlueRayResult(true, playerToAdjustedPos, entityCenter.distanceTo(adjustedPos));
+            return new BlueRayResult(true, playerToAdjustedPos, entityCenter.distanceTo(rayStartPos));
         }
 
         return new BlueRayResult(false,null, -1);
