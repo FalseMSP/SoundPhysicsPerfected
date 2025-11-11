@@ -454,7 +454,7 @@ public class RaycastingHelper {
             double segmentTraveled = currentPos.distanceTo(actualEnd);
             totalDistanceTraveled += segmentTraveled;
             // bounce mult
-            totalDistanceTraveled *= Config.getInstance().rayBounce;
+            totalDistanceTraveled *= bounce;
 
             if (hitBlock) {
                 if (Config.getInstance().reverb) {
@@ -463,7 +463,7 @@ public class RaycastingHelper {
                         // make it update that as initial direction + set totalDistance
                         initialDirection = blueRayResult.directionFromPlayer;
                         totalDistanceTraveled = blueRayResult.distance;
-                        totalDistanceTraveled *= Config.getInstance().rayBounce;
+                        totalDistanceTraveled *= bounce;
                     }
                 }
                 if (Config.getInstance().permeation)
