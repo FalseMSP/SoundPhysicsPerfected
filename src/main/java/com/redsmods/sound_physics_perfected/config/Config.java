@@ -130,6 +130,11 @@ public class Config {
     @SerialEntry public boolean barrierAsAir = true;
 
     @AutoGen(category = "general", group = "main")
+    @DoubleSlider(min = 1.0, max = 2, step = 0.01)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.bounceAbsorptionMultiplier.description")
+    @SerialEntry public double bounceAbsorptionMultiplier = 1.1;
+
+    @AutoGen(category = "general", group = "main")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.shortcutDirectionality.description")
     @SerialEntry public boolean shortcutDirectionality = false; // way too many bugs coming from this.

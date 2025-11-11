@@ -454,16 +454,16 @@ public class RaycastingHelper {
             double segmentTraveled = currentPos.distanceTo(actualEnd);
             totalDistanceTraveled += segmentTraveled;
             // bounce mult
-            totalDistanceTraveled *= bounce;
+            totalDistanceTraveled *= Config.getInstance().bounceAbsorptionMultiplier; // make it so bounce mult is whatever doesn't get absorbed (hmm realism?!)
 
             if (hitBlock) {
                 if (Config.getInstance().reverb) {
                     BlueRayResult blueRayResult = castBlueRay(world, player, actualEnd, soundQueue, totalDistanceTraveled, initialDirection, bounce);
                     if (blueRayResult.arrived) { // cast blue ray and if it makes it back to the player
                         // make it update that as initial direction + set totalDistance
-                        initialDirection = blueRayResult.directionFromPlayer;
+//                        initialDirection = blueRayResult.directionFromPlayer;
                         totalDistanceTraveled = blueRayResult.distance;
-                        totalDistanceTraveled *= bounce;
+                        totalDistanceTraveled *= Config.getInstance().bounceAbsorptionMultiplier; // make it so bounce mult is whatever doesn't get absorbed (hmm realism?!)
                     }
                 }
                 if (Config.getInstance().permeation)

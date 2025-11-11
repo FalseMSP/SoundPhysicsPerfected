@@ -101,6 +101,8 @@
       "shortcutDirectionality.description": "if direct LOS, use that directionality instead of ray traced \\n this removes weird audio panning when having directionality",
       "maxSounds": "Max Sounds",
       "maxSounds.description": "Maximum # of sounds the mod is allowed to process",
+      "bounceAbsorptionMultiplier": "Bounce Absorption",
+      "bounceAbsorptionMultiplier.description": "how much should be absorbed (1.0 is no absorption, 2.0 is volume reduced by 2x)",
 
       "reverbTuning": "Reverb Debug",
       "reverbTuning.description": "Debug for finding what values are coming out of Blue ray casting.",
