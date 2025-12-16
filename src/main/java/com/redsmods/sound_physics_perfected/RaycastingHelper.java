@@ -92,6 +92,7 @@ public class RaycastingHelper {
     private static final ExecutorService soundProcessingExecutor = Executors.newFixedThreadPool(2);
     private static final AtomicBoolean isRaytracing = new AtomicBoolean(false);
     private static final AtomicBoolean freezeTickCounter = new AtomicBoolean(false);
+    public static Vec3 playerEyePos = new Vec3(0,0,0);
 
     static {
         surfaceMaterials.put("default", new ReverbSurfaceData(0.05, 0.7, "medium"));
@@ -109,7 +110,7 @@ public class RaycastingHelper {
                 return; // Already raytracing, ignore this call
             }
 
-            Vec3 playerEyePos = player.getEyePosition();
+            playerEyePos = player.getEyePosition();
             double maxTotalDistance = 16.0 * Config.getInstance().maxRayLength * Config.getInstance().raysBounced; // Max total distance after all bounces
 
             // Clear previous ray hit counts

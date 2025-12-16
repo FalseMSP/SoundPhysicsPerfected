@@ -68,16 +68,7 @@ public abstract class SoundSystemMixin {
         if (!fxHandler.efxInitialized) {
             fxHandler.initializeReverb();
         }
-//        Minecraft client = Minecraft.getInstance();
-//        if (sound instanceof TickableSoundInstance) {
-//            client.particleEngine.createParticle(ParticleTypes.NOTE,
-//                    sound.getX(), sound.getY(), sound.getZ(), 0.0D, 0.0D, 0.0D);
-//            System.out.println("modified sound location" + sound.getX() + " " + sound.getY() + " " + sound.getZ());
-//        } else {
-//            client.particleEngine.createParticle(ParticleTypes.ANGRY_VILLAGER,
-//                    sound.getX(), sound.getY(), sound.getZ(), 0.0D, 0.0D, 0.0D);
-//            System.out.println("original sound location" + sound.getX() + " " + sound.getY() + " " + sound.getZ());
-//        }
+
         if (isSoundBlacklisted(sound.toString())) return; // skip if in the overall blacklist
 
         if (!fxHandler.efxInitialized) return; // Skip if initialization failed
@@ -96,6 +87,9 @@ public abstract class SoundSystemMixin {
                 double soundY = sound.getY();
                 double soundZ = sound.getZ();
                 Vec3 soundPos = new Vec3(soundX, soundY, soundZ);
+                if(Config.getInstance().procRange != -1 && soundPos.subtract(playerEyePos).length() > Config.getInstance().procRange) { // if sounds are too far, let it proc through vanilla means.
+                    return;
+                }
 
                 // Get sound ID
                 String soundId = sound.getLocation().toString();

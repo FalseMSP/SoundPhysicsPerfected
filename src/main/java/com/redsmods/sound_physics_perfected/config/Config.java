@@ -57,6 +57,12 @@ public class Config {
     @SerialEntry public int maxRayLength = 8; // chunks
 
     @AutoGen(category = "general", group = "main")
+    @IntSlider(min = -1, max = 1000, step = 10)
+    @FormatTranslation("sound_physics_perfected.config.unit.blocks")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.procRange.description")
+    @SerialEntry public int procRange = 200; // blocks
+
+    @AutoGen(category = "general", group = "main")
     @IntSlider(min = 0, max = 20, step = 1)
     @FormatTranslation("sound_physics_perfected.config.unit.ticks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.tickRate.description")

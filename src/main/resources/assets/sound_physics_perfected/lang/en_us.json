@@ -71,6 +71,8 @@
       "raysBounced.description": "Max # of times the ray will bounce before terminating\\n(More accurate for hearing sounds after bouncing off walls, INCREASING THIS WILL INCREASE REVERB)\\nPERFORMANCE IMPACT: HIGH",
       "maxRayLength": "Max Ray Length",
       "maxRayLength.description": "Max Length of a singular ray, if you don't get reverb, turn this value up. if you get too much reverb, turn this down\\nPERFORMANCE IMPACT: LOW",
+      "procRange": "Processing Range",
+      "procRange.description": "Max distance that SPP will proccess your sound. \\n(-1 is infinite range)",
       "tickRate": "Sound Updates (Tickable)",
       "tickRate.description": "How often sounds' positions should be updated\\n(0 is off)\\n(1 = every tick -> 20 = every second)\\nPERFORMANCE IMPACT: MEDIUM",
       "soundMult": "Max Sound Distance Multiplier",
