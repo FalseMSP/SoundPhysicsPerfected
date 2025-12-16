@@ -421,4 +421,9 @@ public class Config {
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.voicechatMuffle.description")
     @SerialEntry public boolean voicechatMuffle = true;
+
+    @AutoGen(category = "voicechat", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.voicechatMuffleVolume.description")
+    @SerialEntry public boolean voicechatMuffleVolume = true;
 }

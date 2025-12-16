@@ -104,27 +104,6 @@ public class SVC implements VoicechatPlugin {
         applyOpenALEffects(openALSource, 1-occlusion);
     }
 
-    private float getMaterialOcclusion(BlockState blockState) {
-        String blockName = blockState.getBlock().getDescriptionId();
-
-        // Material-based occlusion values
-        if (blockName.contains("stone") || blockName.contains("concrete")) {
-            return 0.8f;
-        } else if (blockName.contains("wood")) {
-            return 0.6f;
-        } else if (blockName.contains("glass")) {
-            return 0.3f;
-        } else if (blockName.contains("wool") || blockName.contains("carpet")) {
-            return 0.9f; // High absorption
-        } else if (blockName.contains("leaves")) {
-            return 0.4f;
-        } else if (blockName.contains("water") || blockName.contains("lava")) {
-            return 0.7f;
-        }
-
-        return 0.7f; // Default occlusion
-    }
-
     private void applyOpenALEffects(int openALSource, float occlusion) {
         try {
             if(Config.getInstance().voicechatReverb)  fxHandler.applyReverbToSource(openALSource);
@@ -132,6 +111,11 @@ public class SVC implements VoicechatPlugin {
 
 //            System.out.println("Applying effects to OpenAL source: " + openALSource +
 //                    ", occlusion: " + String.format("%.2f", occlusion));
+            if(Config.getInstance().voicechatMuffleVolume) {
+                float volumeMultiplier = 1-occlusion;
+                volumeMultiplier = Math.max(0.0f, Math.min(1.0f, volumeMultiplier));
+                org.lwjgl.openal.AL10.alSourcef(openALSource, org.lwjgl.openal.AL10.AL_GAIN, volumeMultiplier);
+            }
 
         } catch (Exception e) {
             System.err.println("Failed to apply OpenAL effects: " + e.getMessage());

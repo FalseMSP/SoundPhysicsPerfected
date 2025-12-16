@@ -198,7 +198,9 @@
       "voicechatReverb": "Reverb",
       "voicechatReverb.description": "Enables Reverb for Voicechat",
       "voicechatMuffle": "Muffle",
-      "voicechatMuffle.description": "Muffle for Voicechat"
+      "voicechatMuffle.description": "Muffle for Voicechat",
+      "voicechatMuffleVolume": "Muffle Volume decrement",
+      "voicechatMuffleVolume.description": "Makes Volume Lower through walls for Jukeboxes/Players"
     }
   }
 }
