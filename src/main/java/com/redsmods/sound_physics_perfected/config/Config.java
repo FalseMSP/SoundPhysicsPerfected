@@ -143,7 +143,7 @@ public class Config {
     @AutoGen(category = "general", group = "main")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.shortcutDirectionality.description")
-    @SerialEntry public boolean shortcutDirectionality = false; // way too many bugs coming from this.
+    @SerialEntry public boolean shortcutDirectionality = true; // bugs are now fixed.
     @AutoGen(category = "general", group = "main")
     @IntField(min = 0)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.maxSounds.description")
