@@ -54,7 +54,6 @@ public class RaycastingHelper {
     public static final Queue<RedPermeatedSoundInstance> permeatedTickQueue = new LinkedList<>();
     private static final ConcurrentHashMap<SoundData, Integer> entityRayHitCounts = new ConcurrentHashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
-    public static final Queue<SoundData> weatherQueue = new LinkedList<>();
     private static final double SPEED_OF_SOUND_TICKS = 17.15; // 17.15 blocks per gametick
     private static final Map<Integer,ArrayList<SoundInstance>> soundPlayingWaiting = new ConcurrentHashMap<>();
     private static int ticksSinceWorld;
@@ -103,6 +102,7 @@ public class RaycastingHelper {
     @Unique
     public static OpenALEffectsHandler fxHandler = new OpenALEffectsHandler();
 
+    // Entrypoint #1
     public static void castBouncingRaysAndDetectSFX(Level world, Player player) {
         try {
 
@@ -126,18 +126,6 @@ public class RaycastingHelper {
                 isRaytracing.set(false);
                 return; // no sounds to proc
             }
-            weatherQueue.clear();
-
-            // Process weather sounds
-            // disable weather proc bc it borked
-//            Iterator<SoundData> iterator = soundQueue.iterator();
-//            while (iterator.hasNext()) {
-//                SoundData sound = iterator.next();
-//                if (sound.soundId.contains("rain")) {
-//                    weatherQueue.add(sound);
-//                    iterator.remove();
-//                }
-//            }
 
             // Generate ray directions
             Vec3[] rayDirections = RaycastingHelper.generateRayDirections();
@@ -157,6 +145,31 @@ public class RaycastingHelper {
             System.err.println("Error in player bouncing ray entity detection: " + e.getMessage());
         }
     }
+
+    // Entrypoint #2, the thing that actually plays the sound
+    public static void playQueuedObjects(int tsw) {
+        if (freezeTickCounter.get())
+            return;
+        ticksSinceWorld++;
+
+        if (soundPlayingWaiting.isEmpty())
+            return;
+
+        Minecraft client = Minecraft.getInstance();
+
+        // Play all sounds in the map
+        for (ArrayList<SoundInstance> soundList : soundPlayingWaiting.values()) {
+            for (SoundInstance newSound : soundList) {
+                if (newSound == null)
+                    continue;
+                client.getSoundManager().play(newSound);
+            }
+        }
+
+        // Clear the entire map after playing all sounds
+        soundPlayingWaiting.clear();
+    }
+
 
     public static void processAndPlayAveragedSounds(Level world, Player player, Vec3 playerEyePos,
                                                     List<Vec3> rayDirections, Queue<SoundData> soundQueue,
@@ -181,7 +194,7 @@ public class RaycastingHelper {
         if(Config.getInstance().permeation) {
             for (AveragedSoundData avgData : muffledAveragedResults.values()) {
                 CompletableFuture<Void> task = CompletableFuture.runAsync(() ->
-                                playMuffled(client, avgData, playerEyePos, 1f, 1f),
+                                playMuffled(client, avgData, playerEyePos, 1f, 1f, world, player),
                         soundProcessingExecutor);
                 soundTasks.add(task);
             }
@@ -264,7 +277,7 @@ public class RaycastingHelper {
     }
 
     public static void playMuffled(Minecraft client, AveragedSoundData avgData, Vec3 playerPos,
-                                   float volumeMultiplier, float pitchMultiplier) {
+                                   float volumeMultiplier, float pitchMultiplier, Level world, Player player) {
         if (client == null || client.level == null || avgData == null) {
             return;
         }
@@ -273,7 +286,7 @@ public class RaycastingHelper {
             // Calculate the target position
             Vec3 targetPosition = playerPos.add(avgData.averageDirection.scale(avgData.averageDistance));
             if (avgData.totalWeight == 0)
-                targetPosition = avgData.soundEntity.position; // make sound appear at its original source
+                targetPosition = avgData.soundEntity.position; // make sound stay where it was last tick.
 
             // Get original sound properties
             SoundInstance originalSound = avgData.soundEntity.sound;
@@ -285,6 +298,14 @@ public class RaycastingHelper {
                 baseVolume = ((RedTickableInstance) originalSound).getOriginalVolume();
             else
                 baseVolume = ((RedSoundInstance) originalSound).original.getVolume();
+
+            // Shortcut Directionality Logic
+            if(Config.getInstance().shortcutDirectionality && hasLineOfSight(world, player, originalSound) && originalSound instanceof RedTickableInstance) {
+                targetPosition = ((RedTickableInstance) originalSound).getOriginalPosition();
+            } else if (Config.getInstance().shortcutDirectionality){
+                targetPosition = new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ());
+            }
+
             float confidenceMultiplier;
             float attenuationMultiplier = 1;
             if (Config.getInstance().attenuationType == RedsAttenuationType.VERCIDIUM_INVERSE_SQUARE) {
@@ -484,20 +505,6 @@ public class RaycastingHelper {
                 totalRaysHitSurface.incrementAndGet();
                 outdoorLeakDenom.incrementAndGet();
             } else {
-                for (SoundData soundEntity : weatherQueue) {
-                    double weight = getWeight(totalDistanceTraveled-segmentTraveled,0,0);
-
-                    RaycastResult GreenRayResult = new RaycastResult(
-                            maxTotalDistance,
-                            initialDirection,
-                            soundEntity
-                    );
-                    RayHitData hitData = new RayHitData(GreenRayResult, initialDirection, weight,0,bounce);
-
-                    rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
-                    entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
-                }
-
                 Vec3 toCenter = player.position().subtract(actualEnd);
                 Vec3 normal = toCenter.normalize();
                 Vec3 reflectedDirection = calculateReflection(currentDirection, normal);
@@ -662,7 +669,7 @@ public class RaycastingHelper {
         if (!blockState.isAir()) {
             String materialName = blockState.getBlock().getName().getString().toLowerCase();
             ReverbSurfaceData surfaceData = surfaceMaterials.getOrDefault(materialName,
-                    surfaceMaterials.get("default"));
+                    surfaceMaterials.get("default")); // SEE I TOLD YOU I HAVE IT IN CODE, I JUST AM WAY TOO LAZY TO MAKE IT ACTUALLY DO SMTH
 
             // Weight by distance (closer surfaces have more impact)
             double distanceWeight = 1.0 / Math.max(distance, 1.0);
@@ -704,6 +711,8 @@ public class RaycastingHelper {
                 roomRadius, avgAbsorption, acousticProfile, isIndoors);
     }
 
+    // I could use this later:tm: for better baselines for the dynamic reverb, but then it wouldn't be seemeless, so u get to stay in the codebase.
+    // Unused tho
     private static String determineAcousticProfile(double absorption, double surfaceToVolRatio, double volume) {
         if (volume > 10000) return "cathedral"; // Large reverberant space
         if (absorption > 0.6) return "padded_room"; // Highly absorptive
@@ -857,10 +866,6 @@ public class RaycastingHelper {
 
         // Calculate weighted sums
         for (RayHitData rayHit : rayHits) {
-            if (rayHit.bounces == -1 && Config.getInstance().shortcutDirectionality) { // direct LOS means it is exactly where you think
-                absDirection = rayHit.direction;
-                absDistance = rayHit.rayResult.totalDistance;
-            }
             double weight = rayHit.weight;
             totalWeight += weight;
             totalMuffle += rayHit.muffleFac;
@@ -974,6 +979,10 @@ public class RaycastingHelper {
         return totalDistanceInBlocks;
     }
 
+    public static boolean hasLineOfSight(Level world, Player player, SoundInstance sound) {
+        return countBlocksBetween(world,player.getEyePosition(),new Vec3(sound.getX(),sound.getY(),sound.getZ()),player) == 0;
+    }
+
     public static Vec3 calculateReflection(Vec3 incident, Direction hitSide) {
         //? if >=1.21.2
         Vec3 normal = Vec3.atLowerCornerOf(hitSide.getUnitVec3i());
@@ -1032,57 +1041,6 @@ public class RaycastingHelper {
         return directions;
     }
 
-//    public static void playQueuedObjects(int tsw) {
-//        if (freezeTickCounter.get())
-//            return;
-//        ticksSinceWorld++;
-//
-//        Minecraft client = Minecraft.getInstance();
-//
-//        // Create a list to store keys that need to be removed after processing
-//        ArrayList<Integer> keysToRemove = new ArrayList<>();
-//
-//        // Iterate through all keys and play sounds for keys <= ticksSinceWorld
-//        for (Integer key : soundPlayingWaiting.keySet()) {
-//            if (key <= ticksSinceWorld) {
-//                ArrayList<SoundInstance> sound = soundPlayingWaiting.get(key);
-//                for (SoundInstance newSound : sound) {
-//                    if (newSound == null)
-//                        continue;
-//                    client.getSoundManager().play(newSound);
-//                }
-//                keysToRemove.add(key);
-//            }
-//        }
-//
-//        // Remove all processed keys
-//        for (Integer key : keysToRemove) {
-//            soundPlayingWaiting.remove(key);
-//        }
-//    }
-    public static void playQueuedObjects(int tsw) {
-        if (freezeTickCounter.get())
-            return;
-        ticksSinceWorld++;
-
-        if (soundPlayingWaiting.isEmpty())
-            return;
-
-        Minecraft client = Minecraft.getInstance();
-
-        // Play all sounds in the map
-        for (ArrayList<SoundInstance> soundList : soundPlayingWaiting.values()) {
-            for (SoundInstance newSound : soundList) {
-                if (newSound == null)
-                    continue;
-                client.getSoundManager().play(newSound);
-            }
-        }
-
-        // Clear the entire map after playing all sounds
-        soundPlayingWaiting.clear();
-    }
-
     // Utility methods to get atomic values safely
     public static double getDistanceFromWallEcho() {
         return distanceFromWallEcho.get();
@@ -1108,7 +1066,8 @@ public class RaycastingHelper {
         return outdoorLeakDenom.get();
     }
 
-    // I was told that cleanup is neccessary when using threads, but idk where to put this lmao
+    // I was told that cleanup is neccessary when using threads, but idk where to put this lmao]
+    // this is prolly not a good thing... #burnthevibecoder
     public static void shutdown() {
         try {
             raycastExecutor.shutdown();
