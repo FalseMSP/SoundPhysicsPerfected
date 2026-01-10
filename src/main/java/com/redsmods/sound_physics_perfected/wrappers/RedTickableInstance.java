@@ -60,11 +60,6 @@ public class RedTickableInstance implements TickableSoundInstance {
         }
         tickCount++;
         if (stopped || Config.getInstance().tickRate == 0) return; // DONE or ticking sounds is off
-//        if (!this.location.toString().contains("rain")) {
-//            if(tickCount % Math.max(Config.getInstance().tickRate, 8) == 0) // no way I shouldn't be having nesting like this oh noes.
-//                if (!RaycastingHelper.tickQueue.contains(this))
-//                    RaycastingHelper.tickQueue.add(this);
-//        } else
         if (tickCount % Config.getInstance().tickRate == 0) // only update once every .1 second
             if (!RaycastingHelper.tickQueue.contains(this))
                 RaycastingHelper.tickQueue.add(this);
