@@ -662,6 +662,25 @@ public class RaycastingHelper {
         return new BlueRayResult(false,null, -1);
     }
 
+    private static double getAbsorptionCoeficient(Level world, Vec3 pos) {
+        BlockPos blockPos = new BlockPos((int)pos.x, (int)pos.y, (int)pos.z);
+        BlockState blockState = world.getBlockState(blockPos);
+
+        if (!blockState.isAir()) {
+            String materialName = blockState.getBlock().getName().getString().toLowerCase();
+            ReverbSurfaceData surfaceData = surfaceMaterials.getOrDefault(materialName,
+                    surfaceMaterials.get("default")); // SEE I TOLD YOU I HAVE IT IN CODE, I JUST AM WAY TOO LAZY TO MAKE IT ACTUALLY DO SMTH
+            // list still does nothing ^
+
+            if (Config.getInstance().useExplosionResistance)
+                surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,1.0); // deepslate is default 1
+            else
+                surfaceData.absorptionCoefficient = 1; // maintain current functionality
+            return surfaceData.absorptionCoefficient;
+        }
+        return 0; // smth went wrong.
+    }
+
     private static void analyzeSurfaceAtPosition(Level world, Vec3 pos, double distance, boolean hasLineOfSight) {
         BlockPos blockPos = new BlockPos((int)pos.x, (int)pos.y, (int)pos.z);
         BlockState blockState = world.getBlockState(blockPos);
@@ -670,6 +689,8 @@ public class RaycastingHelper {
             String materialName = blockState.getBlock().getName().getString().toLowerCase();
             ReverbSurfaceData surfaceData = surfaceMaterials.getOrDefault(materialName,
                     surfaceMaterials.get("default")); // SEE I TOLD YOU I HAVE IT IN CODE, I JUST AM WAY TOO LAZY TO MAKE IT ACTUALLY DO SMTH
+            if (Config.getInstance().useExplosionResistance)
+                surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,1.0); // deepslate is default 1
 
             // Weight by distance (closer surfaces have more impact)
             double distanceWeight = 1.0 / Math.max(distance, 1.0);
@@ -960,12 +981,8 @@ public class RaycastingHelper {
 
             // Calculate distance traveled within this block
             double distanceInBlock = hit.getLocation().distanceTo(exitPoint);
-            double absorptionIndex = 1;
-//                if (world.getBlockState(hit.getBlockPos()).getBlock() == Blocks.BARRIER && Config.getInstance().barrierAsAir)
-//                    absorptionIndex = 0.01;
+            double absorptionIndex = getAbsorptionCoeficient(world,hit.getLocation());
             totalDistanceInBlocks += distanceInBlock * absorptionIndex;
-            //else
-                // don't add if the block is a barrier
 
 
             // Add a small buffer to ensure we're clearly outside

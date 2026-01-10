@@ -178,8 +178,13 @@ public class Config {
 
     @AutoGen(category = "reverb_tuning", group = "main")
     @EnumCycler
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.reverbTuning.description")
     @SerialEntry public DebugType reverbTuning = DebugType.OFF;
+
+    @AutoGen(category = "reverb_tuning", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.useExplosionResistance.description")
+    @SerialEntry public boolean useExplosionResistance;
 
     @AutoGen(category = "reverb_tuning", group = "main")
     @EnumCycler

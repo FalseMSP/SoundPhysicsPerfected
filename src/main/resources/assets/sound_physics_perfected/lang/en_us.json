@@ -108,6 +108,8 @@
 
       "reverbTuning": "Reverb Debug",
       "reverbTuning.description": "Debug for finding what values are coming out of Blue ray casting.",
+      "useExplosionResistance": "Material Based Absorption",
+      "useExplosionResistance.description": "Use Explosion Resistance for calculating Absorption \\n ExplosionFactor / 6, deepslate being the default",
       "legacyReverb": "Legacy Reverb",
       "legacyReverb.description": "Switches reverb mode to different versions TUNING IS NOT ALWAYS AVAILABLE",
       "experimentalReverb": "Experimental Reverb",
