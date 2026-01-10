@@ -224,7 +224,7 @@ public class RaycastingHelper {
             if(avgData.totalWeight == 0 && originalSound instanceof RedTickableInstance) {
                 ((RedTickableInstance) originalSound).setTargetVolume(0);
                 ((RedTickableInstance) originalSound).setTargetPosition(((RedTickableInstance) originalSound).getOriginalPosition());
-                ((RedTickableInstance) originalSound).setDirection(avgData.averageDirection.scale(avgData.averageDistance));
+                ((RedTickableInstance) originalSound).setAttenuationMultiplier(0);
                 return;
             }
             // Calculate adjusted volume based on ray count and weight (confidence-based)
@@ -257,7 +257,7 @@ public class RaycastingHelper {
             if (originalSound instanceof RedTickableInstance) { // update pos of sounds
                 ((RedTickableInstance) originalSound).setTargetPosition(targetPosition);
                 ((RedTickableInstance) originalSound).setTargetVolume(Math.max(0.01f, Math.min(1.0f, adjustedVolume)));
-                ((RedTickableInstance) originalSound).setDirection(avgData.averageDirection.scale(avgData.averageDistance));
+                ((RedTickableInstance) originalSound).setAttenuationMultiplier(attenuationMultiplier);
                 return;
             } else if (((RedSoundInstance) originalSound) instanceof TickableSoundInstance) {
                 newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, avgData.averageDirection.scale(avgData.averageDistance), baseVolume);
@@ -329,7 +329,7 @@ public class RaycastingHelper {
                 ((RedPermeatedSoundInstance) originalSound).setTargetVolume(0);
                 ((RedPermeatedSoundInstance) originalSound).setTargetPosition(((RedTickableInstance) originalSound).getOriginalPosition());
                 ((RedPermeatedSoundInstance) originalSound).setPermeationIndex(0);
-                ((RedTickableInstance) originalSound).setDirection(avgData.averageDirection.scale(avgData.averageDistance));
+                ((RedTickableInstance) originalSound).setAttenuationMultiplier(0);
                 return;
             }
 
@@ -337,7 +337,7 @@ public class RaycastingHelper {
                 ((RedPermeatedSoundInstance) originalSound).setTargetPosition(targetPosition);
                 ((RedPermeatedSoundInstance) originalSound).setTargetVolume(adjustedVolume);
                 ((RedPermeatedSoundInstance) originalSound).setPermeationIndex(permeationIndex);
-                ((RedTickableInstance) originalSound).setDirection(avgData.averageDirection.scale(avgData.averageDistance));
+                ((RedTickableInstance) originalSound).setAttenuationMultiplier(attenuationMultiplier);
                 return;
             }
 

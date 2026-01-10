@@ -20,7 +20,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     private final ResourceLocation location;
     private final Sound sound;
     private final SoundSource source;
-    @Setter private Vec3 direction;
+    @Setter private float attenuationMultiplier;
     @Delegate private SoundInstance wrapped;
     private double x;
     private double y;
@@ -44,7 +44,6 @@ public class RedTickableInstance implements TickableSoundInstance {
         this.volume = volume;
         this.pitch = pitch;
         this.wrapped = wrapped;
-        this.direction = direction;
         tickCount = 0;
         targetPosition = position;
         targetVolume = volume;
@@ -172,8 +171,8 @@ public class RedTickableInstance implements TickableSoundInstance {
     public float getVolume() {
         float vol = volume * Config.getInstance().volumeMultiplier;
         if (!Config.getInstance().experimentalReverb) return vol;
-        if(direction.length() < 1) return vol;
-        if (Config.getInstance().attenuationType.equals(RedsAttenuationType.VERCIDIUM_LINEAR) || Config.getInstance().attenuationType.equals(RedsAttenuationType.LINEAR)) return (float) (vol * direction.length()); // get volume without attenuation LINEAR
-        return (float) (vol * Math.pow(direction.length(),2)); // get volume without attenuation INVERSE_SQUARE
+        if (attenuationMultiplier == 0) return vol; // if no rays make it, disable sound
+        if (Config.getInstance().attenuationType.equals(RedsAttenuationType.VERCIDIUM_LINEAR) || Config.getInstance().attenuationType.equals(RedsAttenuationType.VERCIDIUM_INVERSE_SQUARE)) return (float) (vol * 1.0/attenuationMultiplier); // get volume without attenuation LINEAR
+        return vol;
     }
 }
