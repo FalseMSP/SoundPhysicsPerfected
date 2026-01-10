@@ -182,7 +182,7 @@ public class Config {
     @AutoGen(category = "reverb_tuning", group = "main")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.experimentalReverb.description")
-    @SerialEntry public boolean experimentalReverb = false;
+    @SerialEntry public boolean experimentalReverb = true;
 
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)
