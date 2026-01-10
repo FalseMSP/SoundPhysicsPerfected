@@ -32,9 +32,7 @@
 		"yet_another_config_lib_v3": ">=${yacl_version}"
 	},
 	"breaks": {
-		"feather": "*",
-		"labymod": "*",
-		"ichor": "*"
+
 	},
 	"suggests": {
 		"voicechat": ">=${mcdep}-${voicechat_api_version}"

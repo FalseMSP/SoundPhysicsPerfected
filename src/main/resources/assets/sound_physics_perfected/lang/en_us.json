@@ -41,7 +41,7 @@
           "main": "Main",
           "permeation": "Permeation"
         },
-        "reverb_tuning": "Reverb Tuning",
+        "reverb_tuning": "Reverb Config",
         "reverb_tuning.group": {
           "main": "Main",
           "global": "Global",
@@ -63,7 +63,10 @@
         "voicechat.group": {
           "main": "Main"
         },
-        "blacklist": "Blacklist"
+        "blacklist": "Blacklist",
+        "blacklist.group": {
+          "main": "Main"
+        }
       },
       "raysCast": "Rays Cast",
       "raysCast.description": "# of Rays to cast from players\\nPERFORMANCE IMPACT: HIGH",

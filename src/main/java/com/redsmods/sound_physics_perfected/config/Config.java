@@ -63,29 +63,18 @@ public class Config {
     @SerialEntry public int procRange = 200; // blocks
 
     @AutoGen(category = "general", group = "main")
-    @IntSlider(min = 0, max = 20, step = 1)
-    @FormatTranslation("sound_physics_perfected.config.unit.ticks")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.tickRate.description")
-    @SerialEntry public int tickRate = 2; // once every 2 ticks bc i want poor people's pcs to burn
-
-    @AutoGen(category = "general", group = "main")
-    @FloatSlider(min = 0, max = 10, step = 0.1f)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.soundMult.description")
-    @SerialEntry public float soundMult = 1; // make it just work like default Minecraft for lag helping :)
-
-    @AutoGen(category = "general", group = "main")
     @FloatSlider(min = 0, max = 10, step = 0.1f)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.volumeMultiplier.description")
     @SerialEntry public float volumeMultiplier = 1;
 
     @AutoGen(category = "general", group = "main")
-    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.reverb.description")
-    @SerialEntry public boolean reverb = true;
+    @IntSlider(min = 0, max = 20, step = 1)
+    @FormatTranslation("sound_physics_perfected.config.unit.ticks")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.tickRate.description")
+    @SerialEntry public int tickRate = 2; // once every 2 ticks bc i want poor people's pcs to burn
 
-    @AutoGen(category = "general", group = "main")
+    @AutoGen(category = "general", group = "permeation")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeation.description")
     @SerialEntry public boolean permeation = true;
@@ -95,6 +84,11 @@ public class Config {
     @FormatTranslation("sound_physics_perfected.config.unit.blocks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeationStepSize.description")
     @SerialEntry public double permeationStepSize = 0.0625; // changed to 1/16 of a block bc u don't *need* 0.01 precision lets be so fr
+
+    @AutoGen(category = "general", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.useExplosionResistance.description")
+    @SerialEntry public boolean useExplosionResistance = true;
 
     @AutoGen(category = "general", group = "permeation")
     @IntSlider(min = 0, max = 20, step = 1)
@@ -106,17 +100,6 @@ public class Config {
     @EnumCycler
     @CustomDescription("yacl3.config.sound_physics_perfected:config.attenuationType.description")
     @SerialEntry public RedsAttenuationType attenuationType = RedsAttenuationType.VERCIDIUM_LINEAR;
-
-    @AutoGen(category = "general", group = "main")
-    @DoubleSlider(min = 1, max = 10, step = 0.05)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.rayBounce.description")
-    @SerialEntry public double rayBounce = 1.3;
-
-    @AutoGen(category = "general", group = "main")
-    @EnumCycler
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
-    @SerialEntry public DebugType debug = DebugType.OFF;
 
     @AutoGen(category = "general", group = "permeation")
     @DoubleSlider(min = 1, max = 10, step = 0.1)
@@ -130,7 +113,7 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeationAbsorption.description")
     @SerialEntry public double permeationAbsorption = 0.4;
 
-    @AutoGen(category = "general", group = "main")
+    @AutoGen(category = "general", group = "permeation")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.barrierAsAir.description")
     @SerialEntry public boolean barrierAsAir = true;
@@ -163,6 +146,11 @@ public class Config {
         }
     }
 
+    @AutoGen(category = "blacklist", group = "main")
+    @EnumCycler
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.debug.description")
+    @SerialEntry public DebugType debug = DebugType.OFF;
+
     @AutoGen(category = "blacklist")
     @ListGroup(valueFactory = StringValueFactory.class, controllerFactory = StringControllerFactory.class)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.soundBlacklist.description")
@@ -177,14 +165,14 @@ public class Config {
     // Global Controls
 
     @AutoGen(category = "reverb_tuning", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.reverb.description")
+    @SerialEntry public boolean reverb = true;
+
+    @AutoGen(category = "reverb_tuning", group = "main")
     @EnumCycler
     @CustomDescription("yacl3.config.sound_physics_perfected:config.reverbTuning.description")
     @SerialEntry public DebugType reverbTuning = DebugType.OFF;
-
-    @AutoGen(category = "reverb_tuning", group = "main")
-    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.useExplosionResistance.description")
-    @SerialEntry public boolean useExplosionResistance;
 
     @AutoGen(category = "reverb_tuning", group = "main")
     @EnumCycler

@@ -628,7 +628,7 @@ public class RaycastingHelper {
 
         // Analyze surface material at bounce point
         if (bounceNumber <= 2) { // Only for early reflections
-            analyzeSurfaceAtPosition(world, currentPos, currentDistance, hasLineOfSight);
+            analyzeSurfaceAtPosition(world, currentPos, currentDistance);
         }
 
         // Calculate early vs late reflections
@@ -673,7 +673,7 @@ public class RaycastingHelper {
             // list still does nothing ^
 
             if (Config.getInstance().useExplosionResistance)
-                surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,1.0); // deepslate is default 1
+                surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0); // deepslate is default 1
             else
                 surfaceData.absorptionCoefficient = 1; // maintain current functionality
             return surfaceData.absorptionCoefficient;
@@ -681,7 +681,7 @@ public class RaycastingHelper {
         return 0; // smth went wrong.
     }
 
-    private static void analyzeSurfaceAtPosition(Level world, Vec3 pos, double distance, boolean hasLineOfSight) {
+    private static void analyzeSurfaceAtPosition(Level world, Vec3 pos, double distance) {
         BlockPos blockPos = new BlockPos((int)pos.x, (int)pos.y, (int)pos.z);
         BlockState blockState = world.getBlockState(blockPos);
 
@@ -690,7 +690,7 @@ public class RaycastingHelper {
             ReverbSurfaceData surfaceData = surfaceMaterials.getOrDefault(materialName,
                     surfaceMaterials.get("default")); // SEE I TOLD YOU I HAVE IT IN CODE, I JUST AM WAY TOO LAZY TO MAKE IT ACTUALLY DO SMTH
             if (Config.getInstance().useExplosionResistance)
-                surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,1.0); // deepslate is default 1
+                surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0); // deepslate is default 1
 
             // Weight by distance (closer surfaces have more impact)
             double distanceWeight = 1.0 / Math.max(distance, 1.0);
