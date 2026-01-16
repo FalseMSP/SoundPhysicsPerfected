@@ -157,13 +157,20 @@ public class RaycastingHelper {
 
         Minecraft client = Minecraft.getInstance();
 
-        // Play all sounds in the map
+        // Create a snapshot of all sounds to play
+        List<SoundInstance> soundsToPlay = new ArrayList<>();
+
         for (ArrayList<SoundInstance> soundList : soundPlayingWaiting.values()) {
-            for (SoundInstance newSound : soundList) {
-                if (newSound == null)
-                    continue;
-                client.getSoundManager().play(newSound);
+            synchronized (soundList) {  // Synchronize access to the list
+                soundsToPlay.addAll(soundList);
             }
+        }
+
+        // Play all sounds from the snapshot
+        for (SoundInstance newSound : soundsToPlay) {
+            if (newSound == null)
+                continue;
+            client.getSoundManager().play(newSound);
         }
 
         // Clear the entire map after playing all sounds
