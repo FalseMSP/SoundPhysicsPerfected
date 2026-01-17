@@ -2,6 +2,7 @@ package com.redsmods.sound_physics_perfected.wrappers;
 
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
 import com.redsmods.sound_physics_perfected.config.Config;
+import com.redsmods.sound_physics_perfected.config.DebugType;
 import com.redsmods.sound_physics_perfected.config.RedsAttenuationType;
 import lombok.Getter;
 import lombok.Setter;
@@ -32,8 +33,10 @@ public class RedTickableInstance implements TickableSoundInstance {
     @Setter private Vec3 targetPosition;
     @Setter private float targetVolume;
     private final boolean isBlacklisted;
+    @Getter private float originalVolume;
+    @Getter private Vec3 originalPosition;
 
-    public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped, Vec3 direction, float originalVolume) {
+    public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped) {
         this.location = location;
         this.sound = sound;
         this.source = source;
@@ -48,13 +51,18 @@ public class RedTickableInstance implements TickableSoundInstance {
         targetPosition = position;
         targetVolume = volume;
         isBlacklisted = isSoundTickBlacklisted(sound.toString());
+        originalVolume = wrapped.getVolume();
+        originalPosition = new Vec3(wrapped.getX(),wrapped.getY(),wrapped.getZ());
     }
 
     @Override
     public void tick() {
         if (isBlacklisted) {
-            if (wrapped instanceof TickableSoundInstance)
+            if (wrapped instanceof TickableSoundInstance) {
                 ((TickableSoundInstance) wrapped).tick();
+                originalVolume = wrapped.getVolume();
+                originalPosition = new Vec3(wrapped.getX(),wrapped.getY(),wrapped.getZ());
+            }
             return;
         }
         tickCount++;
@@ -95,8 +103,6 @@ public class RedTickableInstance implements TickableSoundInstance {
             z = targetPosition.z();
             return;
         }
-
-        // Maximum speed in blocks per tick
 
         // Calculate how far we can move this tick
         double moveDistance = Math.min(maxSpeed, distance);
@@ -142,14 +148,6 @@ public class RedTickableInstance implements TickableSoundInstance {
     @Override
     public Sound getSound() {
         return this.sound;
-    }
-
-    public float getOriginalVolume() {
-        return wrapped.getVolume();
-    }
-
-    public Vec3 getOriginalPosition() {
-        return new Vec3(wrapped.getX(),wrapped.getY(),wrapped.getZ());
     }
 
     private boolean isSoundTickBlacklisted(String soundName) {

@@ -5,6 +5,7 @@ import com.redsmods.sound_physics_perfected.config.Config;
 import lombok.Getter;
 import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.resources.sounds.TickableSoundInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.levelgen.Column;
@@ -24,7 +25,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     private float targetMuffle;
 
     public RedPermeatedSoundInstance(ResourceLocation soundID, Sound sound, SoundSource category, Vec3 position, float volume, float pitch, SoundInstance wrapped, Vec3 originalPos, float originalVolume, float permeationIndex) {
-        super(soundID, sound, category,position, volume, pitch, wrapped, originalPos, originalVolume);
+        super(soundID, sound, category,position, volume, pitch, wrapped);
         this.permeationIndex = permeationIndex;
 
     }
@@ -36,6 +37,10 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
 
     @Override
     public void tick() {
+        if (super.isBlacklisted()) {
+            super.tick();
+        }
+
         tickCount++;
         if (super.isStopped() || Config.getInstance().permeatedTickRate == 0) return; // DONE or ticking sounds is off
         if (tickCount % Config.getInstance().permeatedTickRate == 0) { // only update once every .1 second

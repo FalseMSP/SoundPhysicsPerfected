@@ -52,7 +52,6 @@ public class RaycastingHelper {
     // Queues and other lists that really aren't necessary lmao (i decided to care about readability rather than memory efficiency, sorry users' pcs
     public static final Queue<RedTickableInstance> tickQueue = new LinkedList<>();
     public static final Queue<RedPermeatedSoundInstance> permeatedTickQueue = new LinkedList<>();
-    private static final ConcurrentHashMap<SoundData, Integer> entityRayHitCounts = new ConcurrentHashMap<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
     private static final double SPEED_OF_SOUND_TICKS = 17.15; // 17.15 blocks per gametick
     private static final Map<Integer,ArrayList<SoundInstance>> soundPlayingWaiting = new ConcurrentHashMap<>();
@@ -113,9 +112,6 @@ public class RaycastingHelper {
             playerEyePos = player.getEyePosition();
             double maxTotalDistance = 16.0 * Config.getInstance().maxRayLength * Config.getInstance().raysBounced; // Max total distance after all bounces
 
-            // Clear previous ray hit counts
-            entityRayHitCounts.clear();
-
             Minecraft client = Minecraft.getInstance();
             if (client == null || client.getSoundManager() == null) {
                 isRaytracing.set(false);
@@ -130,11 +126,9 @@ public class RaycastingHelper {
             // Generate ray directions
             Vec3[] rayDirections = RaycastingHelper.generateRayDirections();
             rayHitsByEntity.clear(); // clear list before every call
-            redRaysToTarget.clear(); // wow this was the issue? i feel like a real dumbass now D:
+            redRaysToTarget.clear(); // wow, this was the issue? I feel like a real dumbass now D:
 
             processAndPlayAveragedSounds(world,player,playerEyePos,new ArrayList<>(Arrays.asList(rayDirections)),soundQueue,maxTotalDistance,client);
-            // Display ray hit counts for detected sfx
-            displayEntityRayHitCounts(world, player);
 
             tickQueue.clear();
             soundQueue.clear();
@@ -191,11 +185,13 @@ public class RaycastingHelper {
 
         List<CompletableFuture<Void>> soundTasks = new ArrayList<>();
         freezeTickCounter.set(true);
-        for (AveragedSoundData avgData : averagedResults.values()) {
-            CompletableFuture<Void> task = CompletableFuture.runAsync(() ->
-                            playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.0f, 1.0f),
-                    soundProcessingExecutor);
-            soundTasks.add(task);
+        if(!Config.getInstance().permeation) { // force no regular processing if permeation is enabled
+            for (AveragedSoundData avgData : averagedResults.values()) {
+                CompletableFuture<Void> task = CompletableFuture.runAsync(() ->
+                                playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.0f, 1.0f),
+                        soundProcessingExecutor);
+                soundTasks.add(task);
+            }
         }
 
         if(Config.getInstance().permeation) {
@@ -267,9 +263,9 @@ public class RaycastingHelper {
                 ((RedTickableInstance) originalSound).setAttenuationMultiplier(attenuationMultiplier);
                 return;
             } else if (((RedSoundInstance) originalSound) instanceof TickableSoundInstance) {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, avgData.averageDirection.scale(avgData.averageDistance), baseVolume);
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound);
             } else {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, avgData.averageDirection.scale(avgData.averageDistance),baseVolume);
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound);
             }
 
             soundInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(),newSound);
@@ -567,7 +563,6 @@ public class RaycastingHelper {
                 RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
-                entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
             }
         }
 
@@ -609,7 +604,6 @@ public class RaycastingHelper {
                 RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
 
                 rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
-                entityRayHitCounts.merge(data, 1, Integer::sum);
             }
         }
     }
@@ -769,7 +763,7 @@ public class RaycastingHelper {
     private static void castRedRay(Level world, Player player, Vec3 currentPos, Queue<SoundData> entities,
                                    double currentDistance, Vec3 initialDirection, int bounces) {
         for (SoundData soundEntity : entities) {
-            rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()); // make sure all sounds are proc'd even if they aren't audible at first (makes discs work lmao)
+//            rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()); // make sure all sounds are proc'd even if they aren't audible at first (makes discs work lmao)
             redRaysToTarget.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>());
             Vec3 entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
@@ -791,10 +785,9 @@ public class RaycastingHelper {
             Vec3 normalVector = direction.normalize();
             RayHitData hitData = new RayHitData(rayResult, normalVector, weight, permeationAbsorption, bounces);
 
-            if (blockCount == 0) {
-                rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
-                entityRayHitCounts.merge(soundEntity, 1, Integer::sum);
-            }
+//            if (blockCount == 0) {
+//                rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
+//            }
 
             redRaysToTarget.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()).add(hitData);
         }
@@ -822,48 +815,6 @@ public class RaycastingHelper {
             Vec3 normalVector = direction.normalize();
             RayHitData hitData = new RayHitData(rayResult, normalVector, weight, permeationAbsorption, bounces);
             redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
-        }
-
-        // Handle tickable sounds (cast green ray for EXCLUSIVELY standard tick queue)
-        for (RedTickableInstance soundEntity : tickQueue) {
-            SoundData data = new TickableSoundData(soundEntity, soundEntity.getOriginalPosition(), soundEntity.getSound().toString());
-            rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>());
-
-            Vec3 entityCenter = soundEntity.getOriginalPosition();
-            double distanceToEntity = currentPos.distanceTo(entityCenter);
-
-            if (distanceToEntity + currentDistance > 16 * soundEntity.getOriginalVolume())
-                continue;
-
-            ClipContext raycastContext = new ClipContext(
-                    currentPos,
-                    entityCenter,
-                    ClipContext.Block.COLLIDER,
-                    ClipContext.Fluid.NONE,
-                    player
-            );
-
-            BlockHitResult blockHit = world.clip(raycastContext);
-
-            boolean hasLineOfSight = blockHit.getType() != HitResult.Type.BLOCK ||
-                    currentPos.distanceTo(blockHit.getLocation()) >= distanceToEntity - 1;
-
-            if (hasLineOfSight) {
-                double weight = getWeight(currentDistance,0,distanceToEntity); // 0 = no blocks in the way, green ray.
-
-                RaycastResult GreenRayResult = new RaycastResult(
-                        distanceToEntity,
-                        initialDirection,
-                        data
-                );
-
-                Vec3 direction = entityCenter.subtract(currentPos);
-                Vec3 normalVector = direction.normalize();
-                RayHitData hitData = new RayHitData(GreenRayResult, normalVector, weight, 0, bounces);
-
-                rayHitsByEntity.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>()).add(hitData);
-                entityRayHitCounts.merge(data, 1, Integer::sum);
-            }
         }
     }
 
@@ -1024,23 +975,6 @@ public class RaycastingHelper {
         // Where I is incident vector, N is normal, R is reflected vector
         double dotProduct = incident.dot(normal);
         return incident.subtract(normal.scale(2 * dotProduct));
-    }
-
-    public static void displayEntityRayHitCounts(Level world, Player player) {
-        if (world.isClientSide() && !entityRayHitCounts.isEmpty()) {
-            for (Map.Entry<SoundData, Integer> entry : entityRayHitCounts.entrySet()) {
-                SoundData entity = entry.getKey();
-                int rayCount = entry.getValue();
-
-                // Display the count above the entity
-                Vec3 entityPos = entity.position;
-                Vec3 displayPos = entityPos.add(0, entity.position.y, 0);
-
-                // Print to console for debugging
-                String entityName = entity.soundId;
-//                System.out.println("SFX: " + entityName + " hit by " + rayCount + " rays");
-            }
-        }
     }
 
     public static Vec3[] generateRayDirections() {
