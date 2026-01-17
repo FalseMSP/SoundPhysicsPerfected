@@ -302,13 +302,6 @@ public class RaycastingHelper {
             else
                 baseVolume = ((RedSoundInstance) originalSound).original.getVolume();
 
-            // Shortcut Directionality Logic
-            if(Config.getInstance().shortcutDirectionality && hasLineOfSight(world, player, originalSound) && originalSound instanceof RedTickableInstance) {
-                targetPosition = ((RedTickableInstance) originalSound).getOriginalPosition();
-            } else if (Config.getInstance().shortcutDirectionality){
-                targetPosition = new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ());
-            }
-
             float confidenceMultiplier;
             float attenuationMultiplier = 1;
             if (Config.getInstance().attenuationType == RedsAttenuationType.VERCIDIUM_INVERSE_SQUARE) {
@@ -321,6 +314,16 @@ public class RaycastingHelper {
             else // maintain old behavior if someone still wants it
                 confidenceMultiplier = (float) avgData.totalWeight / Config.getInstance().raysCast * Config.getInstance().raysBounced;
             float permeationIndex = (float) avgData.averageMuffle;
+
+            // Shortcut Directionality Logic
+            if(Config.getInstance().shortcutDirectionality && hasLineOfSight(world, player, originalSound) && originalSound instanceof RedTickableInstance) {
+                targetPosition = ((RedTickableInstance) originalSound).getOriginalPosition();
+                // Force confidence to 1 if LOS is there
+                confidenceMultiplier = 1; // bc 100% confident or whatever
+            } else if (Config.getInstance().shortcutDirectionality){
+                targetPosition = new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ());
+            }
+
             float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier * attenuationMultiplier * permeationIndex;
 
             // Calculate adjusted pitch
