@@ -26,5 +26,6 @@ public class PlayerEntityMixin {
 
         // Cast rays from player and detect entities
         RaycastingHelper.castBouncingRaysAndDetectSFX(world, player);
-    }
+        RaycastingHelper.playQueuedObjects();
+}
 }

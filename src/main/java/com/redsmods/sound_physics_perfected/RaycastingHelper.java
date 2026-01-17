@@ -140,6 +140,35 @@ public class RaycastingHelper {
         }
     }
 
+    public static void playQueuedObjects() {
+        if (freezeTickCounter.get())
+            return;
+        ticksSinceWorld++;
+
+        if (soundPlayingWaiting.isEmpty())
+            return;
+
+        Minecraft client = Minecraft.getInstance();
+
+        // Create a snapshot of all sounds to play
+        List<SoundInstance> soundsToPlay = new ArrayList<>();
+
+        for (ArrayList<SoundInstance> soundList : soundPlayingWaiting.values()) {
+            synchronized (soundList) {  // Synchronize access to the list
+                soundsToPlay.addAll(soundList);
+            }
+        }
+
+        // Play all sounds from the snapshot
+        for (SoundInstance newSound : soundsToPlay) {
+            if (newSound == null)
+                continue;
+            client.getSoundManager().play(newSound);
+        }
+
+        // Clear the entire map after playing all sounds
+        soundPlayingWaiting.clear();
+    }
 
     public static void processAndPlayAveragedSounds(Level world, Player player, Vec3 playerEyePos,
                                                     List<Vec3> rayDirections, Queue<SoundData> soundQueue,
@@ -241,7 +270,7 @@ public class RaycastingHelper {
             if (Config.getInstance().debug == DebugType.ACTION_BAR) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), true);
             else if (Config.getInstance().debug == DebugType.CHAT) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), false);
 
-            queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
+            queueSound(newSound);
 
         } catch (Exception e) {
             System.err.println("Error playing adjusted averaged sound: " + e.getMessage());
@@ -321,16 +350,15 @@ public class RaycastingHelper {
             newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, adjustedVolume),adjustedPitch,originalSound, permeationIndex, attenuationMultiplier);
             soundPermInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(), newSound);
 
-            queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
+            queueSound(newSound);
 
         } catch (Exception e) {
             System.err.println("Error playing adjusted averaged sound: " + e.getMessage());
         }
     }
 
-    private static void queueSound(SoundInstance newSound, int distance) {
-        Minecraft client = Minecraft.getInstance();
-        client.getSoundManager().play(newSound);
+    private static void queueSound(SoundInstance newSound) {
+        soundPlayingWaiting.computeIfAbsent(ticksSinceWorld + 1, k -> new ArrayList<>()).add(newSound);
     }
 
     public static Map<SoundData, AveragedSoundData> processRaysWithAveraging(Level world, Player player,

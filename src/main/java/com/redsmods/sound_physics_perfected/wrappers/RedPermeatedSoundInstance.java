@@ -27,6 +27,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     public RedPermeatedSoundInstance(ResourceLocation soundID, Sound sound, SoundSource category, Vec3 position, float volume, float pitch, SoundInstance wrapped, float permeationIndex, float attenuationMultiplier) {
         super(soundID, sound, category,position, volume, pitch, wrapped, attenuationMultiplier);
         this.permeationIndex = permeationIndex;
+        this.targetMuffle = permeationIndex;
         updateMuffle();
     }
 
