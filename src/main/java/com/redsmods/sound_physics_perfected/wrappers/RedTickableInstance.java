@@ -47,7 +47,7 @@ public class RedTickableInstance implements TickableSoundInstance {
         this.volume = volume;
         this.pitch = pitch;
         this.wrapped = wrapped;
-        tickCount = 0;
+        tickCount = 1;
         targetPosition = position;
         targetVolume = volume;
         isBlacklisted = isSoundTickBlacklisted(sound.toString());

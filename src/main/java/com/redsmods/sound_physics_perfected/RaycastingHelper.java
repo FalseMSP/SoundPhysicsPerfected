@@ -349,7 +349,7 @@ public class RaycastingHelper {
 
             RedPermeatedSoundInstance newSound;
             // Create positioned sound with adjustments
-            newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, avgData.averageDirection.scale(avgData.averageDistance),baseVolume, permeationIndex);
+            newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, permeationIndex);
             soundPermInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(), newSound);
 
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
@@ -932,12 +932,21 @@ public class RaycastingHelper {
                 );
             }
 
+            if(blockBounds.contains(end)) { // shouldn't but im kinda just hoping something works atp
+                break;
+            }
+
             // Find the exit point by moving along the ray direction until we're outside the block
             Vec3 exitPoint = hit.getLocation();
             double step = Config.getInstance().permeationStepSize; // Small step size for precision
 
             while (blockBounds.contains(exitPoint)) {
                 exitPoint = exitPoint.add(direction.scale(step));
+            }
+
+            // Check if we've passed the end point
+            if (currentStart.distanceTo(start) >= end.distanceTo(start)) {
+                break;
             }
 
             // Calculate distance traveled within this block
@@ -948,17 +957,12 @@ public class RaycastingHelper {
 
             // Add a small buffer to ensure we're clearly outside
             currentStart = exitPoint.add(direction.scale(0.01));
-
-            // Check if we've passed the end point
-            if (currentStart.distanceTo(start) >= end.distanceTo(start)) {
-                break;
-            }
         }
         return totalDistanceInBlocks;
     }
 
     public static boolean hasLineOfSight(Level world, Player player, SoundInstance sound) {
-        return countBlocksBetween(world,player.getEyePosition(),new Vec3(sound.getX(),sound.getY(),sound.getZ()),player) == 0;
+        return countBlocksBetween(world,player.getEyePosition(),new Vec3(sound.getX(),sound.getY(),sound.getZ()),player) < 0.2;
     }
 
     public static Vec3 calculateReflection(Vec3 incident, Direction hitSide) {

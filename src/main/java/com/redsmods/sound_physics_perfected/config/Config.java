@@ -94,7 +94,7 @@ public class Config {
     @IntSlider(min = 0, max = 20, step = 1)
     @FormatTranslation("sound_physics_perfected.config.unit.ticks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeatedTickRate.description")
-    @SerialEntry public int permeatedTickRate = 10; // once every .5 seconds to lower the choppiness
+    @SerialEntry public int permeatedTickRate = 1; // once every tick bc fuck people with weak hardware
 
     @AutoGen(category = "general", group = "main")
     @EnumCycler
