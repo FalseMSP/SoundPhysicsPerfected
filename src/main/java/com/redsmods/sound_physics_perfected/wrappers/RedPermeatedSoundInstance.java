@@ -24,8 +24,8 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     private boolean sourceSet = false;
     private float targetMuffle;
 
-    public RedPermeatedSoundInstance(ResourceLocation soundID, Sound sound, SoundSource category, Vec3 position, float volume, float pitch, SoundInstance wrapped, float permeationIndex) {
-        super(soundID, sound, category,position, volume, pitch, wrapped);
+    public RedPermeatedSoundInstance(ResourceLocation soundID, Sound sound, SoundSource category, Vec3 position, float volume, float pitch, SoundInstance wrapped, float permeationIndex, float attenuationMultiplier) {
+        super(soundID, sound, category,position, volume, pitch, wrapped, attenuationMultiplier);
         this.permeationIndex = permeationIndex;
         updateMuffle();
     }
@@ -42,8 +42,8 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
         }
 
         tickCount++;
-        if (super.isStopped() || Config.getInstance().permeatedTickRate == 0) return; // DONE or ticking sounds is off
-        if (tickCount % Config.getInstance().permeatedTickRate == 0) { // only update once every .1 second
+        if (super.isStopped() || Config.getInstance().tickRate == 0) return; // DONE or ticking sounds is off
+        if (tickCount % Config.getInstance().tickRate == 0) { // only update once every .1 second
             if (!RaycastingHelper.permeatedTickQueue.contains(this))
                 RaycastingHelper.permeatedTickQueue.add(this);
         }

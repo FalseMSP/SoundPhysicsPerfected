@@ -36,7 +36,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     @Getter private float originalVolume;
     @Getter private Vec3 originalPosition;
 
-    public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped) {
+    public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped, float attenuationMultiplier) {
         this.location = location;
         this.sound = sound;
         this.source = source;
@@ -53,6 +53,7 @@ public class RedTickableInstance implements TickableSoundInstance {
         isBlacklisted = isSoundTickBlacklisted(sound.toString());
         originalVolume = wrapped.getVolume();
         originalPosition = new Vec3(wrapped.getX(),wrapped.getY(),wrapped.getZ());
+        this.attenuationMultiplier = attenuationMultiplier;
     }
 
     @Override

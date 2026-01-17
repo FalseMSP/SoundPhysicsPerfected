@@ -140,37 +140,6 @@ public class RaycastingHelper {
         }
     }
 
-    // Entrypoint #2, the thing that actually plays the sound
-    public static void playQueuedObjects(int tsw) {
-        if (freezeTickCounter.get())
-            return;
-        ticksSinceWorld++;
-
-        if (soundPlayingWaiting.isEmpty())
-            return;
-
-        Minecraft client = Minecraft.getInstance();
-
-        // Create a snapshot of all sounds to play
-        List<SoundInstance> soundsToPlay = new ArrayList<>();
-
-        for (ArrayList<SoundInstance> soundList : soundPlayingWaiting.values()) {
-            synchronized (soundList) {  // Synchronize access to the list
-                soundsToPlay.addAll(soundList);
-            }
-        }
-
-        // Play all sounds from the snapshot
-        for (SoundInstance newSound : soundsToPlay) {
-            if (newSound == null)
-                continue;
-            client.getSoundManager().play(newSound);
-        }
-
-        // Clear the entire map after playing all sounds
-        soundPlayingWaiting.clear();
-    }
-
 
     public static void processAndPlayAveragedSounds(Level world, Player player, Vec3 playerEyePos,
                                                     List<Vec3> rayDirections, Queue<SoundData> soundQueue,
@@ -263,9 +232,9 @@ public class RaycastingHelper {
                 ((RedTickableInstance) originalSound).setAttenuationMultiplier(attenuationMultiplier);
                 return;
             } else if (((RedSoundInstance) originalSound) instanceof TickableSoundInstance) {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound);
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, attenuationMultiplier);
             } else {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound);
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, attenuationMultiplier);
             }
 
             soundInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(),newSound);
@@ -349,7 +318,7 @@ public class RaycastingHelper {
 
             RedPermeatedSoundInstance newSound;
             // Create positioned sound with adjustments
-            newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, permeationIndex);
+            newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, adjustedVolume),adjustedPitch,originalSound, permeationIndex, attenuationMultiplier);
             soundPermInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(), newSound);
 
             queueSound(newSound,(int) (avgData.averageDistance / SPEED_OF_SOUND_TICKS));
@@ -360,10 +329,8 @@ public class RaycastingHelper {
     }
 
     private static void queueSound(SoundInstance newSound, int distance) {
-//        Minecraft client = Minecraft.getInstance();
-//        client.getSoundManager().play(newSound);
-//         removed this queue because speed of sound based calculation is currently borked, will re-add later MAYBE.
-        soundPlayingWaiting.computeIfAbsent(ticksSinceWorld + 1, k -> new ArrayList<>()).add(newSound); // removed speed of sound calculation for delay.
+        Minecraft client = Minecraft.getInstance();
+        client.getSoundManager().play(newSound);
     }
 
     public static Map<SoundData, AveragedSoundData> processRaysWithAveraging(Level world, Player player,
