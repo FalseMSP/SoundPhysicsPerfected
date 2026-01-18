@@ -148,7 +148,7 @@ public class Config {
     @AutoGen(category = "blacklist")
     @ListGroup(valueFactory = StringValueFactory.class, controllerFactory = StringControllerFactory.class)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.soundBlacklist.description")
-    @SerialEntry public List<String> soundBlacklist = new ArrayList<>(Arrays.asList("rain", "swim"));
+    @SerialEntry public List<String> soundBlacklist = new ArrayList<>();
 
     @AutoGen(category = "blacklist")
     @ListGroup(valueFactory = StringValueFactory.class, controllerFactory = StringControllerFactory.class)

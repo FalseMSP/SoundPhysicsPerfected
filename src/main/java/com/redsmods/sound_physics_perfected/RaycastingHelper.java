@@ -769,7 +769,7 @@ public class RaycastingHelper {
             Vec3 entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
 
-            if (distanceToEntity + currentDistance > 16 * soundEntity.sound.getVolume())
+            if (distanceToEntity + currentDistance > Config.getInstance().maxRayLength * 16)
                 continue;
 
             double blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
@@ -794,12 +794,12 @@ public class RaycastingHelper {
         }
         for (RedPermeatedSoundInstance soundEntity : permeatedTickQueue) {
             SoundData data = new TickableSoundData(soundEntity, soundEntity.getOriginalPosition(), soundEntity.getSound().toString());
-            redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>());
+//            redRaysToTarget.computeIfAbsent(data, k -> new CopyOnWriteArrayList<>());
 
             Vec3 entityCenter = soundEntity.getOriginalPosition();
             double distanceToEntity = currentPos.distanceTo(entityCenter);
 
-            if (distanceToEntity + currentDistance > 16 * soundEntity.getOriginalVolume())
+            if (distanceToEntity + currentDistance > Config.getInstance().maxRayLength * 16)
                 continue;
 
             double blockCount = countBlocksBetween(world, currentPos, entityCenter, player);
