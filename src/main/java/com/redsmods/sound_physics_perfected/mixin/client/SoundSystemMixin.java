@@ -147,7 +147,7 @@ public abstract class SoundSystemMixin {
                 Channel source = accessor.getChannel();
                 int id = ((SourceAccessor) source).getSource();
                 sound.setSource(id);
-                fxHandler.applyMuffleToSource(id,sound.getPermeationIndex());
+                fxHandler.applyMuffleToSource(id,1-sound.getPermeationIndex());
             } catch (Exception e) {
                 if (Config.getInstance().debug != DebugType.OFF)
                     System.out.println("sourceID is invalid for a sound, non-issue" + e);
