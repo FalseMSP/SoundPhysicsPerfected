@@ -72,7 +72,7 @@ public class Config {
     @IntSlider(min = 0, max = 20, step = 1)
     @FormatTranslation("sound_physics_perfected.config.unit.ticks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.tickRate.description")
-    @SerialEntry public int tickRate = 2; // once every 2 ticks bc i want poor people's pcs to burn
+    @SerialEntry public int tickRate = 10; // once every 2 ticks bc i want poor people's pcs to burn
 
     @AutoGen(category = "general", group = "permeation")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
