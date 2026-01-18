@@ -350,6 +350,9 @@ public class RaycastingHelper {
             newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, adjustedVolume),adjustedPitch,originalSound, permeationIndex, attenuationMultiplier);
             soundPermInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(), newSound);
 
+            if (Config.getInstance().debug == DebugType.ACTION_BAR) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), true);
+            else if (Config.getInstance().debug == DebugType.CHAT) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), false);
+
             queueSound(newSound);
 
         } catch (Exception e) {

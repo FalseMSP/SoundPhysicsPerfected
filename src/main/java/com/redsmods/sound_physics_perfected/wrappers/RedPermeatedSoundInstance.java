@@ -5,14 +5,10 @@ import com.redsmods.sound_physics_perfected.config.Config;
 import lombok.Getter;
 import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
-import net.minecraft.client.resources.sounds.TickableSoundInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.level.levelgen.Column;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.openal.AL10;
-import org.lwjgl.openal.AL11;
-import org.lwjgl.openal.EXTEfx;
 
 import static com.redsmods.sound_physics_perfected.RaycastingHelper.fxHandler;
 import static org.joml.Math.lerp;
@@ -38,10 +34,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
 
     @Override
     public void tick() {
-        if (super.isBlacklisted()) {
-            super.tick();
-        }
-
+        super.updateWrapped();
         tickCount++;
         if (super.isStopped() || Config.getInstance().tickRate == 0) return; // DONE or ticking sounds is off
         if (tickCount % Config.getInstance().tickRate == 0) { // only update once every .1 second

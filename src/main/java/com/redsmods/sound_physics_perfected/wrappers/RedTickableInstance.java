@@ -2,7 +2,6 @@ package com.redsmods.sound_physics_perfected.wrappers;
 
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
 import com.redsmods.sound_physics_perfected.config.Config;
-import com.redsmods.sound_physics_perfected.config.DebugType;
 import com.redsmods.sound_physics_perfected.config.RedsAttenuationType;
 import lombok.Getter;
 import lombok.Setter;
@@ -56,25 +55,39 @@ public class RedTickableInstance implements TickableSoundInstance {
         this.attenuationMultiplier = attenuationMultiplier;
     }
 
+    public boolean isStopped() {
+        if (wrapped instanceof TickableSoundInstance) {
+            stopped = ((TickableSoundInstance) wrapped).isStopped();
+        }
+        return stopped;
+    };
+
     @Override
     public void tick() {
+        if (wrapped instanceof TickableSoundInstance) {
+            ((TickableSoundInstance) wrapped).tick();
+            originalVolume = wrapped.getVolume();
+            originalPosition = new Vec3(wrapped.getX(), wrapped.getY(), wrapped.getZ());
+        }
+
         if (isBlacklisted) {
-            if (wrapped instanceof TickableSoundInstance) {
-                ((TickableSoundInstance) wrapped).tick();
-                originalVolume = wrapped.getVolume();
-                originalPosition = new Vec3(wrapped.getX(),wrapped.getY(),wrapped.getZ());
-            }
             return;
         }
+
         tickCount++;
         if (stopped || Config.getInstance().tickRate == 0) return; // DONE or ticking sounds is off
         if (tickCount % Config.getInstance().tickRate == 0) // only update once every .1 second
             if (!RaycastingHelper.tickQueue.contains(this))
                 RaycastingHelper.tickQueue.add(this);
-        if (wrapped instanceof TickableSoundInstance)
-            ((TickableSoundInstance) wrapped).tick();
         updatePos();
         updateVolume();
+    }
+    public void updateWrapped() {
+        if (wrapped instanceof TickableSoundInstance) {
+            ((TickableSoundInstance) wrapped).tick();
+            originalVolume = wrapped.getVolume();
+            originalPosition = new Vec3(wrapped.getX(), wrapped.getY(), wrapped.getZ());
+        }
     }
 
     @Override
