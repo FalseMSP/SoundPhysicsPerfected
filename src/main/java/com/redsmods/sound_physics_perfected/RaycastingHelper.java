@@ -318,8 +318,8 @@ public class RaycastingHelper {
                 targetPosition = ((RedTickableInstance) originalSound).getOriginalPosition();
                 // Force confidence to 1 if LOS is there
                 confidenceMultiplier = 1; // bc 100% confident or whatever
-            } else if (Config.getInstance().shortcutDirectionality){
-                targetPosition = new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ());
+//            } else if (Config.getInstance().shortcutDirectionality){
+//                targetPosition = new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ());
             }
 
             float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier * attenuationMultiplier * permeationIndex;
@@ -776,6 +776,7 @@ public class RaycastingHelper {
 
             double weight = getWeight(currentDistance,blockCount,distanceToEntity);
             double permeationAbsorption = Math.pow(Config.getInstance().permeationAbsorption, blockCount);
+            weight *= permeationAbsorption;
 
             RaycastResult rayResult = new RaycastResult(
                     distanceToEntity,
@@ -806,6 +807,7 @@ public class RaycastingHelper {
 
             double weight = getWeight(currentDistance, blockCount, distanceToEntity);
             double permeationAbsorption = Math.pow(Config.getInstance().permeationAbsorption, blockCount);
+            weight *= permeationAbsorption;
 
             RaycastResult rayResult = new RaycastResult(
                     distanceToEntity,
@@ -838,29 +840,22 @@ public class RaycastingHelper {
     // Helper method to calculate weighted averages for a single entity
     private static AveragedSoundData calculateWeightedAverages(SoundData entity, List<RayHitData> rayHits) {
         double totalWeight = 0.0;
-        double totalMuffle = 0.0;
         double weightedDistanceSum = 0.0;
+        double weightedMuffleSum = 0.0;
         Vec3 weightedDirectionSum = Vec3.ZERO;
-        Vec3 absDirection = null;
-        double absDistance = -1;
 
         // Calculate weighted sums
         for (RayHitData rayHit : rayHits) {
             double weight = rayHit.weight;
             totalWeight += weight;
-            totalMuffle += rayHit.muffleFac;
 
             // Weighted distance
             weightedDistanceSum += rayHit.rayResult.totalDistance * weight;
+            weightedMuffleSum += rayHit.muffleFac * weight;
 
             // Weighted direction (using initial ray direction)
             Vec3 weightedDirection = rayHit.rayResult.initialDirection.scale(weight);
             weightedDirectionSum = weightedDirectionSum.add(weightedDirection);
-        }
-
-        if (absDirection != null) {
-            weightedDirectionSum = absDirection;
-            weightedDistanceSum = absDistance;
         }
 
         if (totalWeight == 0.0)
@@ -871,7 +866,7 @@ public class RaycastingHelper {
         Vec3 averageDirection = weightedDirectionSum.scale(1.0 / totalWeight).normalize();
 
         return new AveragedSoundData(entity, averageDirection, averageDistance,
-                totalWeight, rayHits.size(), rayHits, totalMuffle / rayHits.size());
+                totalWeight, rayHits.size(), rayHits, weightedMuffleSum / totalWeight);
     }
 
 
