@@ -95,7 +95,7 @@
       "rayBounce": "Wall Bounce",
       "rayBounce.description": "Larger = less heavily the sound will be coming from walls (will make likely make sounds quieter)\\nPERFORMANCE IMPACT: NONE",
       "debug": "Debug Mode",
-      "debug.description": "puts sound names in chat. \\nPERFORMANCE IMPACT: SMALL",
+      "debug.description": "puts sound names in chat.   CAN CAUSE CRASHES WITH SODIUM \\n(idk why, its really weird) \\nPERFORMANCE IMPACT: SMALL",
       "maxBlocksPermeated": "Max Permeation Distance",
       "maxBlocksPermeated.description": "Max blocks permeated in the calculation",
       "permeationAbsorption": "Absorption Multiplier",
