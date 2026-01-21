@@ -130,6 +130,14 @@ public abstract class SoundSystemMixin {
             locals = LocalCapture.CAPTURE_FAILHARD
     )
     private void onSoundTick(boolean paused, CallbackInfo ci) {
+        // Cast rays from player and detect entities
+        Minecraft client = Minecraft.getInstance();
+        if(client.level == null || client.player == null) {
+            return;
+        } // some error occurred
+        RaycastingHelper.castBouncingRaysAndDetectSFX(client.level, client.player);
+        RaycastingHelper.playQueuedObjects();
+
         if (!fxHandler.efxInitialized) {
             fxHandler.initializeReverb();
         }
