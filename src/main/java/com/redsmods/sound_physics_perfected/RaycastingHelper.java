@@ -318,8 +318,9 @@ public class RaycastingHelper {
                 targetPosition = ((RedTickableInstance) originalSound).getOriginalPosition();
                 // Force confidence to 1 if LOS is there
                 confidenceMultiplier = 1; // bc 100% confident or whatever
-//            } else if (Config.getInstance().shortcutDirectionality){
-//                targetPosition = new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ());
+            } else if (Config.getInstance().shortcutDirectionality && hasLineOfSight(world, player, originalSound)){
+                targetPosition = new Vec3(originalSound.getX(),originalSound.getY(),originalSound.getZ());
+                confidenceMultiplier = 1;
             }
 
             float adjustedVolume = baseVolume * volumeMultiplier * confidenceMultiplier * attenuationMultiplier * permeationIndex;
@@ -955,7 +956,9 @@ public class RaycastingHelper {
     }
 
     public static boolean hasLineOfSight(Level world, Player player, SoundInstance sound) {
-        return countBlocksBetween(world,player.getEyePosition(),new Vec3(sound.getX(),sound.getY(),sound.getZ()),player) < 0.2;
+        if (sound instanceof RedTickableInstance)
+            return countBlocksBetween(world,player.getEyePosition(), ((RedTickableInstance) sound).getOriginalPosition(), player) == 0;
+        return countBlocksBetween(world,player.getEyePosition(),new Vec3(sound.getX(),sound.getY(),sound.getZ()),player) == 0;
     }
 
     public static Vec3 calculateReflection(Vec3 incident, Direction hitSide) {
