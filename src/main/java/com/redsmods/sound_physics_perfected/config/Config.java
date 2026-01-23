@@ -85,7 +85,7 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeationStepSize.description")
     @SerialEntry public double permeationStepSize = 0.0625; // changed to 1/16 of a block bc u don't *need* 0.01 precision lets be so fr
 
-    @AutoGen(category = "general", group = "main")
+    @AutoGen(category = "general", group = "permeation")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.useExplosionResistance.description")
     @SerialEntry public boolean useExplosionResistance = true;
