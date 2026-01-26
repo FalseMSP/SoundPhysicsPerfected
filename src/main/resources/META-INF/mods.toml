@@ -1,0 +1,33 @@
+modLoader = "javafml"
+loaderVersion = "*"
+issueTrackerURL = "${issues}"
+license = "${license}"
+
+[[mods]]
+modId = "${id}"
+version = "${version}"
+displayName = "${name}"
+authors = "RedLife"
+description = "${description}"
+logoFile = "assets/${id}/icon.png"
+
+[[dependencies.sound_physics_perfected]]
+modId="forge"
+mandatory=true
+versionRange="[40,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.sound_physics_perfected]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1]"
+ordering="NONE"
+side="BOTH"
+
+[["dependencies.${id}"]]
+modId = "yet_another_config_lib_v3"
+mandatory=true
+versionRange = "[${yacl_version},)"
+ordering = "BEFORE"
+side = "CLIENT"

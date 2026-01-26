@@ -1,0 +1,1 @@
+MixinConnector: com.redsmods.sound_physics_perfected.MixinConnector

@@ -963,9 +963,9 @@ public class RaycastingHelper {
 
     public static Vec3 calculateReflection(Vec3 incident, Direction hitSide) {
         //? if >=1.21.2
-        Vec3 normal = Vec3.atLowerCornerOf(hitSide.getUnitVec3i());
+        /*Vec3 normal = Vec3.atLowerCornerOf(hitSide.getUnitVec3i());*/
         //? if <1.21.2
-        /*Vec3 normal = Vec3.atLowerCornerOf(hitSide.getNormal());*/
+        Vec3 normal = Vec3.atLowerCornerOf(hitSide.getNormal());
 
         // Reflection formula: R = I - 2(I·N)N
         // Where I is incident vector, N is normal, R is reflected vector

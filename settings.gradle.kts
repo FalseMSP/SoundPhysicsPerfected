@@ -26,7 +26,7 @@ stonecutter {
 			}
 		}
 
-		mc("1.20.1", listOf("fabric"))
+		mc("1.20.1", listOf("fabric", "forge"))
 		mc("1.21.1", listOf("fabric", "neoforge"))
 		mc("1.21.3", listOf("fabric", "neoforge"))
 		mc("1.21.6", listOf("fabric", "neoforge"))

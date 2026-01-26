@@ -25,6 +25,7 @@ class ModData {
 }
 
 class Dependencies {
+    val forgeVersion = property("deps.forge_version")
     val neoforgeVersion = property("deps.neoforge_version")
     val fabricLoaderVersion = property("deps.fabric_loader_version")
     val fabricApiVersion = property("deps.fabric_api_version")
@@ -34,12 +35,14 @@ class Dependencies {
     val devauthVersion = property("deps.devauth_version")
     val mixinconstraintsVersion = property("deps.mixinconstraints_version")
     val mixinsquaredVersion = property("deps.mixinsquared_version")
+//    val kotlinForgeVersion = property("deps.kotlin_forge_version")
 }
 
 class LoaderData {
     val loader = loom.platform.get().name.lowercase()
     val isFabric = loader == "fabric"
     val isNeoforge = loader == "neoforge"
+    val isForge = loader == "forge"
 }
 
 class McData {
@@ -59,6 +62,7 @@ base { archivesName.set(mod.id) }
 stonecutter {
     constants["fabric"] = loader.isFabric
     constants["neoforge"] = loader.isNeoforge
+    constants["forge"] = loader.isForge
 }
 
 blossom {
@@ -67,6 +71,11 @@ blossom {
 
 loom {
     silentMojangMappingsLicense()
+
+    mixin {
+        useLegacyMixinAp = true
+        defaultRefmapName.set("sound_physics_perfected.refmap.json")
+    }
 
     runConfigs.all {
         ideConfigGenerated(stonecutter.current.isActive)
@@ -82,10 +91,10 @@ loom.runs {
             componentFilter {
                 it is ModuleComponentIdentifier && it.group == "net.fabricmc" && it.module == "sponge-mixin"
             }
-        }.files.first()
+        }.files.firstOrNull()
 
         configureEach {
-            vmArg("-javaagent:$mixinJarFile") // Mixin Hotswap doesn't work on NeoForge, but doesn't hurt to keep
+            mixinJarFile?.let { vmArg("-javaagent:$it") }
 
             property("mixin.hotSwap", "true")
             property("mixin.debug.export", "true") // Puts mixin outputs in /run/.mixin.out
@@ -106,11 +115,13 @@ fletchingTable {
 repositories {
     maven("https://maven.parchmentmc.org") // Parchment
     maven("https://maven.isxander.dev/releases") // YACL
-    maven("https://thedarkcolour.github.io/KotlinForForge") // Kotlin for Forge - required by YACL
+//    maven("https://thedarkcolour.github.io/KotlinForForge") // Kotlin for Forge - required by YACL
     maven("https://maven.terraformersmc.com") // Mod Menu
     maven("https://maven.nucleoid.xyz/") // Placeholder API - required by Mod Menu
     maven("https://maven.neoforged.net/releases") // NeoForge
-    maven("https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1") // DevAuth
+    maven("https://maven.minecraftforge.net/") // Forge
+    if(!loader.isForge)
+        maven("https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1") // DevAuth
     maven("https://maven.bawnorton.com/releases") // MixinSquared
     maven("https://api.modrinth.com/maven") // Modrinth
     maven ("https://maven.maxhenkel.de/repository/public") // Simple Voice Chat API
@@ -127,8 +138,8 @@ dependencies {
             parchment("org.parchmentmc.data:parchment-${mc.version}:$it@zip")
         }
     })
-
-    modRuntimeOnly("me.djtheredstoner:DevAuth-${loader.loader}:${deps.devauthVersion}")
+    if(!loader.isForge)
+        modRuntimeOnly("me.djtheredstoner:DevAuth-${loader.loader}:${deps.devauthVersion}")
     include(implementation("com.moulberry:mixinconstraints:${deps.mixinconstraintsVersion}")!!)!!
     include(implementation(annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-${loader.loader}:${deps.mixinsquaredVersion}")!!)!!)
     modImplementation("de.maxhenkel.voicechat:voicechat-api:${deps.voicechat_api_version}")
@@ -140,7 +151,14 @@ dependencies {
         modImplementation("com.terraformersmc:modmenu:${deps.modmenuVersion}")
     } else if (loader.isNeoforge) {
         "neoForge"("net.neoforged:neoforge:${deps.neoforgeVersion}")
-        implementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
+        modImplementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
+    } else if (loader.isForge) {
+        "forge"("net.minecraftforge:forge:${mc.version}-${deps.forgeVersion}")
+
+        // Kotlin for Forge (required by YACL on Forge 1.20.1)
+//        modImplementation("thedarkcolour:kotlinforforge:${deps.kotlinForgeVersion}")
+
+        modImplementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
     }
 
 }
@@ -191,8 +209,11 @@ publishMods {
                 requires("fabric-api")
                 requires("yacl")
                 requires("modmenu")
-            } else if (loader.isNeoforge) {
+            } else if (loader.isNeoforge || loader.isForge) {
                 requires("yacl")
+                if (loader.isForge) {
+                    requires("kotlin-for-forge")
+                }
             }
         }
     }
@@ -219,8 +240,11 @@ publishMods {
                 requires("fabric-api")
                 requires("yacl")
                 optional("modmenu")
-            } else if (loader.isNeoforge) {
+            } else if (loader.isNeoforge || loader.isForge) {
                 requires("yacl")
+                if (loader.isForge) {
+                    requires("kotlin-for-forge")
+                }
             }
         }
     }
@@ -234,6 +258,22 @@ java {
     ) JavaVersion.VERSION_21 else JavaVersion.VERSION_17
     sourceCompatibility = java
     targetCompatibility = java
+}
+
+tasks.jar {
+    from("src/main/resources") {
+        include("META-INF/services/**")
+    }
+
+    manifest {
+        attributes(
+            "MixinConnector" to "com.redsmods.sound_physics_perfected.MixinConnector"
+        )
+    }
+}
+
+tasks.named("remapJar") {
+    dependsOn(tasks.jar)
 }
 
 tasks.processResources {
@@ -259,6 +299,11 @@ tasks.processResources {
         if (loader.isNeoforge) {
             put("forge_version", deps.neoforgeVersion)
         }
+
+        if (loader.isForge) {
+            put("forge_version", deps.forgeVersion)
+//            put("kotlin_forge_version", deps.kotlinForgeVersion)
+        }
     }
 
     props.forEach(inputs::property)
@@ -270,12 +315,17 @@ tasks.processResources {
 
     if (loader.isFabric) {
         filesMatching("fabric.mod.json") { expand(props) }
-        exclude(listOf("META-INF/neoforge.mods.toml"))
+        exclude(listOf("META-INF/neoforge.mods.toml", "META-INF/mods.toml"))
     }
 
     if (loader.isNeoforge) {
         filesMatching("META-INF/neoforge.mods.toml") { expand(props) }
-        exclude("fabric.mod.json")
+        exclude(listOf("fabric.mod.json", "META-INF/mods.toml"))
+    }
+
+    if (loader.isForge) {
+        filesMatching("META-INF/mods.toml") { expand(props) }
+        exclude(listOf("fabric.mod.json", "META-INF/neoforge.mods.toml"))
     }
 }
 

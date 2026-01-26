@@ -9,15 +9,23 @@ import org.slf4j.LoggerFactory;
 import net.fabricmc.api.ModInitializer;
 *///?}
 //? if neoforge {
-import net.neoforged.api.distmarker.Dist;
+/*import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.ModLoadingContext;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+*///?}
+
+//? if forge {
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.common.Mod;
 //?}
 
 
 //? if neoforge {
-@Mod(value = "@MODID@", dist = Dist.CLIENT)
+/*@Mod(value = "@MODID@", dist = Dist.CLIENT)
+*///?} else if forge {
+@Mod(value = "@MODID@")
 //?} else {
 /*@Entrypoint
 *///?}
@@ -34,9 +42,14 @@ public class SoundPhysicsPerfected /*? if fabric {*/ /*implements ModInitializer
     *///?}
 
     //? if neoforge {
-    public SoundPhysicsPerfected() {
+    /*public SoundPhysicsPerfected() {
         Config.CONFIG.load();
         ModLoadingContext.get().registerExtensionPoint(IConfigScreenFactory.class, () -> (client, parent) -> Config.configScreen(parent));
     }
-	//?}
+	*///?}
+    //? if forge {
+    public SoundPhysicsPerfected() {
+        Config.CONFIG.load();
+    }
+    //?}
 }
