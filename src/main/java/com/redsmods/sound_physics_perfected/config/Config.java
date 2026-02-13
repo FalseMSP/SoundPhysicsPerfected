@@ -54,7 +54,7 @@ public class Config {
     @IntSlider(min = 2, max = 16, step = 1)
     @FormatTranslation("sound_physics_perfected.config.unit.chunks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.maxRayLength.description")
-    @SerialEntry public int maxRayLength = 8; // chunks
+    @SerialEntry public int maxRayLength = 4; // chunks
 
     @AutoGen(category = "general", group = "main")
     @IntSlider(min = -1, max = 1000, step = 10)

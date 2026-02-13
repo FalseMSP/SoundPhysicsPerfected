@@ -364,7 +364,8 @@ public class OpenALEffectsHandler {
             long device = ALC10.alcGetContextsDevice(currentContext);
             initializeReverb(currentContext, device);
         } catch (Exception e) {
-//            System.err.println("Failed to initialize reverb: " + e.getMessage());
+            if(Config.getInstance().debug != DebugType.OFF)
+                System.err.println("Failed to initialize reverb: " + e.getMessage());
         }
     }
     public void initializeReverb(long currentContext, long currentDevice) {
