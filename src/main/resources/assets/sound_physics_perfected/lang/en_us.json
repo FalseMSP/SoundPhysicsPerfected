@@ -1,4 +1,7 @@
 {
+  "category.sound_physics_perfected.own_voice": "Own voice",
+  "category.sound_physics_perfected.own_voice.description": "The volume of your own voice",
+
   "modmenu.descriptionTranslation.${id}": "${description}",
   "${id}": {
     "${id}": "${name}",
@@ -204,6 +207,8 @@
 
       "voicechatReverb": "Reverb",
       "voicechatReverb.description": "Enables Reverb for Voicechat",
+      "voicechatReverbSelf": "Reverb Self",
+      "voicechatReverbSelf.description": "Make it so you can hear your own reverb bc Skizzy promised me clout.",
       "voicechatMuffle": "Muffle",
       "voicechatMuffle.description": "Muffle for Voicechat",
       "voicechatMuffleVolume": "Muffle Volume decrement",

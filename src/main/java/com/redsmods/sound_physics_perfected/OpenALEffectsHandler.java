@@ -21,6 +21,9 @@ public class OpenALEffectsHandler {
     private int muffleFilter = 0;
     private int sendFilter = 0;
     public boolean efxInitialized = false;
+    private int directBlockFilter;
+
+    public int getDirectBlockFilter() { return directBlockFilter; }
 
     /**
      * Apply reverb settings to a specific OpenAL source
@@ -363,6 +366,10 @@ public class OpenALEffectsHandler {
             long currentContext = ALC10.alcGetCurrentContext();
             long device = ALC10.alcGetContextsDevice(currentContext);
             initializeReverb(currentContext, device);
+            directBlockFilter = EXTEfx.alGenFilters();
+            EXTEfx.alFilteri(directBlockFilter, EXTEfx.AL_FILTER_TYPE, EXTEfx.AL_FILTER_LOWPASS);
+            EXTEfx.alFilterf(directBlockFilter, EXTEfx.AL_LOWPASS_GAIN, 0.0f);
+            EXTEfx.alFilterf(directBlockFilter, EXTEfx.AL_LOWPASS_GAINHF, 0.0f);
         } catch (Exception e) {
             if(Config.getInstance().debug != DebugType.OFF)
                 System.err.println("Failed to initialize reverb: " + e.getMessage());
