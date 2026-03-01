@@ -666,6 +666,8 @@ public class RaycastingHelper {
     }
 
     private static double getAbsorptionCoeficient(Level world, Vec3 pos) {
+        if (!Config.getInstance().useExplosionResistance)
+            return 1;
         BlockPos blockPos = new BlockPos((int)pos.x, (int)pos.y, (int)pos.z);
         BlockState blockState = world.getBlockState(blockPos);
 
@@ -674,12 +676,7 @@ public class RaycastingHelper {
             ReverbSurfaceData surfaceData = surfaceMaterials.getOrDefault(materialName,
                     surfaceMaterials.get("default")); // SEE I TOLD YOU I HAVE IT IN CODE, I JUST AM WAY TOO LAZY TO MAKE IT ACTUALLY DO SMTH
             // list still does nothing ^
-
-            if (Config.getInstance().useExplosionResistance)
-                surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0); // deepslate is default 1
-            else
-                surfaceData.absorptionCoefficient = 1; // maintain current functionality
-            return surfaceData.absorptionCoefficient;
+            surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0); // deepslate is default 1
         }
         return 0; // smth went wrong.
     }
