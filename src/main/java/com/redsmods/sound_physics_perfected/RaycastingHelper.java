@@ -668,7 +668,11 @@ public class RaycastingHelper {
     private static double getAbsorptionCoeficient(Level world, Vec3 pos) {
         if (!Config.getInstance().useExplosionResistance)
             return 1;
-        BlockPos blockPos = new BlockPos((int)pos.x, (int)pos.y, (int)pos.z);
+        BlockPos blockPos = new BlockPos(
+                (int)Math.floor(pos.x),
+                (int)Math.floor(pos.y),
+                (int)Math.floor(pos.z)
+        );
         BlockState blockState = world.getBlockState(blockPos);
 
         if (!blockState.isAir()) {
