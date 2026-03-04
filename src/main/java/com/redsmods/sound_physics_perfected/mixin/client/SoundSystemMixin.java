@@ -102,8 +102,8 @@ public abstract class SoundSystemMixin {
                 soundQueue.offer(soundData);
 
                 // Remove the oldest sounds if queue is too large
-                while (soundQueue.size() > Config.getInstance().maxSounds) {
-                    soundQueue.poll();
+                if (soundQueue.size() > Config.getInstance().maxSounds) {
+                    return;
                 }
 
                 /*? if >= 1.21.6 {*/ /*cir.cancel(); *//*?} else {*/ ci.cancel(); /*?}*/

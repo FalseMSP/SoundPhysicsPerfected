@@ -681,8 +681,9 @@ public class RaycastingHelper {
                     surfaceMaterials.get("default")); // SEE I TOLD YOU I HAVE IT IN CODE, I JUST AM WAY TOO LAZY TO MAKE IT ACTUALLY DO SMTH
             // list still does nothing ^
             surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0); // deepslate is default 1
+            return surfaceData.absorptionCoefficient;
         }
-        return 0; // smth went wrong.
+        return 1; // smth went wrong.
     }
 
     private static void analyzeSurfaceAtPosition(Level world, Vec3 pos, double distance) {
