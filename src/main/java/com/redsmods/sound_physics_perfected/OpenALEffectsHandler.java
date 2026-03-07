@@ -11,6 +11,8 @@ import org.lwjgl.openal.AL11;
 import org.lwjgl.openal.ALC10;
 import org.lwjgl.openal.EXTEfx;
 
+import java.util.logging.Logger;
+
 import static com.redsmods.sound_physics_perfected.RaycastingHelper.*;
 import static org.joml.Math.lerp;
 import static org.lwjgl.openal.EXTEfx.*;
@@ -388,23 +390,28 @@ public class OpenALEffectsHandler {
             // Create auxiliary effect slot
             auxFXSlot = EXTEfx.alGenAuxiliaryEffectSlots();
             EXTEfx.alAuxiliaryEffectSloti(auxFXSlot, EXTEfx.AL_EFFECTSLOT_AUXILIARY_SEND_AUTO, AL11.AL_TRUE);
+            logALError("Failed creating aux");
 
             // Create reverb effect
             reverbEffect = EXTEfx.alGenEffects();
             EXTEfx.alEffecti(reverbEffect, EXTEfx.AL_EFFECT_TYPE, EXTEfx.AL_EFFECT_EAXREVERB);
+            logALError("Failed creating reverb effect");
 
             muffleFilter = EXTEfx.alGenFilters();
             EXTEfx.alFilteri(muffleFilter, EXTEfx.AL_FILTER_TYPE, EXTEfx.AL_FILTER_LOWPASS);
+            logALError("Failed creating Muffle Filter");
 
             // Create send filter
             sendFilter = EXTEfx.alGenFilters();
             EXTEfx.alFilteri(sendFilter, EXTEfx.AL_FILTER_TYPE, EXTEfx.AL_FILTER_LOWPASS);
+            logALError("Failed creating Send Filter");
 
             // Set basic reverb parameters (medium room)
             setBasicReverbParams();
 
             // Attach effect to slot
             EXTEfx.alAuxiliaryEffectSloti(auxFXSlot, EXTEfx.AL_EFFECTSLOT_EFFECT, reverbEffect);
+            logALError("Failed attaching reverb to slot");
 
             efxInitialized = true;
             System.out.println("Reverb system initialized successfully");
@@ -509,5 +516,24 @@ public class OpenALEffectsHandler {
 
     private static float clamp(float a, float b, float c) {
         return Math.min(Math.max(a,b),c);
+    }
+
+    public static void logALError(String errorMessage) {
+        int error = AL11.alGetError();
+
+        if (error == AL11.AL_NO_ERROR) {
+            return;
+        }
+
+        String errorName = switch (error) {
+            case AL11.AL_INVALID_NAME -> "AL_INVALID_NAME";
+            case AL11.AL_INVALID_ENUM -> "AL_INVALID_ENUM";
+            case AL11.AL_INVALID_VALUE -> "AL_INVALID_VALUE";
+            case AL11.AL_INVALID_OPERATION -> "AL_INVALID_OPERATION";
+            case AL11.AL_OUT_OF_MEMORY -> "AL_OUT_OF_MEMORY";
+            default -> Integer.toString(error);
+        };
+
+        SoundPhysicsPerfected.DEBUG_LOGGER.error("{}: OpenAL error {}", errorMessage, errorName);
     }
 }
