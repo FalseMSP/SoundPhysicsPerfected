@@ -15,6 +15,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import com.redsmods.sound_physics_perfected.storageclasses.*;
 import com.redsmods.sound_physics_perfected.wrappers.*;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
@@ -677,11 +678,13 @@ public class RaycastingHelper {
 
         if (!blockState.isAir()) {
             String materialName = blockState.getBlock().getName().getString().toLowerCase();
-            ReverbSurfaceData surfaceData = surfaceMaterials.getOrDefault(materialName,
-                    surfaceMaterials.get("default")); // SEE I TOLD YOU I HAVE IT IN CODE, I JUST AM WAY TOO LAZY TO MAKE IT ACTUALLY DO SMTH
-            // list still does nothing ^
-            surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0); // deepslate is default 1
-            return surfaceData.absorptionCoefficient;
+            double absorptionCoefficient = 0.0;
+            if(blockState.is(BlockTags.DAMPENS_VIBRATIONS) || blockState.is(BlockTags.OCCLUDES_VIBRATION_SIGNALS))
+                absorptionCoefficient = 50;
+            else
+                absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0); // deepslate is default 1
+
+            return absorptionCoefficient;
         }
         return 1; // smth went wrong.
     }
@@ -696,6 +699,9 @@ public class RaycastingHelper {
                     surfaceMaterials.get("default")); // SEE I TOLD YOU I HAVE IT IN CODE, I JUST AM WAY TOO LAZY TO MAKE IT ACTUALLY DO SMTH
             if (Config.getInstance().useExplosionResistance)
                 surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0); // deepslate is default 1
+
+            if(blockState.is(BlockTags.DAMPENS_VIBRATIONS) || blockState.is(BlockTags.OCCLUDES_VIBRATION_SIGNALS))
+                surfaceData.absorptionCoefficient = 50;
 
             // Weight by distance (closer surfaces have more impact)
             double distanceWeight = 1.0 / Math.max(distance, 1.0);
