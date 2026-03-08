@@ -375,6 +375,7 @@ public class RaycastingHelper {
                                                                              Queue<SoundData> soundQueue, double maxTotalDistance) {
         // Reset atomic variables
         reverbStrength.set(0);
+        weightedReverbStrength.set(0.0);
         distanceFromWallEcho.set(0.0);
         distanceFromWallEchoDenom.set(0.0);
         reverbDenom.set(0);
