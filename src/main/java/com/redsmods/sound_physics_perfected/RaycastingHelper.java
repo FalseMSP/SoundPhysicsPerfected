@@ -92,6 +92,8 @@ public class RaycastingHelper {
     private static final AtomicBoolean isRaytracing = new AtomicBoolean(false);
     private static final AtomicBoolean freezeTickCounter = new AtomicBoolean(false);
     public static Vec3 playerEyePos = new Vec3(0,0,0);
+    private static Vec3[] rayDirections;
+    private static int lastRaysCast = -1;
 
     static {
         surfaceMaterials.put("default", new ReverbSurfaceData(0.05, 0.7, "medium"));
@@ -125,7 +127,9 @@ public class RaycastingHelper {
             }
 
             // Generate ray directions
-            Vec3[] rayDirections = RaycastingHelper.generateRayDirections();
+            if (Config.getInstance().raysCast != lastRaysCast)
+                rayDirections = RaycastingHelper.generateRayDirections();
+            lastRaysCast = Config.getInstance().raysCast;
             rayHitsByEntity.clear(); // clear list before every call
             redRaysToTarget.clear(); // wow, this was the issue? I feel like a real dumbass now D:
 
@@ -677,10 +681,9 @@ public class RaycastingHelper {
         BlockState blockState = world.getBlockState(blockPos);
 
         if (!blockState.isAir()) {
-            String materialName = blockState.getBlock().getName().getString().toLowerCase();
             double absorptionCoefficient = 0.0;
             if(blockState.is(BlockTags.DAMPENS_VIBRATIONS) || blockState.is(BlockTags.OCCLUDES_VIBRATION_SIGNALS))
-                absorptionCoefficient = 50;
+                absorptionCoefficient = Config.getInstance().maxBlocksPermeated;
             else
                 absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0); // deepslate is default 1
 
@@ -697,11 +700,11 @@ public class RaycastingHelper {
             String materialName = blockState.getBlock().getName().getString().toLowerCase();
             ReverbSurfaceData surfaceData = surfaceMaterials.getOrDefault(materialName,
                     surfaceMaterials.get("default")); // SEE I TOLD YOU I HAVE IT IN CODE, I JUST AM WAY TOO LAZY TO MAKE IT ACTUALLY DO SMTH
-            if (Config.getInstance().useExplosionResistance)
-                surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0); // deepslate is default 1
 
             if(blockState.is(BlockTags.DAMPENS_VIBRATIONS) || blockState.is(BlockTags.OCCLUDES_VIBRATION_SIGNALS))
-                surfaceData.absorptionCoefficient = 50;
+                surfaceData.absorptionCoefficient = Config.getInstance().maxBlocksPermeated;
+            else
+                surfaceData.absorptionCoefficient = Math.min(blockState.getBlock().getExplosionResistance()/6,5.0);
 
             // Weight by distance (closer surfaces have more impact)
             double distanceWeight = 1.0 / Math.max(distance, 1.0);
@@ -991,7 +994,7 @@ public class RaycastingHelper {
     public static Vec3[] generateRayDirections() {
         // Generate directions in a roughly spherical pattern
         // Using fibonacci sphere for even distribution
-        int numRays = Config.getInstance().raysCast; // Good balance between accuracy and performance
+        int numRays = Config.getInstance().raysCast;
         Vec3[] directions = new Vec3[numRays];
 
         double goldenRatio = (1 + Math.sqrt(5)) / 2;
