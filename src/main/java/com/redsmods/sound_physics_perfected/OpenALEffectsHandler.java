@@ -469,6 +469,11 @@ public class OpenALEffectsHandler {
                 sendFilter = 0;
             }
 
+            if (directBlockFilter != 0) {
+                EXTEfx.alDeleteFilters(directBlockFilter);
+                directBlockFilter = 0;
+            }
+
             efxInitialized = false;
             System.out.println("EFX resources cleaned up successfully");
 
@@ -480,6 +485,7 @@ public class OpenALEffectsHandler {
             muffleFilter = 0;
             sendFilter = 0;
             efxInitialized = false;
+            directBlockFilter = 0;
         }
     }
 
