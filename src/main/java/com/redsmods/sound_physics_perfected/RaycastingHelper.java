@@ -437,15 +437,13 @@ public class RaycastingHelper {
         return rayTasks;
     }
 
-    public static RaycastResult castBouncingRay(Level world, Player player, Vec3 startPos, Vec3 direction,
+    public static void castBouncingRay(Level world, Player player, Vec3 startPos, Vec3 direction,
                                                 Queue<SoundData> sQ, Queue<RedTickableInstance> tQ, Queue<RedPermeatedSoundInstance> pTQ, double maxTotalDistance) {
         Vec3 currentPos = startPos;
         Vec3 currentDirection = direction.normalize();
         Vec3 initialDirection = currentDirection.normalize();
         double remainingDistance = maxTotalDistance;
         double totalDistanceTraveled = 0.0;
-
-        SoundData hitEntity = null;
 
 
         if (Config.getInstance().permeation)
@@ -526,11 +524,9 @@ public class RaycastingHelper {
                 outdoorLeak.incrementAndGet();
                 outdoorLeakDenom.incrementAndGet();
                 if (bounce == 0)
-                    return null;
+                    return;
             }
         }
-
-        return new RaycastResult(totalDistanceTraveled, initialDirection, hitEntity);
     }
 
     private static void castGreenRay(Level world, Player player, Vec3 currentPos, Queue<SoundData> sQ, Queue<RedTickableInstance> tQ, Queue<RedPermeatedSoundInstance> pTQ,
