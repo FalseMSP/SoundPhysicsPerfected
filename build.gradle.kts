@@ -6,8 +6,8 @@ plugins {
     alias(libs.plugins.publishing)
     alias(libs.plugins.blossom)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.fletchingtable.fabric)
-    alias(libs.plugins.fletchingtable.neoforge)
+//    alias(libs.plugins.fletchingtable.fabric)
+//    alias(libs.plugins.fletchingtable.neoforge)
     id("io.freefair.lombok") version "8.14"
 }
 
@@ -39,7 +39,8 @@ class Dependencies {
 }
 
 class LoaderData {
-    val loader = loom.platform.get().name.lowercase()
+//    val loader = loom.platform.get().name.lowercase()
+    val loader = "fabric"
     val isFabric = loader == "fabric"
     val isNeoforge = loader == "neoforge"
     val isForge = loader == "forge"
@@ -70,7 +71,8 @@ blossom {
 }
 
 loom {
-    silentMojangMappingsLicense()
+//    splitEnvironmentSourceSets()
+//    silentMojangMappingsLicense()
 
     mixin {
         useLegacyMixinAp = true
@@ -85,32 +87,32 @@ loom {
     runConfigs.remove(runConfigs["server"]) // Removes server run configs
 }
 
-loom.runs {
-    afterEvaluate {
-        val mixinJarFile = configurations.runtimeClasspath.get().incoming.artifactView {
-            componentFilter {
-                it is ModuleComponentIdentifier && it.group == "net.fabricmc" && it.module == "sponge-mixin"
-            }
-        }.files.firstOrNull()
+//loom.runs {
+//    afterEvaluate {
+//        val mixinJarFile = configurations.runtimeClasspath.get().incoming.artifactView {
+//            componentFilter {
+//                it is ModuleComponentIdentifier && it.group == "net.fabricmc" && it.module == "sponge-mixin"
+//            }
+//        }.files.firstOrNull()
+//
+//        configureEach {
+//            mixinJarFile?.let { vmArg("-javaagent:$it") }
+//
+//            property("mixin.hotSwap", "true")
+//            property("mixin.debug.export", "true") // Puts mixin outputs in /run/.mixin.out
+//        }
+//    }
+//}
 
-        configureEach {
-            mixinJarFile?.let { vmArg("-javaagent:$it") }
-
-            property("mixin.hotSwap", "true")
-            property("mixin.debug.export", "true") // Puts mixin outputs in /run/.mixin.out
-        }
-    }
-}
-
-fletchingTable {
-    mixins.create("main") {
-        mixin("default", "${mod.id}.mixins.json")
-    }
-
-    lang.create("main") {
-        patterns.add("assets/${mod.id}/lang/**")
-    }
-}
+//fletchingTable {
+//    mixins.create("main") {
+//        mixin("default", "${mod.id}.mixins.json")
+//    }
+//
+//    lang.create("main") {
+//        patterns.add("assets/${mod.id}/lang/**")
+//    }
+//}
 
 repositories {
     maven("https://maven.parchmentmc.org") // Parchment
@@ -129,36 +131,22 @@ repositories {
 
 dependencies {
     minecraft("com.mojang:minecraft:${mc.version}")
-    mappings(loom.layered {
-        // Mojmap mappings
-        officialMojangMappings()
-
-        // Parchment mappings (it adds parameter mappings & javadoc)
-        optionalProp("deps.parchment_version") {
-            parchment("org.parchmentmc.data:parchment-${mc.version}:$it@zip")
-        }
-    })
-    if(!loader.isForge)
-        modRuntimeOnly("me.djtheredstoner:DevAuth-${loader.loader}:${deps.devauthVersion}")
-    include(implementation("com.moulberry:mixinconstraints:${deps.mixinconstraintsVersion}")!!)!!
-    include(implementation(annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-${loader.loader}:${deps.mixinsquaredVersion}")!!)!!)
-    modImplementation("de.maxhenkel.voicechat:voicechat-api:${deps.voicechat_api_version}")
+//    include(implementation("com.moulberry:mixinconstraints:${deps.mixinconstraintsVersion}")!!)!!
+//    include(implementation(annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-${loader.loader}:${deps.mixinsquaredVersion}")!!)!!)
+    implementation("de.maxhenkel.voicechat:voicechat-api:${deps.voicechat_api_version}")
 
     if (loader.isFabric) {
-        modImplementation("net.fabricmc:fabric-loader:${deps.fabricLoaderVersion}")!!
-        modImplementation("net.fabricmc.fabric-api:fabric-api:${deps.fabricApiVersion}+${mc.version}")
-        modImplementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}")
-        modImplementation("com.terraformersmc:modmenu:${deps.modmenuVersion}")
+        implementation("net.fabricmc:fabric-loader:${deps.fabricLoaderVersion}")!!
+        implementation("net.fabricmc.fabric-api:fabric-api:${deps.fabricApiVersion}+${mc.version}")
+        implementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}")
+        implementation("com.terraformersmc:modmenu:${deps.modmenuVersion}")
     } else if (loader.isNeoforge) {
         "neoForge"("net.neoforged:neoforge:${deps.neoforgeVersion}")
-        modImplementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
+        implementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
     } else if (loader.isForge) {
         "forge"("net.minecraftforge:forge:${mc.version}-${deps.forgeVersion}")
 
-        // Kotlin for Forge (required by YACL on Forge 1.20.1)
-//        modImplementation("thedarkcolour:kotlinforforge:${deps.kotlinForgeVersion}")
-
-        modImplementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
+        implementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
     }
 
 }
@@ -175,89 +163,85 @@ val curseforgeId = findProperty("publish.curseforge")?.toString()?.takeIf { it.i
 // then add:
 // modrinth.token=
 // curseforge.token=
-publishMods {
-    file = project.tasks.remapJar.get().archiveFile
-
-    displayName = "${mod.name} ${mod.version}"
-    this.version = mod.version.toString()
-    changelog = project.rootProject.file("CHANGELOG.md").takeIf { it.exists() }?.readText() ?: "No changelog provided."
-    type = STABLE
-
-    modLoaders.add(loader.loader)
-
-    dryRun = modrinthId == null && curseforgeId == null
-
-    if (modrinthId != null) {
-        modrinth {
-            projectId = property("publish.modrinth").toString()
-            accessToken = findProperty("modrinth.token").toString()
-
-            if (rangeRegex.matches(mc.dep)) {
-                val match = rangeRegex.find(mc.dep)!!
-                val minVersion = match.groupValues[1]
-                val maxVersion = match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() } ?: "latest"
-
-                minecraftVersionRange {
-                    start = minVersion
-                    end = maxVersion
-                }
-            } else if (exactVersionRegex.matches(mc.dep)) {
-                minecraftVersions.add(mc.dep)
-            }
-
-            if (loader.isFabric) {
-                requires("fabric-api")
-                requires("yacl")
-                requires("modmenu")
-            } else if (loader.isNeoforge || loader.isForge) {
-                requires("yacl")
-                if (loader.isForge) {
-                    requires("kotlin-for-forge")
-                }
-            }
-        }
-    }
-
-    if (curseforgeId != null) {
-        curseforge {
-            projectId = property("publish.curseforge").toString()
-            accessToken = findProperty("curseforge.token").toString()
-
-            if (rangeRegex.matches(mc.dep)) {
-                val match = rangeRegex.find(mc.dep)!!
-                val minVersion = match.groupValues[1]
-                val maxVersion = match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() } ?: "latest"
-
-                minecraftVersionRange {
-                    start = minVersion
-                    end = maxVersion
-                }
-            } else if (exactVersionRegex.matches(mc.dep)) {
-                minecraftVersions.add(mc.dep)
-            }
-
-            if (loader.isFabric) {
-                requires("fabric-api")
-                requires("yacl")
-                optional("modmenu")
-            } else if (loader.isNeoforge || loader.isForge) {
-                requires("yacl")
-                if (loader.isForge) {
-                    requires("kotlin-for-forge")
-                }
-            }
-        }
-    }
-}
+//publishMods {
+//    file = project.tasks.remapJar.get().archiveFile
+//
+//    displayName = "${mod.name} ${mod.version}"
+//    this.version = mod.version.toString()
+//    changelog = project.rootProject.file("CHANGELOG.md").takeIf { it.exists() }?.readText() ?: "No changelog provided."
+//    type = STABLE
+//
+//    modLoaders.add(loader.loader)
+//
+//    dryRun = modrinthId == null && curseforgeId == null
+//
+//    if (modrinthId != null) {
+//        modrinth {
+//            projectId = property("publish.modrinth").toString()
+//            accessToken = findProperty("modrinth.token").toString()
+//
+//            if (rangeRegex.matches(mc.dep)) {
+//                val match = rangeRegex.find(mc.dep)!!
+//                val minVersion = match.groupValues[1]
+//                val maxVersion = match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() } ?: "latest"
+//
+//                minecraftVersionRange {
+//                    start = minVersion
+//                    end = maxVersion
+//                }
+//            } else if (exactVersionRegex.matches(mc.dep)) {
+//                minecraftVersions.add(mc.dep)
+//            }
+//
+//            if (loader.isFabric) {
+//                requires("fabric-api")
+//                requires("yacl")
+//                requires("modmenu")
+//            } else if (loader.isNeoforge || loader.isForge) {
+//                requires("yacl")
+//                if (loader.isForge) {
+//                    requires("kotlin-for-forge")
+//                }
+//            }
+//        }
+//    }
+//
+//    if (curseforgeId != null) {
+//        curseforge {
+//            projectId = property("publish.curseforge").toString()
+//            accessToken = findProperty("curseforge.token").toString()
+//
+//            if (rangeRegex.matches(mc.dep)) {
+//                val match = rangeRegex.find(mc.dep)!!
+//                val minVersion = match.groupValues[1]
+//                val maxVersion = match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() } ?: "latest"
+//
+//                minecraftVersionRange {
+//                    start = minVersion
+//                    end = maxVersion
+//                }
+//            } else if (exactVersionRegex.matches(mc.dep)) {
+//                minecraftVersions.add(mc.dep)
+//            }
+//
+//            if (loader.isFabric) {
+//                requires("fabric-api")
+//                requires("yacl")
+//                optional("modmenu")
+//            } else if (loader.isNeoforge || loader.isForge) {
+//                requires("yacl")
+//                if (loader.isForge) {
+//                    requires("kotlin-for-forge")
+//                }
+//            }
+//        }
+//    }
+//}
 
 java {
-    val java = if (stonecutter.compare(
-            stonecutter.current.version,
-            "1.20.6"
-        ) >= 0
-    ) JavaVersion.VERSION_21 else JavaVersion.VERSION_17
-    sourceCompatibility = java
-    targetCompatibility = java
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
 }
 
 tasks.jar {
@@ -270,10 +254,6 @@ tasks.jar {
             "MixinConnector" to "com.redsmods.sound_physics_perfected.MixinConnector"
         )
     }
-}
-
-tasks.named("remapJar") {
-    dependsOn(tasks.jar)
 }
 
 tasks.processResources {

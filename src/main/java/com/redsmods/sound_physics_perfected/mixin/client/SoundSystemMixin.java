@@ -58,13 +58,8 @@ public abstract class SoundSystemMixin {
 
     @Shadow public abstract void tick(boolean paused);
 
-    //? if <1.21.6 {
-    @Inject(method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
-    private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
-    //?} else {
-    /*@Inject(method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)Lnet/minecraft/client/sounds/SoundEngine$PlayResult;", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)Lnet/minecraft/client/sounds/SoundEngine$PlayResult;", at = @At("HEAD"), cancellable = true)
     private void onSoundPlay(SoundInstance sound, CallbackInfoReturnable<SoundEngine.PlayResult> cir) {
-     *///?}
         if (!fxHandler.efxInitialized) {
             fxHandler.initializeReverb();
         }
@@ -106,7 +101,7 @@ public abstract class SoundSystemMixin {
                     return;
                 }
 
-                /*? if >= 1.21.6 {*/ /*cir.cancel(); *//*?} else {*/ ci.cancel(); /*?}*/
+                cir.cancel();
             } else if (Config.getInstance().permeation && sound instanceof RedPermeatedSoundInstance) {
 //                System.out.println(sound);
                 FXQueue.add((RedPermeatedSoundInstance) sound);
@@ -122,10 +117,7 @@ public abstract class SoundSystemMixin {
     @Inject(
             method = "tick(Z)V",
             at = @At(value = "INVOKE",
-                    //? if >=1.21.6
-                    /*target = "Lnet/minecraft/client/sounds/SoundEngine;tickInGameSound()V",*/
-                    //? if <1.21.6
-                    target = "Lnet/minecraft/client/sounds/SoundEngine;tickNonPaused()V",
+                    target = "Lnet/minecraft/client/sounds/SoundEngine;tickInGameSound()V",
                     shift = At.Shift.AFTER),
             locals = LocalCapture.CAPTURE_FAILHARD
     )
