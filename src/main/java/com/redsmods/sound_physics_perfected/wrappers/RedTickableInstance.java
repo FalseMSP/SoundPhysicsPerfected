@@ -9,7 +9,7 @@ import lombok.experimental.Delegate;
 import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.resources.sounds.TickableSoundInstance;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 
@@ -17,7 +17,7 @@ import java.util.List;
 
 @Getter
 public class RedTickableInstance implements TickableSoundInstance {
-    private final ResourceLocation location;
+    private final Identifier location;
     private final Sound sound;
     private final SoundSource source;
     @Setter private float attenuationMultiplier;
@@ -35,7 +35,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     @Getter private float originalVolume;
     @Getter private Vec3 originalPosition;
 
-    public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped, float attenuationMultiplier) {
+    public RedTickableInstance(Identifier location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped, float attenuationMultiplier) {
         this.location = location;
         this.sound = sound;
         this.source = source;

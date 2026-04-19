@@ -6,8 +6,8 @@ plugins {
     alias(libs.plugins.publishing)
     alias(libs.plugins.blossom)
     alias(libs.plugins.ksp)
-//    alias(libs.plugins.fletchingtable.fabric)
-//    alias(libs.plugins.fletchingtable.neoforge)
+    alias(libs.plugins.fletchingtable.fabric)
+    alias(libs.plugins.fletchingtable.neoforge)
     id("io.freefair.lombok") version "8.14"
 }
 
@@ -75,7 +75,7 @@ loom {
 //    silentMojangMappingsLicense()
 
     mixin {
-        useLegacyMixinAp = true
+        useLegacyMixinAp = false
         defaultRefmapName.set("sound_physics_perfected.refmap.json")
     }
 

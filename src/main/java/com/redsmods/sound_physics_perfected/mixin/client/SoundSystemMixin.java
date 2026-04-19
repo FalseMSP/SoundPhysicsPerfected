@@ -87,7 +87,7 @@ public abstract class SoundSystemMixin {
                 }
 
                 // Get sound ID
-                String soundId = sound.getLocation().toString();
+                String soundId = sound.getIdentifier().toString();
 
                 // Create sound data object
                 RedSoundInstance redSoundData = new RedSoundInstance(sound);

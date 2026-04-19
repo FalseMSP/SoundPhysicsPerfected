@@ -12,7 +12,7 @@ import net.minecraft.client.resources.sounds.TickableSoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import com.redsmods.sound_physics_perfected.storageclasses.*;
 import com.redsmods.sound_physics_perfected.wrappers.*;
 import net.minecraft.tags.BlockTags;
@@ -231,7 +231,7 @@ public class RaycastingHelper {
 
             // Get original sound properties
             SoundInstance originalSound = avgData.soundEntity.sound;
-            ResourceLocation soundId = originalSound.getLocation();
+            Identifier soundId = originalSound.getIdentifier();
             if(avgData.totalWeight == 0 && originalSound instanceof RedTickableInstance) {
                 ((RedTickableInstance) originalSound).setTargetVolume(0);
                 ((RedTickableInstance) originalSound).setTargetPosition(((RedTickableInstance) originalSound).getOriginalPosition());
@@ -277,8 +277,8 @@ public class RaycastingHelper {
             }
 
             soundInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(),newSound);
-            if (Config.getInstance().debug == DebugType.ACTION_BAR) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), true);
-            else if (Config.getInstance().debug == DebugType.CHAT) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), false);
+            if (Config.getInstance().debug == DebugType.ACTION_BAR) client.player.sendOverlayMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()));
+            if (Config.getInstance().debug == DebugType.CHAT) client.player.sendSystemMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()));
 
             queueSound(newSound);
 
@@ -301,7 +301,7 @@ public class RaycastingHelper {
 
             // Get original sound properties
             SoundInstance originalSound = avgData.soundEntity.sound;
-            ResourceLocation soundId = originalSound.getLocation();
+            Identifier soundId = originalSound.getIdentifier();
 
             // Calculate adjusted volume based on ray count and weight (confidence-based)
             float baseVolume;
@@ -361,8 +361,8 @@ public class RaycastingHelper {
             newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, adjustedVolume),adjustedPitch,originalSound, permeationIndex, attenuationMultiplier);
             soundPermInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(), newSound);
 
-            if (Config.getInstance().debug == DebugType.ACTION_BAR) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), true);
-            else if (Config.getInstance().debug == DebugType.CHAT) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), false);
+            if (Config.getInstance().debug == DebugType.ACTION_BAR) client.player.sendOverlayMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()));
+            else if (Config.getInstance().debug == DebugType.CHAT) client.player.sendSystemMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()));
 
             queueSound(newSound);
 

@@ -5,7 +5,7 @@ import com.redsmods.sound_physics_perfected.config.Config;
 import lombok.Getter;
 import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.openal.AL10;
@@ -20,7 +20,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     private boolean sourceSet = false;
     private float targetMuffle;
 
-    public RedPermeatedSoundInstance(ResourceLocation soundID, Sound sound, SoundSource category, Vec3 position, float volume, float pitch, SoundInstance wrapped, float permeationIndex, float attenuationMultiplier) {
+    public RedPermeatedSoundInstance(Identifier soundID, Sound sound, SoundSource category, Vec3 position, float volume, float pitch, SoundInstance wrapped, float permeationIndex, float attenuationMultiplier) {
         super(soundID, sound, category,position, volume, pitch, wrapped, attenuationMultiplier);
         this.permeationIndex = permeationIndex;
         this.targetMuffle = permeationIndex;
