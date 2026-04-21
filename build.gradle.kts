@@ -125,6 +125,7 @@ repositories {
     maven("https://maven.bawnorton.com/releases") // MixinSquared
     maven("https://api.modrinth.com/maven") // Modrinth
     maven ("https://maven.maxhenkel.de/repository/public") // Simple Voice Chat API
+    maven("https://maven.ryanhcode.dev/releases")
 }
 
 dependencies {
@@ -152,6 +153,10 @@ dependencies {
     } else if (loader.isNeoforge) {
         "neoForge"("net.neoforged:neoforge:${deps.neoforgeVersion}")
         modImplementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
+        if (mc.version == "1.21.1") {
+            val sableCompanionVersion = "1.4.2"
+            include(modApi("dev.ryanhcode.sable-companion:sable-companion-common-${mc.version}:[$sableCompanionVersion,)")!!)
+        }
     } else if (loader.isForge) {
         "forge"("net.minecraftforge:forge:${mc.version}-${deps.forgeVersion}")
 
