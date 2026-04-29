@@ -2,9 +2,9 @@
   "category.sound_physics_perfected.own_voice": "Own voice",
   "category.sound_physics_perfected.own_voice.description": "The volume of your own voice",
 
-  "modmenu.descriptionTranslation.${id}": "${description}",
-  "${id}": {
-    "${id}": "${name}",
+  "modmenu.descriptionTranslation.sound_physics_perfected": "${description}",
+  "sound_physics_perfected": {
+    "sound_physics_perfected": "${name}",
     "config": {
       "unit": {
         "meters_per_second": "%s m/s",
@@ -37,7 +37,7 @@
         "version100": "1.0.0"
       }
     },
-    "${id}:config": {
+    "sound_physics_perfected:config": {
       "category": {
         "general": "General Settings",
         "general.group": {

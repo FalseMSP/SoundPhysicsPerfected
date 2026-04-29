@@ -73,12 +73,10 @@ blossom {
 loom {
 //    splitEnvironmentSourceSets()
 //    silentMojangMappingsLicense()
-
     mixin {
-        useLegacyMixinAp = false
+//        useLegacyMixinAp = true
         defaultRefmapName.set("sound_physics_perfected.refmap.json")
     }
-
     runConfigs.all {
         ideConfigGenerated(stonecutter.current.isActive)
         runDir = "../../run" // This sets the run folder for all mc versions to the same folder. Remove this line if you want individual run folders.
@@ -104,15 +102,15 @@ loom {
 //    }
 //}
 
-//fletchingTable {
-//    mixins.create("main") {
-//        mixin("default", "${mod.id}.mixins.json")
-//    }
-//
-//    lang.create("main") {
-//        patterns.add("assets/${mod.id}/lang/**")
-//    }
-//}
+fletchingTable {
+    mixins.create("main") {
+        mixin("default", "${mod.id}.mixins.json")
+    }
+
+    lang.create("main") {
+        patterns.add("assets/${mod.id}/lang/**")
+    }
+}
 
 repositories {
     maven("https://maven.parchmentmc.org") // Parchment
