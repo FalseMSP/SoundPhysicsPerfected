@@ -111,6 +111,8 @@
       "maxSounds.description": "Maximum # of sounds the mod is allowed to process",
       "bounceAbsorptionMultiplier": "Bounce Absorption",
       "bounceAbsorptionMultiplier.description": "how much should be absorbed (1.0 is no absorption, 0.5 is volume reduced by 1/2)",
+      "disableFXOnUI": "Disable FX on UI Elements",
+      "disableFXOnUI.description":  "Disables FX on Master Category, off by default bc some mods will get ignored if this is on",
 
       "reverbTuning": "Reverb Debug",
       "reverbTuning.description": "Debug for finding what values are coming out of Blue ray casting.",

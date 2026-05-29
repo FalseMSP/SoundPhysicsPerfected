@@ -22,6 +22,7 @@ import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
@@ -77,6 +78,11 @@ public abstract class SoundSystemMixin {
         // Add null checks
         if (client == null || client.player == null || client.level == null || sound == null || soundManager == null) {
             return;
+        }
+
+        // ignore UI sounds
+        if (Config.getInstance().disableFXOnUI && sound.getSource() == SoundSource.MASTER) {
+            ci.cancel();
         }
 
         try {
