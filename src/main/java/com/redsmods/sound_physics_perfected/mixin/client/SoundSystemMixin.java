@@ -82,7 +82,7 @@ public abstract class SoundSystemMixin {
 
         // ignore UI sounds
         if (Config.getInstance().disableFXOnUI && sound.getSource() == SoundSource.MASTER) {
-            ci.cancel();
+            return;
         }
 
         try {
