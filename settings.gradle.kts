@@ -8,6 +8,7 @@ pluginManagement {
 		maven("https://maven.kikugie.dev/snapshots")
 		maven("https://maven.kikugie.dev/releases")
 		maven("https://repo.polyfrost.cc/releases")
+		maven("https://maven.ryanhcode.dev/releases")
 	}
 }
 

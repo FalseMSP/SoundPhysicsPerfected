@@ -112,6 +112,11 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.barrierAsAir.description")
     @SerialEntry public boolean barrierAsAir = true;
 
+    @AutoGen(category = "general", group = "permeation")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.disableFXOnUI.description")
+    @SerialEntry public boolean disableFXOnUI = false;
+
     @AutoGen(category = "general", group = "main")
     @DoubleSlider(min = 0.001, max = 1, step = 0.01)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.bounceAbsorptionMultiplier.description")

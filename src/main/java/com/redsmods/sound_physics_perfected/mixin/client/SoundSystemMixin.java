@@ -22,6 +22,7 @@ import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
@@ -46,7 +47,7 @@ import static com.redsmods.sound_physics_perfected.RaycastingHelper.*;
 import static org.joml.Math.lerp;
 import static org.lwjgl.openal.EXTEfx.*;
 
-@Mixin(SoundEngine.class)
+@Mixin(value = SoundEngine.class, priority = 9001) // its over 9000!!!!
 public abstract class SoundSystemMixin {
 
     @Shadow
@@ -74,9 +75,14 @@ public abstract class SoundSystemMixin {
             return;
         }
 
+        // ignore UI sounds
+        if (Config.getInstance().disableFXOnUI && sound.getSource() == SoundSource.MASTER) {
+            return;
+        }
+
         try {
             WeighedSoundEvents weightedSoundSet = sound.resolve(soundManager); // load pitches and whatnot into the sound data
-            if (!(sound instanceof RedPositionedSoundInstance || sound instanceof TickableSoundInstance || sound instanceof RedPermeatedSoundInstance) && sound.getAttenuation() != SoundInstance.Attenuation.NONE) { // !replayList.contains(redSoundData)
+            if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance) && sound.getAttenuation() != SoundInstance.Attenuation.NONE) { // !replayList.contains(redSoundData)
                 // Get sound coordinates
                 double soundX = sound.getX();
                 double soundY = sound.getY();

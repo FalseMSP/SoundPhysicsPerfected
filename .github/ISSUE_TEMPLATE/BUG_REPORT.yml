@@ -11,7 +11,8 @@ body:
       options:
         - Fabric
         - NeoForge
-        - Synatra Connector
+        - Forge
+        - Connector
       default: 0
     validations:
       required: true
