@@ -19,10 +19,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
-//? if neoforge && =1.21.1 {
-import dev.ryanhcode.sable.companion.SableCompanion;
-import dev.ryanhcode.sable.companion.SubLevelAccess;
-//?}
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.resources.sounds.TickableSoundInstance;
@@ -179,11 +175,11 @@ public class RaycastingHelper {
     }
 
     public static int processAndPlayAveragedSounds(Level world, Player player, Vec3 playerEyePos,
-                                                    List<Vec3> rayDirections,
-                                                    double maxTotalDistance, Minecraft client) {
+                                                   List<Vec3> rayDirections,
+                                                   double maxTotalDistance, Minecraft client) {
 
-         if (processRaysWithAveraging(world, player, playerEyePos, rayDirections, maxTotalDistance) == -1) // return if still processing.
-             return -1;
+        if (processRaysWithAveraging(world, player, playerEyePos, rayDirections, maxTotalDistance) == -1) // return if still processing.
+            return -1;
 
         // Calculate averages for each entity (this part is fast, so keep sequential)
         Map<SoundData, AveragedSoundData> averagedResults = new ConcurrentHashMap<>();
@@ -393,8 +389,8 @@ public class RaycastingHelper {
     }
 
     public static int processRaysWithAveraging(Level world, Player player,
-                                                                             Vec3 playerEyePos, List<Vec3> rayDirections,
-                                                                             double maxTotalDistance) {
+                                               Vec3 playerEyePos, List<Vec3> rayDirections,
+                                               double maxTotalDistance) {
         if (isRaytracing.compareAndSet(false, true)) {
             // create tasks
             final ConcurrentLinkedQueue<SoundData> sQ = new ConcurrentLinkedQueue<>(soundQueue);
@@ -455,7 +451,7 @@ public class RaycastingHelper {
     }
 
     public static void castBouncingRay(Level world, Player player, Vec3 startPos, Vec3 direction,
-                                                Queue<SoundData> sQ, Queue<RedTickableInstance> tQ, Queue<RedPermeatedSoundInstance> pTQ, double maxTotalDistance) {
+                                       Queue<SoundData> sQ, Queue<RedTickableInstance> tQ, Queue<RedPermeatedSoundInstance> pTQ, double maxTotalDistance) {
         Vec3 currentPos = startPos;
         Vec3 currentDirection = direction.normalize();
         Vec3 initialDirection = currentDirection.normalize();
@@ -550,13 +546,7 @@ public class RaycastingHelper {
                                      double currentDistance, Vec3 initialDirection, int bounces) {
         for (SoundData soundEntity : sQ) {
             rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()); // make sure all sounds are proc'd even if they aren't audible at first (makes discs work lmao)
-            //? if neoforge && =1.21.1 {
-             Vec3 entityCenter = SableCompanion.INSTANCE.getContaining(world, soundEntity.position) != null
-                     ? SableCompanion.INSTANCE.getContaining(world, soundEntity.position).logicalPose().transformPosition(soundEntity.position)
-                     : soundEntity.position;
-            //? } else {
-//            Vec3 entityCenter = soundEntity.position;
-            //? }
+            Vec3 entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
 
             if (distanceToEntity + currentDistance > 16 * soundEntity.sound.getVolume())
@@ -635,8 +625,8 @@ public class RaycastingHelper {
     }
 
     private static BlueRayResult castBlueRay(Level world, Player player, Vec3 currentPos,
-                                               Queue<SoundData> entities, double currentDistance,
-                                               Vec3 initialDirection, int bounceNumber) {
+                                             Queue<SoundData> entities, double currentDistance,
+                                             Vec3 initialDirection, int bounceNumber) {
         Vec3 entityCenter = player.getBoundingBox().getCenter();
         Vec3 toPlayer = entityCenter.subtract(currentPos).normalize();
         Vec3 rayStartPos = currentPos.add(toPlayer.scale(0.1));
@@ -797,13 +787,7 @@ public class RaycastingHelper {
         for (SoundData soundEntity : sQ) {
 //            rayHitsByEntity.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>()); // make sure all sounds are proc'd even if they aren't audible at first (makes discs work lmao)
             redRaysToTarget.computeIfAbsent(soundEntity, k -> new CopyOnWriteArrayList<>());
-            //? if neoforge && =1.21.1 {
-            Vec3 entityCenter = SableCompanion.INSTANCE.getContaining(world, soundEntity.position) != null
-                    ? SableCompanion.INSTANCE.getContaining(world, soundEntity.position).logicalPose().transformPosition(soundEntity.position)
-                    : soundEntity.position;
-            //? } else {
-//            Vec3 entityCenter = soundEntity.position;
-            //? }
+            Vec3 entityCenter = soundEntity.position;
             double distanceToEntity = currentPos.distanceTo(entityCenter);
 
             if (distanceToEntity + currentDistance > Config.getInstance().maxRayLength * 16)
@@ -906,92 +890,7 @@ public class RaycastingHelper {
                 totalWeight, rayHits.size(), rayHits, weightedMuffleSum / totalWeight);
     }
 
-//? if neoforge && =1.21.1 {
-public static double countBlocksBetween(Level world, Vec3 start, Vec3 end, Player player) {
-    double totalDistanceInBlocks = 0;
-    Vec3 currentStart = start;
-
-    BlockPos endBlockPos = new BlockPos((int) Math.floor(end.x), (int) Math.floor(end.y), (int) Math.floor(end.z));
-
-    while (totalDistanceInBlocks < Config.getInstance().maxBlocksPermeated) {
-        ClipContext context = new ClipContext(
-                currentStart, end,
-                ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
-                player
-        ) {
-            @Override
-            public VoxelShape getBlockShape(BlockState blockState, BlockGetter level, BlockPos pos) {
-                if (blockState.getBlock() == Blocks.BARRIER && Config.getInstance().barrierAsAir)
-                    return Shapes.empty();
-                return super.getBlockShape(blockState, world, pos);
-            }
-        };
-
-        BlockHitResult hit = world.clip(context);
-        if (hit.getType() != HitResult.Type.BLOCK) break;
-
-        BlockPos hitBlockPos = hit.getBlockPos();
-        BlockState blockState = world.getBlockState(hitBlockPos);
-
-        // Check if this hit is inside a sub-level
-        SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(world, hit.getLocation());
-
-        // Project hit location to global space
-        Vec3 globalHitLoc = subLevel != null
-                ? subLevel.logicalPose().transformPosition(hit.getLocation())
-                : hit.getLocation();
-
-        // End block check — compare in the same space
-        if (subLevel == null && hitBlockPos.equals(endBlockPos)) break;
-        // For sub-level hits, check global distance proximity to end instead
-        if (subLevel != null && globalHitLoc.distanceToSqr(end) < 0.5) break;
-
-        // Direction for stepping — transform into plot space if needed
-        Vec3 plotDirection;
-        if (subLevel != null) {
-            // Transform direction into plot space for correct stepping
-            Vec3 plotStart = subLevel.logicalPose().transformPositionInverse(currentStart);
-            Vec3 plotEnd = subLevel.logicalPose().transformPositionInverse(end);
-            plotDirection = plotEnd.subtract(plotStart).normalize();
-        } else {
-            plotDirection = end.subtract(currentStart).normalize();
-        }
-
-        VoxelShape blockShape = blockState.getShape(world, hitBlockPos);
-        AABB blockBounds = blockShape.isEmpty()
-                ? new AABB(hitBlockPos.getX(), hitBlockPos.getY(), hitBlockPos.getZ(),
-                hitBlockPos.getX() + 1, hitBlockPos.getY() + 1, hitBlockPos.getZ() + 1)
-                : blockShape.bounds().move(hitBlockPos);
-
-        // Step in plot space
-        Vec3 exitPoint = hit.getLocation();
-        double step = Config.getInstance().permeationStepSize;
-        while (blockBounds.contains(exitPoint)) {
-            exitPoint = exitPoint.add(plotDirection.scale(step));
-        }
-
-        // Project exit point to global space
-        Vec3 globalExitPoint = subLevel != null
-                ? subLevel.logicalPose().transformPosition(exitPoint)
-                : exitPoint;
-
-        // Distance check in global space
-        if (SableCompanion.INSTANCE.distanceSquaredWithSubLevels(world, currentStart, start)
-                >= end.distanceToSqr(start)) break;
-
-        double distanceInBlock = globalHitLoc.distanceTo(globalExitPoint);
-        double absorptionIndex = getAbsorptionCoeficient(world, hit.getLocation());
-        totalDistanceInBlocks += distanceInBlock * absorptionIndex;
-
-        // Next iteration starts in global space
-        Vec3 globalDirection = end.subtract(currentStart).normalize();
-        currentStart = globalExitPoint.add(globalDirection.scale(0.01));
-    }
-    return totalDistanceInBlocks;
-}
-//?} else {
-    /*public static double countBlocksBetween(Level world, Vec3 start, Vec3 end, Player player) {
+    public static double countBlocksBetween(Level world, Vec3 start, Vec3 end, Player player) {
         double totalDistanceInBlocks = 0;
         Vec3 currentStart = start;
 
@@ -1074,7 +973,6 @@ public static double countBlocksBetween(Level world, Vec3 start, Vec3 end, Playe
         }
         return totalDistanceInBlocks;
     }
-    *///?}
 
     public static boolean hasLineOfSight(Level world, Player player, SoundInstance sound) {
         if (sound instanceof RedTickableInstance)
