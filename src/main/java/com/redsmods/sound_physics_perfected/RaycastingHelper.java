@@ -98,7 +98,7 @@ public class RaycastingHelper {
     private static final ConcurrentHashMap<SoundData, List<RayHitData>> rayHitsByEntity = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<SoundData, List<RayHitData>> redRaysToTarget = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<SoundData, AveragedSoundData> muffledAveragedResults = new ConcurrentHashMap<>();
-    public static final ConcurrentHashMap<SoundInstance, SoundInstance> soundInstanceMap = new ConcurrentHashMap<>();
+    public static final ConcurrentHashMap<SoundInstance, RedTickableInstance> soundInstanceMap = new ConcurrentHashMap<>();
     public static final ConcurrentHashMap<SoundInstance, RedPermeatedSoundInstance> soundPermInstanceMap = new ConcurrentHashMap<>();
 
     // Thread pool for parallel ray processing
@@ -279,7 +279,7 @@ public class RaycastingHelper {
             // Calculate adjusted pitch
             float basePitch = originalSound.getPitch();
             float adjustedPitch = basePitch * pitchMultiplier;
-            SoundInstance newSound;
+            RedTickableInstance newSound;
 
             // Create positioned sound with adjustments
             if (originalSound instanceof RedTickableInstance) { // update pos of sounds
