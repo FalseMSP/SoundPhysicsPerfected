@@ -60,29 +60,29 @@ public abstract class SoundSystemMixin {
     @Shadow public abstract void tick(boolean paused);
 
     //? if <1.21.6 {
-    @Inject(method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
-    private void onSoundPlay(SoundInstance sound, CallbackInfo ci) {
+    @ModifyVariable(method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)V", at = @At("HEAD"), argsOnly = true)
+    private SoundInstance onSoundPlay(SoundInstance sound) {
     //?} else {
-    /*@Inject(method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)Lnet/minecraft/client/sounds/SoundEngine$PlayResult;", at = @At("HEAD"), cancellable = true)
-    private void onSoundPlay(SoundInstance sound, CallbackInfoReturnable<SoundEngine.PlayResult> cir) {
+    /*@ModifyVariable(method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)Lnet/minecraft/client/sounds/SoundEngine$PlayResult;", at = @At("HEAD"), argsOnly = true)
+    private SoundInstance onSoundPlay(SoundInstance sound) {
      *///?}
         if (!fxHandler.efxInitialized) {
             fxHandler.initializeReverb();
         }
 
-        if (isSoundBlacklisted(sound.toString())) return; // skip if in the overall blacklist
+        if (isSoundBlacklisted(sound.toString())) return sound; // skip if in the overall blacklist
 
-        if (!fxHandler.efxInitialized) return; // Skip if initialization failed
+        if (!fxHandler.efxInitialized) return sound; // Skip if initialization failed
 
         Minecraft client = Minecraft.getInstance();
         // Add null checks
         if (client == null || client.player == null || client.level == null || sound == null || soundManager == null) {
-            return;
+            return sound;
         }
 
         // ignore UI sounds
         if (Config.getInstance().disableFXOnUI && sound.getSource() == SoundSource.MASTER) {
-            return;
+            return sound;
         }
 
         try {
@@ -94,7 +94,7 @@ public abstract class SoundSystemMixin {
                 double soundZ = sound.getZ();
                 Vec3 soundPos = new Vec3(soundX, soundY, soundZ);
                 if(Config.getInstance().procRange != -1 && soundPos.subtract(playerEyePos).length() > Config.getInstance().procRange) { // if sounds are too far, let it proc through vanilla means.
-                    return;
+                    return sound;
                 }
 
                 // Get sound ID
@@ -105,24 +105,28 @@ public abstract class SoundSystemMixin {
                 SoundData soundData = new SoundData(redSoundData, soundPos, soundId);
 
                 // ignore if size too big
-                if (soundQueue.size() > Config.getInstance().maxSounds) {
-                    return;
+                if(Config.getInstance().permeation) {
+                    if (permeatedTickQueue.size() > Config.getInstance().maxSounds) {
+                        return sound;
+                    }
+                    RedPermeatedSoundInstance wrapper = new RedPermeatedSoundInstance(sound.getLocation(),sound.getSound(),sound.getSource(),new Vec3(soundX,soundY,soundZ),0.001f, sound.getPitch(), sound, 0, 1);
+                    soundPermInstanceMap.put(((RedSoundInstance) sound).getOriginal(), wrapper);
+                    FXQueue.add((RedPermeatedSoundInstance) sound);
+                    return wrapper;
+                } else {
+                    if (permeatedTickQueue.size() > Config.getInstance().maxSounds) {
+                        return sound;
+                    }
+                    RedTickableInstance wrapper = new RedTickableInstance(sound.getLocation(),sound.getSound(),sound.getSource(),new Vec3(soundX,soundY,soundZ),0.001f, sound.getPitch(), sound, 1);
+                    soundInstanceMap.put(((RedSoundInstance) sound).getOriginal(), wrapper);
+                    return wrapper;
                 }
-                soundQueue.offer(soundData);
-
-
-
-                /*? if >= 1.21.6 {*/ /*cir.cancel(); *//*?} else {*/ ci.cancel(); /*?}*/
-            } else if (Config.getInstance().permeation && sound instanceof RedPermeatedSoundInstance) {
-//                System.out.println(sound);
-                FXQueue.add((RedPermeatedSoundInstance) sound);
-            } else {
-//                System.out.println(sound);
             }
         } catch (Exception e) {
             // Log error but don't crash
             System.err.println("Error tracking sound: " + e.getMessage());
         }
+        return sound;
     }
 
     @Inject(
