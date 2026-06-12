@@ -14,6 +14,7 @@ import com.redsmods.sound_physics_perfected.wrappers.RedPermeatedSoundInstance;
 import com.redsmods.sound_physics_perfected.wrappers.RedPositionedSoundInstance;
 import com.redsmods.sound_physics_perfected.wrappers.RedTickableInstance;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.resources.sounds.TickableSoundInstance;
 import net.minecraft.client.sounds.ChannelAccess;
@@ -99,13 +100,14 @@ public abstract class SoundSystemMixin {
                 RedSoundInstance redSoundData = new RedSoundInstance(sound);
                 SoundData soundData = new SoundData(redSoundData, soundPos, soundId);
 
-                // Add to queue
-                soundQueue.offer(soundData);
-
-                // Remove the oldest sounds if queue is too large
+                // ignore if size too big
                 if (soundQueue.size() > Config.getInstance().maxSounds) {
                     return;
                 }
+                soundQueue.offer(soundData);
+                notProcd.add(sound);
+
+
 
                 cir.cancel();
             } else if (Config.getInstance().permeation && sound instanceof RedPermeatedSoundInstance) {

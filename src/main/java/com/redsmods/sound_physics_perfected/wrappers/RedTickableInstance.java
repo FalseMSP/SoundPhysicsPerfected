@@ -6,6 +6,7 @@ import com.redsmods.sound_physics_perfected.config.RedsAttenuationType;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Delegate;
+import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.resources.sounds.TickableSoundInstance;
@@ -64,11 +65,7 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     @Override
     public void tick() {
-        if (wrapped instanceof TickableSoundInstance) {
-            ((TickableSoundInstance) wrapped).tick();
-            originalVolume = wrapped.getVolume();
-            originalPosition = new Vec3(wrapped.getX(), wrapped.getY(), wrapped.getZ());
-        }
+        updateWrapped();
 
         if (isBlacklisted) {
             return;
@@ -86,7 +83,20 @@ public class RedTickableInstance implements TickableSoundInstance {
         if (wrapped instanceof TickableSoundInstance) {
             ((TickableSoundInstance) wrapped).tick();
             originalVolume = wrapped.getVolume();
+            if (wrapped.getVolume() == 0.0) {
+                volume = 0; // force muting sounds
+                targetVolume = 0;
+            }
+            Vec3 delta = new Vec3(
+                    wrapped.getX() - originalPosition.x,
+                    wrapped.getY() - originalPosition.y,
+                    wrapped.getZ() - originalPosition.z
+            );
             originalPosition = new Vec3(wrapped.getX(), wrapped.getY(), wrapped.getZ());
+            x += delta.x;
+            y += delta.y;
+            z += delta.z;
+            targetPosition = new Vec3(x,y,z);
         }
     }
 
