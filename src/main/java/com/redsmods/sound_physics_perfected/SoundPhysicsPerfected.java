@@ -30,7 +30,6 @@ import net.minecraftforge.fml.common.Mod;
 @Entrypoint
 //?}
 public class SoundPhysicsPerfected /*? if fabric {*/ implements ModInitializer /*?}*/ {
-
     public static final String MOD_ID = "sound_physics_perfected";
     public static final Logger DEBUG_LOGGER = LoggerFactory.getLogger(MOD_ID);
 

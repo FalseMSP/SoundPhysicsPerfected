@@ -1,7 +1,7 @@
 package com.redsmods.sound_physics_perfected.config;
 
 //? if fabric {
-/*import com.terraformersmc.modmenu.api.ConfigScreenFactory;
+import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
 import dev.kikugie.fletching_table.annotation.fabric.Entrypoint;
 import net.fabricmc.api.EnvType;
@@ -15,4 +15,4 @@ public class ModMenuIntegration implements ModMenuApi {
         return Config::configScreen;
     }
 }
-*///?}
+//?}
