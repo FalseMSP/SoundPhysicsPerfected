@@ -104,13 +104,13 @@ public abstract class SoundSystemMixin {
                 RedSoundInstance redSoundData = new RedSoundInstance(sound);
                 SoundData soundData = new SoundData(redSoundData, soundPos, soundId);
 
-                // Add to queue
-                soundQueue.offer(soundData);
-
-                // Remove the oldest sounds if queue is too large
+                // ignore if size too big
                 if (soundQueue.size() > Config.getInstance().maxSounds) {
                     return;
                 }
+                soundQueue.offer(soundData);
+
+
 
                 /*? if >= 1.21.6 {*/ /*cir.cancel(); *//*?} else {*/ ci.cancel(); /*?}*/
             } else if (Config.getInstance().permeation && sound instanceof RedPermeatedSoundInstance) {
