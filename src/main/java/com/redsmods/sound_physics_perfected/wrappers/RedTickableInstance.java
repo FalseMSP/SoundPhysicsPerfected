@@ -65,12 +65,6 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     @Override
     public void tick() {
-        System.out.println("[STAFF] vol=" + volume + " target=" + targetVolume
-                + " wrappedVol=" + wrapped.getVolume()
-                + " getVolume()=" + getVolume()
-                + " blacklisted=" + isBlacklisted
-                + " stopped=" + stopped
-                + " tickRate=" + Config.getInstance().tickRate);
         updateWrapped();
 
         if (isBlacklisted) {

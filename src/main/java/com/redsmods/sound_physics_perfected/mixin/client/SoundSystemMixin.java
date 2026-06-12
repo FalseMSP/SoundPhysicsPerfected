@@ -110,6 +110,7 @@ public abstract class SoundSystemMixin {
                     return;
                 }
                 soundQueue.offer(soundData);
+                notProcd.add(sound);
 
 
 

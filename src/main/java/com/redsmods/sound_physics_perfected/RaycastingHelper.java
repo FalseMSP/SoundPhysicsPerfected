@@ -70,6 +70,7 @@ public class RaycastingHelper {
     public static final Queue<RedTickableInstance> tickQueue = new LinkedList<>();
     public static final Queue<RedPermeatedSoundInstance> permeatedTickQueue = new LinkedList<>();
     public static final Queue<SoundData> soundQueue = new LinkedList<>();
+    public static final ArrayList<SoundInstance> notProcd = new ArrayList<>();
     private static final double SPEED_OF_SOUND_TICKS = 17.15; // 17.15 blocks per gametick
     private static final Map<Integer,ArrayList<SoundInstance>> soundPlayingWaiting = new ConcurrentHashMap<>();
     private static int ticksSinceWorld;
@@ -175,6 +176,7 @@ public class RaycastingHelper {
         }
 
         // Clear the entire map after playing all sounds
+        notProcd.clear();
         soundPlayingWaiting.clear();
     }
 
@@ -288,9 +290,9 @@ public class RaycastingHelper {
                 ((RedTickableInstance) originalSound).setAttenuationMultiplier(attenuationMultiplier);
                 return;
             } else if (((RedSoundInstance) originalSound) instanceof TickableSoundInstance) {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, attenuationMultiplier);
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),((RedSoundInstance) originalSound).getOriginal(), attenuationMultiplier);
             } else {
-                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),originalSound, attenuationMultiplier);
+                newSound = new RedTickableInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.001f, Math.min(1.0f, adjustedVolume)),Math.max(0.5f, Math.min(2.0f, adjustedPitch)),((RedSoundInstance) originalSound).getOriginal(), attenuationMultiplier);
             }
 
             soundInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(),newSound);
@@ -375,7 +377,7 @@ public class RaycastingHelper {
 
             RedPermeatedSoundInstance newSound;
             // Create positioned sound with adjustments
-            newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, adjustedVolume),adjustedPitch,originalSound, permeationIndex, attenuationMultiplier);
+            newSound = new RedPermeatedSoundInstance(soundId,originalSound.getSound(),originalSound.getSource(),targetPosition,Math.max(0.01f, adjustedVolume),adjustedPitch,((RedSoundInstance) originalSound).getOriginal(), permeationIndex, attenuationMultiplier);
             soundPermInstanceMap.put(((RedSoundInstance) originalSound).getOriginal(), newSound);
 
             if (Config.getInstance().debug == DebugType.ACTION_BAR) client.player.displayClientMessage(Component.literal(((RedSoundInstance) originalSound).getOriginal().toString()), true);

@@ -1,5 +1,6 @@
 package com.redsmods.sound_physics_perfected.mixin.client;
 
+import com.redsmods.sound_physics_perfected.storageclasses.SoundData;
 import lombok.experimental.Delegate;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.ChannelAccess;
@@ -14,8 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.Map;
 import java.util.Set;
 
-import static com.redsmods.sound_physics_perfected.RaycastingHelper.soundInstanceMap;
-import static com.redsmods.sound_physics_perfected.RaycastingHelper.soundPermInstanceMap;
+import static com.redsmods.sound_physics_perfected.RaycastingHelper.*;
 
 @Mixin(value = SoundEngine.class, priority = 9002)
 public abstract class ShadowInstanceToChannelMixin {
@@ -34,6 +34,7 @@ public abstract class ShadowInstanceToChannelMixin {
                 if (key == null) return false;
                 if (original.containsKey(key)) return true;
                 // Check SPP's remap — if original was wrapped, find the wrapper
+                if (notProcd.contains(key)) return true;
                 SoundInstance wrapped = soundInstanceMap.get((SoundInstance) key);
                 if (wrapped == null) wrapped = soundPermInstanceMap.get((SoundInstance) key);
                 return wrapped != null && original.containsKey(wrapped);
