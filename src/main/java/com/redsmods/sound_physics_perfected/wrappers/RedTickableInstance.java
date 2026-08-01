@@ -78,6 +78,7 @@ public class RedTickableInstance implements TickableSoundInstance {
                 RaycastingHelper.tickQueue.add(this);
         updatePos();
         updateVolume();
+        updatePitch();
     }
     public void updateWrapped() {
         if (wrapped instanceof TickableSoundInstance) {
@@ -196,5 +197,9 @@ public class RedTickableInstance implements TickableSoundInstance {
         if (attenuationMultiplier == 0) return vol; // if no rays make it, disable sound
         if (Config.getInstance().attenuationType.equals(RedsAttenuationType.VERCIDIUM_LINEAR) || Config.getInstance().attenuationType.equals(RedsAttenuationType.VERCIDIUM_INVERSE_SQUARE)) return (float) (vol * 1.0/attenuationMultiplier); // get volume without attenuation LINEAR
         return vol;
+    }
+
+    protected void updatePitch() {
+        pitch = wrapped.getPitch();
     }
 }

@@ -17,6 +17,8 @@ import net.fabricmc.api.ModInitializer;
 
 //? if forge {
 /*import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.ConfigScreenHandler;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 *///?}
@@ -49,6 +51,9 @@ public class SoundPhysicsPerfected /*? if fabric {*/ implements ModInitializer /
     //? if forge {
     /*public SoundPhysicsPerfected() {
         Config.CONFIG.load();
+        ModLoadingContext.get().registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class, () -> new ConfigScreenHandler.ConfigScreenFactory(
+                (mc, parent) -> Config.CONFIG.generateGui().generateScreen(parent)
+        ));
     }
     *///?}
 }
