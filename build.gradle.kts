@@ -1,4 +1,8 @@
 import org.jetbrains.kotlin.gradle.targets.js.yarn.yarn
+import modbuild.ModData
+import modbuild.McData
+import modbuild.LoaderData
+import modbuild.ModBuildExtension
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
@@ -11,49 +15,11 @@ plugins {
     id("io.freefair.lombok") version "8.14"
 }
 
-class ModData {
-    val id = property("mod.id").toString()
-    val name = property("mod.name")
-    val version = property("mod.version")
-    val group = property("mod.group").toString()
-    val description = property("mod.description")
-    val source = property("mod.source")
-    val issues = property("mod.issues")
-    val license = property("mod.license").toString()
-    val modrinth = property("mod.modrinth")
-    val discord = property("mod.discord")
-}
-
-class Dependencies {
-    val forgeVersion = property("deps.forge_version")
-    val neoforgeVersion = property("deps.neoforge_version")
-    val fabricLoaderVersion = property("deps.fabric_loader_version")
-    val fabricApiVersion = property("deps.fabric_api_version")
-    val modmenuVersion = property("deps.modmenu_version")
-    val voicechat_api_version = property("deps.voicechat_api_version")
-    val yaclVersion = property("deps.yacl_version")
-    val devauthVersion = property("deps.devauth_version")
-    val mixinconstraintsVersion = property("deps.mixinconstraints_version")
-    val mixinsquaredVersion = property("deps.mixinsquared_version")
-//    val kotlinForgeVersion = property("deps.kotlin_forge_version")
-}
-
-class LoaderData {
-    val loader = loom.platform.get().name.lowercase()
-    val isFabric = loader == "fabric"
-    val isNeoforge = loader == "neoforge"
-    val isForge = loader == "forge"
-}
-
-class McData {
-    val version = property("mod.mc_version")
-    val dep = property("mod.mc_dep").toString()
-}
-
-val mc = McData()
-val mod = ModData()
-val deps = Dependencies()
-val loader = LoaderData()
+val mc = McData(project)
+val mod = ModData(project)
+val deps = SppDependencyVersions(project)
+val loader = LoaderData(loom.platform.get().name.lowercase())
+val modbuild = extensions.create("modbuild", ModBuildExtension::class, project, loader)
 
 version = "${mod.version}+${mc.version}-${loader.loader}"
 group = mod.group
@@ -141,32 +107,18 @@ dependencies {
     })
     if(!loader.isForge)
         modRuntimeOnly("me.djtheredstoner:DevAuth-${loader.loader}:${deps.devauthVersion}")
-    include(implementation("com.moulberry:mixinconstraints:${deps.mixinconstraintsVersion}")!!)!!
+    // mixinsquared/sable-companion stay as direct include() calls, not modbuild.embed() -- see
+    // buildSrc/README.md's "Known gaps" for why.
     include(implementation(annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-${loader.loader}:${deps.mixinsquaredVersion}")!!)!!)
     modImplementation("de.maxhenkel.voicechat:voicechat-api:${deps.voicechat_api_version}")
-
-    if (loader.isFabric) {
-        modImplementation("net.fabricmc:fabric-loader:${deps.fabricLoaderVersion}")!!
-        modImplementation("net.fabricmc.fabric-api:fabric-api:${deps.fabricApiVersion}+${mc.version}")
-        modImplementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}")
-        modImplementation("com.terraformersmc:modmenu:${deps.modmenuVersion}")
-    } else if (loader.isNeoforge) {
-        "neoForge"("net.neoforged:neoforge:${deps.neoforgeVersion}")
-        modImplementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
-        if (mc.version == "1.21.1") {
-            val sableCompanionVersion = "1.4.2"
-            include(modApi("dev.ryanhcode.sable-companion:sable-companion-common-${mc.version}:[$sableCompanionVersion,)")!!)
-        }
-    } else if (loader.isForge) {
-        "forge"("net.minecraftforge:forge:${mc.version}-${deps.forgeVersion}")
-
-        // Kotlin for Forge (required by YACL on Forge 1.20.1)
-//        modImplementation("thedarkcolour:kotlinforforge:${deps.kotlinForgeVersion}")
-
-        modImplementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
-    }
-
 }
+
+modbuild.embed("mixinconstraints", "com.moulberry:mixinconstraints:${deps.mixinconstraintsVersion}")
+
+// Loader-specific dependency sets live in buildSrc as precompiled convention plugins (see
+// buildSrc/README.md). Conditional plugin application can't go through the static `plugins {}`
+// block, so this uses the older imperative `apply(plugin = )` form deliberately.
+apply(plugin = "modbuild.${loader.loader}-conventions")
 
 // mc_dep fields must be in the format 'x', '>=x', '>=x <=y'
 val rangeRegex = Regex(""">=\s*([0-9.]+)(?:\s*<=\s*([0-9.]+))?""")
@@ -263,6 +215,17 @@ java {
     ) JavaVersion.VERSION_21 else JavaVersion.VERSION_17
     sourceCompatibility = java
     targetCompatibility = java
+
+    // Pin the actual JDK used to compile AND run each target, not just the bytecode level.
+    // sourceCompatibility/targetCompatibility alone only tell javac what to emit; without this,
+    // Gradle just uses whichever JVM the Gradle daemon itself runs on for every task, including
+    // Loom's generated runClient. On a Java 25 daemon that breaks NeoForge 1.21.1 outright
+    // ("Unsupported class file major version 69") since its bundled Mixin/ASM predates Java 25
+    // support. This makes runClient (and compileJava) launch under a real JDK matching each
+    // target's own requirement, auto-downloaded by Gradle if not already installed.
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(java.majorVersion))
+    }
 }
 
 tasks.jar {
