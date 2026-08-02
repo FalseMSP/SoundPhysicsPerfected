@@ -2,31 +2,38 @@
 
 Shared build logic for the Stonecutter-multiplied, Architectury Loom mod build.
 
-**What's actually portable to another Stonecutter+Loom mod project, and what isn't:**
+```
+buildSrc/
+  build.gradle.kts                          <- portable: kotlin-dsl + Shadow, nothing project-specific
+  src/main/kotlin/
+    modbuild/                               <- portable: copy this whole directory into another project
+      ModBuildExtension.kt                     as-is (plus the two lines below) to get embed() there too
+      ModBuildProject.kt
+    SppDependencyVersions.kt                <- NOT portable: this mod's own dependency versions
+    modbuild.fabric-conventions.gradle.kts  <- NOT portable: this mod's own per-loader dependency lists
+    modbuild.neoforge-conventions.gradle.kts   (the *pattern* is reusable, the *content* isn't)
+    modbuild.forge-conventions.gradle.kts
+```
 
-| File | Portable as-is? |
-|---|---|
-| `ModBuildExtension.kt` (the `modbuild { }` extension, `embed(...)`) | Yes — no reference to this mod anywhere |
-| `ModBuildProject.kt` (`ModData`, `McData`, `LoaderData`) | Yes — reads only generic `mod.id`/`mod.mc_version`/loader-name properties, a convention common to most multi-loader mod templates |
-| `SppDependencyVersions.kt` | **No** — enumerates *this mod's* actual third-party dependency versions (YACL, DevAuth, mixinsquared, ...). A different mod would write its own equivalent class with its own dependencies |
-| `modbuild.*-conventions.gradle.kts` (the three convention plugins) | **No** — their *content* (which libraries each loader needs) is this mod's own dependency list, same as any other build script. The *pattern* — one precompiled plugin per loader, applied conditionally — is what's reusable, not the specific dependencies inside them |
-
-So: dropping `ModBuildExtension.kt` + `ModBuildProject.kt` into another mod's buildSrc gets you the
-`embed(...)` mechanism for free. Everything else here is Sound Physics Perfected's own
-configuration that happens to live in buildSrc because the convention plugins need it there.
+**To reuse `embed(...)` in another Stonecutter+Loom mod:** copy `buildSrc/build.gradle.kts` and
+`buildSrc/src/main/kotlin/modbuild/` verbatim into the other project's buildSrc, then in its root
+script add `val modbuild = extensions.create("modbuild", ModBuildExtension::class, project,
+LoaderData(loom.platform.get().name.lowercase()))`. That's the entire portable surface — everything
+else in this directory is Sound Physics Perfected's own build configuration, kept in buildSrc only
+because the convention plugins (also buildSrc-compiled) need to reference it.
 
 ## What's here
 
-- `ModBuildProject.kt` — plain data classes (`ModData`, `McData`, `LoaderData`) reading generic
-  project properties. Construct once per project (`ModData(project)` etc.) instead of redeclaring
-  the same `project.property(...)` lookups everywhere.
-- `SppDependencyVersions.kt` — this mod's own third-party dependency versions. Deliberately not in
-  the `modbuild` package (see table above).
+- `modbuild/ModBuildProject.kt` — plain data classes (`ModData`, `McData`, `LoaderData`) reading
+  generic project properties. Construct once per project (`ModData(project)` etc.) instead of
+  redeclaring the same `project.property(...)` lookups everywhere.
+- `modbuild/ModBuildExtension.kt` — the `modbuild { }` extension, exposing `embed(...)`.
+- `SppDependencyVersions.kt` — this mod's own third-party dependency versions. Deliberately outside
+  the `modbuild/` directory and package (see above).
 - `modbuild.fabric-conventions.gradle.kts` / `modbuild.neoforge-conventions.gradle.kts` /
   `modbuild.forge-conventions.gradle.kts` — one precompiled plugin per loader, holding that
   loader's own dependency set. Applied conditionally from the root script (see "Adding a
-  dependency" below).
-- `ModBuildExtension.kt` — the `modbuild { }` extension, exposing `embed(...)`.
+  dependency" below). Also outside `modbuild/` for the same reason.
 
 ## Adding a dependency — which mechanism to use
 
