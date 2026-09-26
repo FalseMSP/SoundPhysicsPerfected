@@ -82,7 +82,11 @@ public abstract class SoundSystemMixin {
         }
 
         try {
+            //? if >=26.3 {
+            /*WeighedSoundEvents weightedSoundSet = sound.getOrResolve(soundManager); // load pitches and whatnot into the sound data
+            *///?} else {
             WeighedSoundEvents weightedSoundSet = sound.resolve(soundManager); // load pitches and whatnot into the sound data
+            //?}
             if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance) && sound.getAttenuation() != SoundInstance.Attenuation.NONE) { // !replayList.contains(redSoundData)
                 // Get sound coordinates
                 double soundX = sound.getX();
