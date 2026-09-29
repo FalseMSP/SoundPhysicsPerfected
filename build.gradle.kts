@@ -134,6 +134,11 @@ dependencies {
     include(implementation(annotationProcessor("com.github.bawnorton.mixinsquared:mixinsquared-${loader.loader}:${deps.mixinsquaredVersion}")!!)!!)
     modImplementation("de.maxhenkel.voicechat:voicechat-api:${deps.voicechat_api_version}")
 
+    // Offline tests of the acoustics core (pure Java, no game needed)
+    testImplementation(platform("org.junit:junit-bom:5.11.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
     if (loader.isFabric) {
         modImplementation("net.fabricmc:fabric-loader:${deps.fabricLoaderVersion}")!!
         modImplementation("net.fabricmc.fabric-api:fabric-api:${deps.fabricApiVersion}+${mc.version}")
@@ -267,6 +272,10 @@ tasks.jar {
             "MixinConnector" to "com.redsmods.sound_physics_perfected.MixinConnector"
         )
     }
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.named("remapJar") {
