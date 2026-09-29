@@ -11,6 +11,7 @@ import com.redsmods.sound_physics_perfected.storageclasses.SoundData;
 import com.redsmods.sound_physics_perfected.wrappers.RedPermeatedSoundInstance;
 import com.redsmods.sound_physics_perfected.wrappers.RedPositionedSoundInstance;
 import com.redsmods.sound_physics_perfected.wrappers.RedTickableInstance;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.ChannelAccess;
@@ -45,6 +46,8 @@ public abstract class SoundSystemMixin {
 
     @Unique
     private int spp$debugTicks;
+    @Unique
+    private double spp$tickMillis;
 
     //? if <1.21.6 {
     @Inject(method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
@@ -106,6 +109,13 @@ public abstract class SoundSystemMixin {
                     shift = At.Shift.AFTER)
     )
     private void onSoundTick(boolean paused, CallbackInfo ci) {
+        long start = System.nanoTime();
+        spp$tick();
+        spp$tickMillis += ((System.nanoTime() - start) / 1.0e6 - spp$tickMillis) * 0.05; // ~1 s average
+    }
+
+    @Unique
+    private void spp$tick() {
         Minecraft client = Minecraft.getInstance();
         if (client.level == null || client.player == null) {
             return;
@@ -164,12 +174,21 @@ public abstract class SoundSystemMixin {
         RaycastingHelper.pruneFinished(instanceToChannel::containsKey);
     }
 
+    @Inject(method = "updateSource(Lnet/minecraft/client/Camera;)V", at = @At("TAIL"))
+    private void onFrame(Camera camera, CallbackInfo ci) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.level != null && client.player != null) {
+            RaycastingHelper.onFrame(client.level, client.player);
+        }
+    }
+
     @Unique
     private void spp$debugReverb(Minecraft client, Config config, ReverbParams environment) {
         if (config.reverbTuning == DebugType.OFF || environment == null || client.player == null) return;
         boolean actionBar = config.reverbTuning == DebugType.ACTION_BAR;
         if (!actionBar && spp$debugTicks++ % 20 != 0) return; // chat: once a second
-        client.player.displayClientMessage(Component.literal(environment.toString()), actionBar);
+        client.player.displayClientMessage(Component.literal(String.format(java.util.Locale.ROOT, "%s | %s, client thread %.2f ms/tick",
+                environment, RaycastingHelper.lastTraceSummary(), spp$tickMillis)), actionBar);
     }
 
     @ModifyVariable(method = "stop(Lnet/minecraft/client/resources/sounds/SoundInstance;)V", at = @At("HEAD"), argsOnly = true)

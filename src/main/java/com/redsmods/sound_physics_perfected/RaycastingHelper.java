@@ -99,6 +99,8 @@ public final class RaycastingHelper {
     private static int tickCounter;
     private static long lastErrorLog;
     private static volatile boolean subLevelsNearby;
+    private static double lastTraceMillis;
+    private static int lastTraceSounds;
 
     // --- Published results ------------------------------------------------------------------------------------------
     private static volatile ReverbStats lastStats = new ReverbStats();
@@ -125,7 +127,8 @@ public final class RaycastingHelper {
         }
     }
 
-    private record Result(Job job, ListenerTrace.Accumulator paths, double[] obstruction, ReverbParams environment) {
+    private record Result(Job job, ListenerTrace.Accumulator paths, double[] obstruction, ReverbParams environment,
+                          long nanos) {
     }
 
     // ================================================================================================================
@@ -134,14 +137,28 @@ public final class RaycastingHelper {
 
     public static void onSoundEngineTick(Level level, Player player) {
         try {
-            tick(level, player);
+            tickCounter++;
+            pump(level, player, false);
+            updateReverbSmoothing();
         } catch (RuntimeException e) {
             logError("Error in sound ray tracing tick", e);
         }
     }
 
-    private static void tick(Level level, Player player) {
-        tickCounter++;
+    /**
+     * Every frame, right after the frame's packets were handled: deliver finished traces and start tracing
+     * brand new sounds immediately, so they play about a frame after they were triggered instead of waiting
+     * for the next 50 ms game tick.
+     */
+    public static void onFrame(Level level, Player player) {
+        try {
+            pump(level, player, true);
+        } catch (RuntimeException e) {
+            logError("Error in sound ray tracing frame update", e);
+        }
+    }
+
+    private static void pump(Level level, Player player, boolean frame) {
         if (level != lastLevel.get()) {
             resetForLevel(level);
         }
@@ -151,7 +168,7 @@ public final class RaycastingHelper {
             collect(inFlight);
             inFlight = null;
         }
-        if (inFlight == null) {
+        if (inFlight == null && (!frame || !soundQueue.isEmpty())) {
             Job job = prepareJob(level, player);
             if (job != null) {
                 inFlight = launch(job);
@@ -173,7 +190,6 @@ public final class RaycastingHelper {
             }
         }
         playQueuedObjects();
-        updateReverbSmoothing();
     }
 
     private static void resetForLevel(Level level) {
@@ -264,6 +280,7 @@ public final class RaycastingHelper {
                 inFlightOriginals.add(((RedSoundInstance) target.data.sound).getOriginal());
             }
         }
+        long start = System.nanoTime();
         int rays = job.dirs.length / 3;
         int targetCount = job.targets.size();
         double[] obstruction = new double[targetCount];
@@ -296,7 +313,8 @@ public final class RaycastingHelper {
             for (CompletableFuture<ListenerTrace.Accumulator> part : parts) {
                 total.merge(part.join()); // merged in a fixed order, so results are deterministic
             }
-            return new Result(job, total, obstruction, RoomAcousticsModel.estimate(total.stats, job.room));
+            return new Result(job, total, obstruction, RoomAcousticsModel.estimate(total.stats, job.room),
+                    System.nanoTime() - start);
         });
     }
 
@@ -334,6 +352,8 @@ public final class RaycastingHelper {
         ListenerTrace.Accumulator paths = result.paths;
         lastStats = paths.stats;
         targetReverb = result.environment;
+        lastTraceMillis = result.nanos / 1.0e6;
+        lastTraceSounds = job.targets.size();
         int totalHits = paths.stats.totalHits();
 
         for (int j = 0; j < job.targets.size(); j++) {
@@ -555,6 +575,12 @@ public final class RaycastingHelper {
         }
         float alpha = (float) (1.0 - Math.exp(-0.05 / smoothing));
         currentReverb = current.approach(target, alpha);
+    }
+
+    /** Wall time of the last trace and how many sounds it placed, for the reverb debug line. */
+    public static String lastTraceSummary() {
+        return String.format(java.util.Locale.ROOT, "trace %.1f ms, %d sounds, %s", lastTraceMillis, lastTraceSounds,
+                subLevelsNearby || !Config.getInstance().fastRaytracing ? "clip" : "voxel");
     }
 
     /** The smoothed reverb for the listener's surroundings, or null before the first trace. Any thread. */

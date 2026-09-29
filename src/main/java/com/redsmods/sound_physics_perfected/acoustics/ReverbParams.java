@@ -95,23 +95,48 @@ public final class ReverbParams {
 
     /** Whether the audible parameters differ by more than a barely perceptible amount. */
     public boolean differsAudiblyFrom(ReverbParams o) {
+        return differsStructurallyFrom(o) || differsInLevelsFrom(o);
+    }
+
+    /**
+     * Parameters whose change makes OpenAL Soft rebuild its reverb network: it switches to a second network
+     * and fades the old one out, so these should not change on every tick.
+     */
+    public boolean differsStructurallyFrom(ReverbParams o) {
         return rel(decayTime, o.decayTime) > 0.01f
-                || Math.abs(gain - o.gain) > 0.002f
+                || Math.abs(decayHFRatio - o.decayHFRatio) > 0.005f
+                || Math.abs(decayLFRatio - o.decayLFRatio) > 0.005f
+                || Math.abs(density - o.density) > 0.01f
+                || Math.abs(diffusion - o.diffusion) > 0.01f
+                || Math.abs(modulationTime - o.modulationTime) > 0.01f
+                || Math.abs(modulationDepth - o.modulationDepth) > 0.01f
+                || Math.abs(hfReference - o.hfReference) > 1.0f
+                || Math.abs(lfReference - o.lfReference) > 1.0f;
+    }
+
+    /** Levels, delays and filters: cheap for OpenAL Soft to change at any time. */
+    public boolean differsInLevelsFrom(ReverbParams o) {
+        return Math.abs(gain - o.gain) > 0.002f
                 || Math.abs(lateReverbGain - o.lateReverbGain) > 0.005f
                 || Math.abs(reflectionsGain - o.reflectionsGain) > 0.005f
                 || Math.abs(gainHF - o.gainHF) > 0.005f
                 || Math.abs(gainLF - o.gainLF) > 0.005f
-                || Math.abs(decayHFRatio - o.decayHFRatio) > 0.005f
-                || Math.abs(decayLFRatio - o.decayLFRatio) > 0.005f
                 || Math.abs(reflectionsDelay - o.reflectionsDelay) > 0.0005f
                 || Math.abs(lateReverbDelay - o.lateReverbDelay) > 0.0005f
-                || Math.abs(density - o.density) > 0.01f
-                || Math.abs(diffusion - o.diffusion) > 0.01f
                 || Math.abs(echoDepth - o.echoDepth) > 0.01f
                 || Math.abs(echoTime - o.echoTime) > 0.002f
-                || Math.abs(hfReference - o.hfReference) > 1.0f
-                || Math.abs(lfReference - o.lfReference) > 1.0f
+                || Math.abs(airAbsorptionGainHF - o.airAbsorptionGainHF) > 0.0005f
                 || Math.abs(roomRolloffFactor - o.roomRolloffFactor) > 0.01f;
+    }
+
+    /** These levels with the structural parameters of another set (bit-identical, so OpenAL sees no change). */
+    public ReverbParams withStructureOf(ReverbParams s) {
+        return new ReverbParams(s.density, s.diffusion, gain, gainHF, gainLF,
+                s.decayTime, s.decayHFRatio, s.decayLFRatio,
+                reflectionsGain, reflectionsDelay, lateReverbGain, lateReverbDelay,
+                echoTime, echoDepth, s.modulationTime, s.modulationDepth,
+                airAbsorptionGainHF, s.hfReference, s.lfReference, roomRolloffFactor,
+                enclosure, meanFreePath, absorption);
     }
 
     private static float rel(float a, float b) {

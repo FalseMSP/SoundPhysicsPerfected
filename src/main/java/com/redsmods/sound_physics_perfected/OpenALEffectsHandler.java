@@ -26,6 +26,9 @@ public class OpenALEffectsHandler {
     /** Parameters currently loaded into the effect slot (null = none / legacy). */
     private ReverbParams loadedParams;
     private boolean legacyParamsLoaded;
+    private long lastStructuralLoad;
+    /** Minimum time between reverb network rebuilds (decay, density, diffusion... changes). */
+    private static final long STRUCTURAL_INTERVAL_NANOS = 250_000_000L;
 
     public int getDirectBlockFilter() {
         return directBlockFilter;
@@ -42,7 +45,21 @@ public class OpenALEffectsHandler {
      */
     public void applyEnvironment(ReverbParams p) {
         if (!efxInitialized || p == null) return;
-        if (loadedParams != null && !legacyParamsLoaded && !p.differsAudiblyFrom(loadedParams)) return;
+        long now = System.nanoTime();
+        if (loadedParams != null && !legacyParamsLoaded) {
+            boolean structural = p.differsStructurallyFrom(loadedParams);
+            if (structural && now - lastStructuralLoad < STRUCTURAL_INTERVAL_NANOS) {
+                // OpenAL Soft rebuilds (and cross-fades) its reverb network whenever decay, density etc. change.
+                // Doing that every tick of a transition splits tails between networks, so those parameters
+                // follow at a slower rate while levels keep updating every tick.
+                p = p.withStructureOf(loadedParams);
+                structural = false;
+            }
+            if (!structural && !p.differsInLevelsFrom(loadedParams)) return;
+            if (structural) lastStructuralLoad = now;
+        } else {
+            lastStructuralLoad = now;
+        }
 
         alEffectf(reverbEffect, AL_EAXREVERB_DENSITY, p.density);
         alEffectf(reverbEffect, AL_EAXREVERB_DIFFUSION, p.diffusion);

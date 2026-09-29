@@ -137,9 +137,14 @@ public final class RoomAcousticsModel {
 
         double gain = Math.min(MASTER_GAIN_PER_INTENSITY * cfg.intensity, Math.min(1.0, cfg.maxGain));
 
+        // OpenAL Soft (1.23, as bundled with Minecraft) renders an LF decay ratio above 1 with a large overshoot:
+        // measured, a ratio of 1.57 on a 1.71 s decay rings for ~4.4 s in the mids and ~6.5 s in the lows, and a
+        // ratio of 2 leaves a long low-level rumble. HF ratios behave. So longer bass decay is not requested.
+        double lfRatio = Math.min(tLow / tMid, 1.0);
+
         return new ReverbParams(
                 (float) density, (float) diffusion, (float) gain, (float) gainHF, (float) gainLF,
-                (float) tMid, (float) (tHigh / tMid), (float) (tLow / tMid),
+                (float) tMid, (float) (tHigh / tMid), (float) lfRatio,
                 (float) reflections, (float) reflectionsDelay, (float) late, (float) lateDelay,
                 (float) echoTime, (float) echoDepth, 0.25f, 0.0f,
                 0.994f, (float) cfg.hfReference, (float) cfg.lfReference, 0.0f,
