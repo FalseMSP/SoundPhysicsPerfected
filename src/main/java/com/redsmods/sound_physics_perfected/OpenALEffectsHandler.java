@@ -1,251 +1,131 @@
 package com.redsmods.sound_physics_perfected;
 
-import com.redsmods.sound_physics_perfected.ReverbHelpers.EnhancedReverbData;
-import com.redsmods.sound_physics_perfected.ReverbHelpers.ReverbConstants;
+import com.redsmods.sound_physics_perfected.acoustics.ReverbParams;
 import com.redsmods.sound_physics_perfected.config.Config;
 import com.redsmods.sound_physics_perfected.config.DebugType;
-import com.redsmods.sound_physics_perfected.wrappers.RedPermeatedSoundInstance;
-import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
+import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
 import org.lwjgl.openal.ALC10;
 import org.lwjgl.openal.EXTEfx;
-
-import java.util.logging.Logger;
 
 import static com.redsmods.sound_physics_perfected.RaycastingHelper.*;
 import static org.joml.Math.lerp;
 import static org.lwjgl.openal.EXTEfx.*;
 
+/**
+ * Owns the EFX objects for one OpenAL context (the game's, or Simple Voice Chat's).
+ */
 public class OpenALEffectsHandler {
     private int auxFXSlot = 0;
     private int reverbEffect = 0;
     private int muffleFilter = 0;
     private int sendFilter = 0;
+    private int directBlockFilter = 0;
     public boolean efxInitialized = false;
-    private int directBlockFilter;
 
-    public int getDirectBlockFilter() { return directBlockFilter; }
+    /** Parameters currently loaded into the effect slot (null = none / legacy). */
+    private ReverbParams loadedParams;
+    private boolean legacyParamsLoaded;
+
+    public int getDirectBlockFilter() {
+        return directBlockFilter;
+    }
+
+    // ================================================================================================================
+    // Modern (ray traced) reverb
+    // ================================================================================================================
 
     /**
-     * Apply reverb settings to a specific OpenAL source
+     * Loads a reverb environment into the effect slot, if it changed audibly since the last load.
+     * EFX slots take a copy of the effect when it is attached, so the effect must be re-attached after its
+     * parameters change; without that, parameter changes are never heard.
      */
-    public void applyReverbToSource(int sourceId) {
-        try {
-            // Get enhanced reverb data
-            EnhancedReverbData reverbData = RaycastingHelper.getEnhancedReverbData();
+    public void applyEnvironment(ReverbParams p) {
+        if (!efxInitialized || p == null) return;
+        if (loadedParams != null && !legacyParamsLoaded && !p.differsAudiblyFrom(loadedParams)) return;
 
-            if (Config.getInstance().reverbTuning == DebugType.CHAT) {
-                Minecraft client = Minecraft.getInstance();
-                if (client.player != null) client.player.displayClientMessage(Component.literal(reverbData.toString()), false);
-            } else if (Config.getInstance().reverbTuning == DebugType.ACTION_BAR) {
-                Minecraft client = Minecraft.getInstance();
-                if (client.player != null) client.player.displayClientMessage(Component.literal(reverbData.toString()), true);
-            }
+        alEffectf(reverbEffect, AL_EAXREVERB_DENSITY, p.density);
+        alEffectf(reverbEffect, AL_EAXREVERB_DIFFUSION, p.diffusion);
+        alEffectf(reverbEffect, AL_EAXREVERB_GAIN, p.gain);
+        alEffectf(reverbEffect, AL_EAXREVERB_GAINHF, p.gainHF);
+        alEffectf(reverbEffect, AL_EAXREVERB_GAINLF, p.gainLF);
+        alEffectf(reverbEffect, AL_EAXREVERB_DECAY_TIME, p.decayTime);
+        alEffectf(reverbEffect, AL_EAXREVERB_DECAY_HFRATIO, p.decayHFRatio);
+        alEffectf(reverbEffect, AL_EAXREVERB_DECAY_LFRATIO, p.decayLFRatio);
+        alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_GAIN, p.reflectionsGain);
+        alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_DELAY, p.reflectionsDelay);
+        alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN, p.lateReverbGain);
+        alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY, p.lateReverbDelay);
+        alEffectf(reverbEffect, AL_EAXREVERB_ECHO_TIME, p.echoTime);
+        alEffectf(reverbEffect, AL_EAXREVERB_ECHO_DEPTH, p.echoDepth);
+        alEffectf(reverbEffect, AL_EAXREVERB_MODULATION_TIME, p.modulationTime);
+        alEffectf(reverbEffect, AL_EAXREVERB_MODULATION_DEPTH, p.modulationDepth);
+        alEffectf(reverbEffect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, p.airAbsorptionGainHF);
+        alEffectf(reverbEffect, AL_EAXREVERB_HFREFERENCE, p.hfReference);
+        alEffectf(reverbEffect, AL_EAXREVERB_LFREFERENCE, p.lfReference);
+        alEffectf(reverbEffect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, p.roomRolloffFactor);
+        // Air absorption is already part of the modelled HF decay; do not let EFX limit it a second time.
+        alEffecti(reverbEffect, AL_EAXREVERB_DECAY_HFLIMIT, AL10.AL_FALSE);
+        alAuxiliaryEffectSloti(auxFXSlot, AL_EFFECTSLOT_EFFECT, reverbEffect);
+        logALError("Failed to load reverb environment");
 
-            if (RaycastingHelper.getDistanceFromWallEchoDenom() == 0 ||
-                    RaycastingHelper.getReverbDenom() == 0 ||
-                    RaycastingHelper.getOutdoorLeakDenom() == 0) {
-                return;
-            }
-
-            if (!EXTEfx.alIsAuxiliaryEffectSlot(auxFXSlot)) {
-                System.err.println("auxFXSlot " + auxFXSlot + " is not valid in the current context");
-                cleanupEFXResources();
-                initializeReverb();
-                return;
-            }
-
-            float wallDistance = (float) (RaycastingHelper.getDistanceFromWallEcho() / RaycastingHelper.getDistanceFromWallEchoDenom());
-            float reverbStrength = (float) RaycastingHelper.getReverbStrength() / RaycastingHelper.getReverbDenom();
-            float weightedReverbStrength = (float) RaycastingHelper.getWeightedReverbStrength() / RaycastingHelper.getReverbDenom();
-            float outdoorLeakPercent = (float) RaycastingHelper.getOutdoorLeak() / RaycastingHelper.getOutdoorLeakDenom();
-            float earlyReflectionRatio = (float) RaycastingHelper.getEarlyReflectionRatio();
-
-            float rt60 = (float) reverbData.rt60;
-            float roomSize = (float) reverbData.roomSize;
-            float absorption = (float) reverbData.absorption;
-            float earlyReflectionDelay = (float) reverbData.earlyReflectionDelay;
-            float lateReflectionStrength = (float) reverbData.lateReflectionStrength;
-            boolean isIndoors = reverbData.isIndoors;
-
-            wallDistance = clamp(wallDistance, ReverbConstants.MIN_WALL_DISTANCE, ReverbConstants.MAX_WALL_DISTANCE);
-            reverbStrength = clamp(reverbStrength, 0.0f, 1.0f);
-            weightedReverbStrength = clamp(weightedReverbStrength, 0.0f, 1.0f);
-            outdoorLeakPercent = clamp(outdoorLeakPercent, 0.0f, 1.0f);
-            earlyReflectionRatio = clamp(earlyReflectionRatio, 0.0f, 1.0f);
-//            rt60 = clamp(rt60, ReverbConstants.MIN_RT60, ReverbConstants.MAX_RT60);
-            roomSize = clamp(roomSize, ReverbConstants.MIN_ROOM_SIZE, ReverbConstants.MAX_ROOM_SIZE);
-            absorption = clamp(absorption, ReverbConstants.MIN_ABSORPTION, ReverbConstants.MAX_ABSORPTION);
-            earlyReflectionDelay = clamp(earlyReflectionDelay, ReverbConstants.MIN_EARLY_REFLECTION_DELAY, ReverbConstants.MAX_EARLY_REFLECTION_DELAY);
-            lateReflectionStrength = clamp(lateReflectionStrength, 0.0f, 1.0f);
-
-            float enclosureFactor = isIndoors ? (1.0f - outdoorLeakPercent) * Config.getInstance().indoorBias :
-                    Math.max(0.0f, (reverbStrength - outdoorLeakPercent)) * Config.getInstance().outdoorBias;
-            enclosureFactor = clamp(enclosureFactor, 0.0f, 1.0f);
-
-            float opennessFactor = 1.0f - enclosureFactor;
-
-            float estimatedVolume = roomSize * roomSize * roomSize * Config.getInstance().roomVolumeMultiplier;
-            float estimatedSurfaceArea = Config.getInstance().surfaceAreaMultiplier * roomSize * roomSize;
-            float surfaceToVolumeRatio = estimatedSurfaceArea / Math.max(estimatedVolume, 1.0f);
-            surfaceToVolumeRatio = clamp(surfaceToVolumeRatio, ReverbConstants.MIN_SURFACE_TO_VOLUME_RATIO, ReverbConstants.MAX_SURFACE_TO_VOLUME_RATIO);
-
-// Material-based absorption (WIP)
-            float dynamicAbsorption = absorption;
-            float totalAbsorption = estimatedSurfaceArea * dynamicAbsorption;
-
-            float calculatedRT60 = rt60;
-            if (calculatedRT60 < ReverbConstants.MIN_RT60 || calculatedRT60 > ReverbConstants.MAX_RT60) {
-                calculatedRT60 = Config.getInstance().rt60SabineConstant * estimatedVolume / Math.max(totalAbsorption, Config.getInstance().minTotalAbsorption);
-                calculatedRT60 = clamp(calculatedRT60, ReverbConstants.MIN_CALCULATED_RT60, ReverbConstants.MAX_CALCULATED_RT60);
-            }
-
-            float effectiveDecayTime = calculatedRT60 * enclosureFactor;
-            effectiveDecayTime = clamp(effectiveDecayTime, ReverbConstants.MIN_EFFECTIVE_DECAY_TIME, ReverbConstants.MAX_EFFECTIVE_DECAY_TIME);
-
-            float distanceAttenuation = 1.0f / (1.0f + wallDistance * Config.getInstance().distanceAttenuationLinear +
-                    wallDistance * wallDistance * Config.getInstance().distanceAttenuationQuadratic);
-
-            float airAbsorptionFactor = 1.0f - (wallDistance * Config.getInstance().airAbsorptionRate);
-            airAbsorptionFactor = clamp(airAbsorptionFactor, Config.getInstance().minAirAbsorption, 1.0f);
-
-            float decayHfRatio = (1.0f - dynamicAbsorption) * airAbsorptionFactor * enclosureFactor;
-            decayHfRatio = clamp(decayHfRatio, ReverbConstants.MIN_DECAY_HF_RATIO, ReverbConstants.MAX_DECAY_HF_RATIO);
-
-            float reflectionsDelay = earlyReflectionDelay;
-            float reflectionsGain = earlyReflectionRatio * reverbStrength * enclosureFactor * distanceAttenuation * Config.getInstance().globalReverbIntensity;
-            reflectionsGain = clamp(reflectionsGain, ReverbConstants.MIN_REFLECTIONS_GAIN, ReverbConstants.MAX_REFLECTIONS_GAIN);
-
-            float lateReverbDelay = earlyReflectionDelay * Config.getInstance().lateReverbDelayMultiplier + (roomSize / Config.getInstance().soundSpeed);
-            lateReverbDelay = clamp(lateReverbDelay, ReverbConstants.MIN_LATE_REVERB_DELAY, ReverbConstants.MAX_LATE_REVERB_DELAY);
-
-            float lateReverbGain = lateReflectionStrength * enclosureFactor * distanceAttenuation * Config.getInstance().globalReverbIntensity;
-            lateReverbGain = clamp(lateReverbGain, ReverbConstants.MIN_LATE_REVERB_GAIN, ReverbConstants.MAX_LATE_REVERB_GAIN);
-
-            float roomComplexity = Math.min(1.0f, surfaceToVolumeRatio / Config.getInstance().roomComplexityDivisor);
-
-// NEW: Room size scaling factors
-            float roomSizeScaling = 1.0f;
-            float smallRoomReduction = 1.0f;
-            float volumeBasedReduction = 1.0f;
-
-            if (roomSize < 0.5f) {
-                // Tiny rooms (closets, small bathrooms): dramatic reduction
-                roomSizeScaling = 0.05f;
-                smallRoomReduction = 0.1f;
-                volumeBasedReduction = 0.1f;
-            } else if (roomSize < 2.0f) {
-                // Very small rooms: significant reduction
-                roomSizeScaling = 0.15f;
-                smallRoomReduction = 0.25f;
-                volumeBasedReduction = 0.3f;
-            } else if (roomSize < 5.0f) {
-                // Small rooms: moderate reduction
-                roomSizeScaling = 0.4f;
-                smallRoomReduction = 0.5f;
-                volumeBasedReduction = 0.6f;
-            } else if (roomSize < 20.0f) {
-                // Medium rooms: slight reduction
-                roomSizeScaling = 0.7f;
-                smallRoomReduction = 0.8f;
-                volumeBasedReduction = 0.8f;
-            }
-            float actualVolumeReduction = Math.max(0.1f, Math.min(1.0f, estimatedVolume / 500.0f));
-            volumeBasedReduction *= actualVolumeReduction;
-
-            float roomSizeEmphasis = roomSize < 10.0f ? Config.getInstance().smallRoomEmphasis * smallRoomReduction : Config.getInstance().largeRoomEmphasis;
-
-            float diffusion = lerp(Config.getInstance().minDiffusion, Config.getInstance().maxDiffusion,
-                    roomComplexity * Config.getInstance().diffusionComplexityWeight *
-                            enclosureFactor * Config.getInstance().diffusionEnclosureWeight *
-                            weightedReverbStrength * Config.getInstance().diffusionReverbWeight *
-                            roomSizeEmphasis);
-            diffusion = clamp(diffusion, 0.1f, 1.0f);
-
-            float density = lerp(Config.getInstance().minDensity, 1.0f,
-                    enclosureFactor * (1.0f - roomSize / Config.getInstance().densityRoomSizeFactor) * roomSizeEmphasis);
-            density = clamp(density, 0.1f, 1.0f);
-
-            float overallGain = enclosureFactor * distanceAttenuation * roomSizeScaling * volumeBasedReduction *
-                    (Config.getInstance().baseReverbGain + reverbStrength * Config.getInstance().reverbGainMultiplier) *
-                    Config.getInstance().globalReverbIntensity;
-            overallGain = clamp(overallGain, 0.0f, Config.getInstance().maxOverallGain);
-
-            float gainHF = (1.0f - dynamicAbsorption) * airAbsorptionFactor * enclosureFactor;
-            gainHF = clamp(gainHF, 0.1f, 1.0f);
-
-            float airAbsorptionHF = airAbsorptionFactor * enclosureFactor + opennessFactor * Config.getInstance().outdoorHfLeak;
-            airAbsorptionHF = clamp(airAbsorptionHF, ReverbConstants.MIN_AIR_ABSORPTION_HF, ReverbConstants.MAX_AIR_ABSORPTION_HF);
-
-            float roomRolloff = lerp(1.0f, 0.0f, enclosureFactor) * (roomSize / Config.getInstance().roomRolloffSizeFactor);
-            roomRolloff = clamp(roomRolloff, ReverbConstants.MIN_ROOM_ROLLOFF, ReverbConstants.MAX_ROOM_ROLLOFF);
-
-            float sendFilterGain = overallGain;
-            float sendFilterGainHF = gainHF * Config.getInstance().sendFilterHfReduction;
-
-            float echoDensity = lerp(1.0f, 0.4f, roomSize / Config.getInstance().densityRoomSizeFactor) * enclosureFactor;
-            echoDensity = clamp(echoDensity, 0.1f, 1.0f);
-
-            float modulationTime = clamp(roomSize * Config.getInstance().modulationTimeMultiplier, ReverbConstants.MIN_MODULATION_TIME, ReverbConstants.MAX_MODULATION_TIME);
-            float modulationDepth = clamp(enclosureFactor * Config.getInstance().modulationDepthMultiplier, ReverbConstants.MIN_MODULATION_DEPTH, ReverbConstants.MAX_MODULATION_DEPTH);
-
-            float hfReference = clamp(Config.getInstance().baseHfReference - roomSize * Config.getInstance().hfRoomSizeFactor,
-                    ReverbConstants.MIN_HF_REFERENCE, ReverbConstants.MAX_HF_REFERENCE);
-            float lfReference = clamp(Config.getInstance().baseLfReference - roomSize * Config.getInstance().lfRoomSizeFactor,
-                    ReverbConstants.MIN_LF_REFERENCE, ReverbConstants.MAX_LF_REFERENCE);
-
-            float gainLF = clamp(1.0f - dynamicAbsorption * Config.getInstance().dynamicAbsorptionLfFactor, ReverbConstants.MIN_GAIN_LF, ReverbConstants.MAX_GAIN_LF);
-
-            float decayLfRatio = clamp(decayHfRatio * Config.getInstance().decayLfMultiplier,
-                    ReverbConstants.MIN_DECAY_HF_RATIO, ReverbConstants.MAX_DECAY_HF_RATIO);
-
-            float echoTime = clamp(roomSize * Config.getInstance().echoTimeMultiplier,
-                    ReverbConstants.MIN_ECHO_TIME, ReverbConstants.MAX_ECHO_TIME);
-            float echoDepth = clamp(echoDensity * Config.getInstance().echoDepthMultiplier,
-                    ReverbConstants.MIN_ECHO_DEPTH, ReverbConstants.MAX_ECHO_DEPTH);
-
-            // FIXED: Apply room size scaling to reflection gains and decay time
-            reflectionsGain *= roomSizeScaling;
-            reflectionsGain = clamp(reflectionsGain, ReverbConstants.MIN_REFLECTIONS_GAIN, ReverbConstants.MAX_REFLECTIONS_GAIN);
-
-            lateReverbGain *= roomSizeScaling;
-            lateReverbGain = clamp(lateReverbGain, ReverbConstants.MIN_LATE_REVERB_GAIN, ReverbConstants.MAX_LATE_REVERB_GAIN);
-
-            effectiveDecayTime *= roomSizeScaling;
-            effectiveDecayTime = clamp(effectiveDecayTime, ReverbConstants.MIN_EFFECTIVE_DECAY_TIME, ReverbConstants.MAX_EFFECTIVE_DECAY_TIME);
-
-// Apply all parameters to OpenAL
-            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAIN, sendFilterGain);
-            EXTEfx.alFilterf(sendFilter, EXTEfx.AL_LOWPASS_GAINHF, sendFilterGainHF);
-
-            alEffectf(reverbEffect, AL_EAXREVERB_DENSITY, density);
-            alEffectf(reverbEffect, AL_EAXREVERB_DIFFUSION, diffusion);
-            alEffectf(reverbEffect, AL_EAXREVERB_GAIN, overallGain);
-            alEffectf(reverbEffect, AL_EAXREVERB_GAINHF, gainHF);
-            alEffectf(reverbEffect, AL_EAXREVERB_GAINLF, gainLF);
-            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_TIME, effectiveDecayTime);
-            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_HFRATIO, decayHfRatio);
-            alEffectf(reverbEffect, AL_EAXREVERB_DECAY_LFRATIO, decayLfRatio);
-            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_GAIN, reflectionsGain);
-            alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_DELAY, reflectionsDelay);
-            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN, lateReverbGain);
-            alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY, lateReverbDelay);
-            alEffectf(reverbEffect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, airAbsorptionHF);
-            alEffectf(reverbEffect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, roomRolloff);
-            alEffectf(reverbEffect, AL_EAXREVERB_ECHO_TIME, echoTime);
-            alEffectf(reverbEffect, AL_EAXREVERB_ECHO_DEPTH, echoDepth);
-            alEffectf(reverbEffect, AL_EAXREVERB_MODULATION_TIME, modulationTime);
-            alEffectf(reverbEffect, AL_EAXREVERB_MODULATION_DEPTH, modulationDepth);
-            alEffectf(reverbEffect, AL_EAXREVERB_HFREFERENCE, hfReference);
-            alEffectf(reverbEffect, AL_EAXREVERB_LFREFERENCE, lfReference);
-
-            AL11.alSource3i(sourceId, EXTEfx.AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
-
-        } catch (Exception e) {
-            System.err.println("Error applying dynamic reverb: " + e.getMessage());
-        }
+        loadedParams = p;
+        legacyParamsLoaded = false;
     }
+
+    /** The legacy modes were always heard with the initial parameters; put those back when switching to them. */
+    public void useLegacyParams() {
+        if (!efxInitialized || legacyParamsLoaded) return;
+        // Recreate the effect so every parameter returns to the EAX default, exactly as at start-up.
+        EXTEfx.alDeleteEffects(reverbEffect);
+        reverbEffect = EXTEfx.alGenEffects();
+        EXTEfx.alEffecti(reverbEffect, EXTEfx.AL_EFFECT_TYPE, EXTEfx.AL_EFFECT_EAXREVERB);
+        setBasicReverbParams();
+        alAuxiliaryEffectSloti(auxFXSlot, AL_EFFECTSLOT_EFFECT, reverbEffect);
+        legacyParamsLoaded = true;
+        loadedParams = null;
+    }
+
+    /**
+     * Routes a source into the reverb. The send goes through a low-pass matching the source's occlusion
+     * (0 = clear, 1 = fully muffled), so a muffled sound does not produce bright, unmuffled reverb.
+     */
+    public void attachReverbSend(int sourceId, float muffleStrength) {
+        float m = clamp(muffleStrength, 0.0f, 1.0f);
+        EXTEfx.alFilterf(sendFilter, AL_LOWPASS_GAIN, lerp(1.0f, 0.2f, m));
+        EXTEfx.alFilterf(sendFilter, AL_LOWPASS_GAINHF, lerp(1.0f, 0.1f, m));
+        AL11.alSource3i(sourceId, AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
+    }
+
+    /** Current environment + reverb send for one source. Used by voice chat, on its own context and thread. */
+    public void applyReverbToSource(int sourceId) {
+        if (!efxInitialized) return;
+        if (!EXTEfx.alIsAuxiliaryEffectSlot(auxFXSlot)) {
+            System.err.println("auxFXSlot " + auxFXSlot + " is not valid in the current context");
+            cleanupEFXResources();
+            initializeReverb();
+            return;
+        }
+        applyEnvironment(RaycastingHelper.getCurrentReverb());
+        attachReverbSend(sourceId, 0.0f);
+    }
+
+    /** Re-creates the EFX objects if the context lost them (e.g. device reset). Returns whether EFX is usable. */
+    public boolean ensureValid() {
+        if (!efxInitialized) {
+            initializeReverb();
+            return efxInitialized;
+        }
+        if (!EXTEfx.alIsAuxiliaryEffectSlot(auxFXSlot)) {
+            cleanupEFXResources();
+            initializeReverb();
+        }
+        return efxInitialized;
+    }
+
+    // ================================================================================================================
+    // Legacy reverb modes (kept exactly as they were, including only ever changing the send level)
+    // ================================================================================================================
 
     public void applyLegacyReverbToSource(int sourceId) {
         try {
@@ -309,8 +189,6 @@ public class OpenALEffectsHandler {
             float occlusionPercent = (float) RaycastingHelper.getReverbStrength() / RaycastingHelper.getReverbDenom();
             float outdoorLeakPercent = (float) RaycastingHelper.getOutdoorLeak() / RaycastingHelper.getOutdoorLeakDenom();
 
-//            System.out.println(occlusionPercent +" " + wallDistance + " " + outdoorLeakPercent);
-
             float distanceMeters     = clamp(wallDistance, 1.0f, 100.0f);
             occlusionPercent   = 1 - clamp(occlusionPercent+outdoorLeakPercent, 0.0f, 1.0f);
             outdoorLeakPercent = clamp(outdoorLeakPercent, 0.0f, 1.0f);
@@ -358,9 +236,9 @@ public class OpenALEffectsHandler {
         }
     }
 
-    /**
-     * Initialize EFX reverb system once
-     */
+    // ================================================================================================================
+    // Setup / teardown
+    // ================================================================================================================
 
     public void initializeReverb() { // get default context
         if (efxInitialized) cleanupEFXResources();
@@ -368,15 +246,12 @@ public class OpenALEffectsHandler {
             long currentContext = ALC10.alcGetCurrentContext();
             long device = ALC10.alcGetContextsDevice(currentContext);
             initializeReverb(currentContext, device);
-            directBlockFilter = EXTEfx.alGenFilters();
-            EXTEfx.alFilteri(directBlockFilter, EXTEfx.AL_FILTER_TYPE, EXTEfx.AL_FILTER_LOWPASS);
-            EXTEfx.alFilterf(directBlockFilter, EXTEfx.AL_LOWPASS_GAIN, 0.0f);
-            EXTEfx.alFilterf(directBlockFilter, EXTEfx.AL_LOWPASS_GAINHF, 0.0f);
         } catch (Exception e) {
             if(Config.getInstance().debug != DebugType.OFF)
                 System.err.println("Failed to initialize reverb: " + e.getMessage());
         }
     }
+
     public void initializeReverb(long currentContext, long currentDevice) {
         if (efxInitialized) cleanupEFXResources(); // restart audio engine ig
 
@@ -406,6 +281,12 @@ public class OpenALEffectsHandler {
             EXTEfx.alFilteri(sendFilter, EXTEfx.AL_FILTER_TYPE, EXTEfx.AL_FILTER_LOWPASS);
             logALError("Failed creating Send Filter");
 
+            // Silences the dry path of the voice chat "own voice" echo source
+            directBlockFilter = EXTEfx.alGenFilters();
+            EXTEfx.alFilteri(directBlockFilter, EXTEfx.AL_FILTER_TYPE, EXTEfx.AL_FILTER_LOWPASS);
+            EXTEfx.alFilterf(directBlockFilter, EXTEfx.AL_LOWPASS_GAIN, 0.0f);
+            EXTEfx.alFilterf(directBlockFilter, EXTEfx.AL_LOWPASS_GAINHF, 0.0f);
+
             // Set basic reverb parameters (medium room)
             setBasicReverbParams();
 
@@ -413,6 +294,8 @@ public class OpenALEffectsHandler {
             EXTEfx.alAuxiliaryEffectSloti(auxFXSlot, EXTEfx.AL_EFFECTSLOT_EFFECT, reverbEffect);
             logALError("Failed attaching reverb to slot");
 
+            loadedParams = null;
+            legacyParamsLoaded = true;
             efxInitialized = true;
             System.out.println("Reverb system initialized successfully");
 
@@ -422,10 +305,10 @@ public class OpenALEffectsHandler {
     }
 
     /**
-     * Set basic reverb parameters for a medium-sized room
+     * The parameters loaded at start-up. The legacy modes only ever changed the send level, so this is
+     * the reverb they were always heard with.
      */
     private void setBasicReverbParams() {
-        // Basic medium room reverb settings
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_DENSITY, 0.5f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_DIFFUSION, 0.8f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_GAIN, 0.3f);
@@ -444,9 +327,6 @@ public class OpenALEffectsHandler {
 
         try {
             System.out.println("Cleaning up EFX resources...");
-
-            // Clear queues and maps
-            FXQueue.clear();
 
             // Delete OpenAL EFX objects if they exist
             if (auxFXSlot != 0) {
@@ -475,6 +355,7 @@ public class OpenALEffectsHandler {
             }
 
             efxInitialized = false;
+            loadedParams = null;
             System.out.println("EFX resources cleaned up successfully");
 
         } catch (Exception e) {
@@ -486,13 +367,15 @@ public class OpenALEffectsHandler {
             sendFilter = 0;
             efxInitialized = false;
             directBlockFilter = 0;
+            loadedParams = null;
         }
     }
 
     /**
-    Muffle filter stuff
+     * Muffle filter stuff
      **/
     public void applyMuffleToSource(int sourceId, float muffleStrength) {
+        if (!efxInitialized) return;
         try {
             // Clamp muffle strength between 0.0 (no muffling) and 1.0 (maximum muffling)
             muffleStrength = clamp(muffleStrength, 0.0f, 1.0f);
@@ -501,20 +384,9 @@ public class OpenALEffectsHandler {
             float lowpassGain = lerp(1.0f, 0.2f, muffleStrength);     // Overall volume reduction
             float lowpassGainHF = lerp(1.0f, 0.1f, muffleStrength);   // High frequency attenuation
 
-            // Apply low-pass filter (main muffling effect)
-            if (!EXTEfx.alIsAuxiliaryEffectSlot(auxFXSlot)) { // smth aint right.
-                System.err.println("Muffle Filter isn't defined properly");
-                cleanupEFXResources();
-                initializeReverb();
-                return;
-            }
-
-            if (muffleFilter != -1) {
-                EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAIN, lowpassGain);
-                EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAINHF, lowpassGainHF);
-                AL11.alSourcei(sourceId, EXTEfx.AL_DIRECT_FILTER, muffleFilter);
-            }
-
+            EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAIN, lowpassGain);
+            EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAINHF, lowpassGainHF);
+            AL11.alSourcei(sourceId, EXTEfx.AL_DIRECT_FILTER, muffleFilter);
         } catch (Exception e) {
             // Handle errors silently like the original function
         }

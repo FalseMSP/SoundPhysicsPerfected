@@ -8,16 +8,14 @@ import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.openal.AL10;
 
-import static com.redsmods.sound_physics_perfected.RaycastingHelper.fxHandler;
-import static org.joml.Math.lerp;
-
+/**
+ * A traced sound heard (partly) through blocks. The muffle filter itself is applied to its OpenAL source by
+ * SoundSystemMixin every tick; this class only eases the permeation value towards each new trace result.
+ */
 public class RedPermeatedSoundInstance extends RedTickableInstance {
     @Getter float permeationIndex;
     int tickCount = 0;
-    private int id;
-    private boolean sourceSet = false;
     private float targetMuffle;
 
     public RedPermeatedSoundInstance(ResourceLocation soundID, Sound sound, SoundSource category, Vec3 position, float volume, float pitch, SoundInstance wrapped, float permeationIndex, float attenuationMultiplier) {
@@ -26,7 +24,6 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
         this.targetMuffle = permeationIndex;
         super.updatePos();
         super.updateVolume();
-        updateMuffle();
     }
 
     public void setPermeationIndex(float permeationIndex) {
@@ -50,39 +47,17 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     }
 
     public void updateMuffle() {
+        // Calculate the difference between current and target muffle
+        float delta = targetMuffle - permeationIndex;
+        float maxChange = Math.max(Math.abs(delta / Math.max(Config.getInstance().tickRate, 1)), 0.3f);
 
-        // Calculate the difference between current and target volume
-        float deltaVolume = targetMuffle - permeationIndex;
-        float maxVolumeChange = Math.max(Math.abs(deltaVolume / Config.getInstance().tickRate),0.3f); // yay magic number
-
-        // If we're already at the target or very close, set volume directly
-        if (Math.abs(deltaVolume) <= 0.001f || Math.abs(deltaVolume) > maxVolumeChange * Config.getInstance().tickRate) {
+        // Already there, or so far off that easing would lag audibly: jump
+        if (Math.abs(delta) <= 0.001f || Math.abs(delta) > maxChange * Config.getInstance().tickRate) {
             permeationIndex = targetMuffle;
-            if (sourceSet && AL10.alIsSource(id))
-                fxHandler.applyMuffleToSource(id,1-permeationIndex);
             return;
         }
 
-        // Calculate how much we can change this tick
-        float volumeChange = Math.min(maxVolumeChange, Math.abs(deltaVolume));
-
-        // Apply the change in the correct direction
-        if (deltaVolume > 0) {
-            permeationIndex += volumeChange;
-        } else {
-            permeationIndex -= volumeChange;
-        }
-
-        if (sourceSet && AL10.alIsSource(id))
-            fxHandler.applyMuffleToSource(id,1-permeationIndex);
-    }
-
-    public void setSource(int id) {
-        sourceSet = true;
-        this.id = id;
-    }
-
-    private static float clamp(float a, float b, float c) {
-        return Math.min(Math.max(a,b),c);
+        float change = Math.min(maxChange, Math.abs(delta));
+        permeationIndex += delta > 0 ? change : -change;
     }
 }

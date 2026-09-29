@@ -131,6 +131,23 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.maxSounds.description")
     @SerialEntry public int maxSounds = 100;
 
+    @AutoGen(category = "general", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.fastRaytracing.description")
+    @SerialEntry public boolean fastRaytracing = true;
+
+    @AutoGen(category = "general", group = "main")
+    @IntSlider(min = 0, max = 20, step = 1)
+    @FormatTranslation("sound_physics_perfected.config.unit.milliseconds")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.lowLatencyBudgetMs.description")
+    @SerialEntry public int lowLatencyBudgetMs = 3;
+
+    @AutoGen(category = "general", group = "main")
+    @FloatSlider(min = 0, max = 10, step = 0.1f)
+    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.airAbsorption.description")
+    @SerialEntry public float airAbsorption = 1.0f;
+
     public static class StringValueFactory implements ListGroup.ValueFactory<String> {
         @Override
         public String provideNewValue() {
@@ -190,166 +207,54 @@ public class Config {
     @SerialEntry public float globalReverbIntensity = 2.0f;
 
     @AutoGen(category = "reverb_tuning", group = "global")
-    @FloatField(min = 0, max = 10000)
+    @FloatSlider(min = 0, max = 2, step = 0.05f)
+    @FormatTranslation("sound_physics_perfected.config.unit.seconds")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.reverbSmoothing.description")
+    @SerialEntry public float reverbSmoothing = 0.25f;
+
+    // Decay
+    @AutoGen(category = "reverb_tuning", group = "decay")
+    @FloatSlider(min = 0.1f, max = 3, step = 0.05f)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.indoorBias.description")
-    @SerialEntry public float indoorBias = 2.0f;
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.decayTimeMultiplier.description")
+    @SerialEntry public float decayTimeMultiplier = 1.0f;
 
-    @AutoGen(category = "reverb_tuning", group = "global")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.outdoorBias.description")
-    @SerialEntry public float outdoorBias = 0.2f;
-
-    @AutoGen(category = "reverb_tuning", group = "global")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.smallRoomEmphasis.description")
-    @SerialEntry public float smallRoomEmphasis = 1.0f;
-
-    @AutoGen(category = "reverb_tuning", group = "global")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.largeRoomEmphasis.description")
-    @SerialEntry public float largeRoomEmphasis = 1.0f;
-
-    // Distance & Attenuation
-    @AutoGen(category = "reverb_tuning", group = "distance_and_attenuation")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.distanceAttenuationLinear.description")
-    @SerialEntry public float distanceAttenuationLinear = 0.0f;
-
-    @AutoGen(category = "reverb_tuning", group = "distance_and_attenuation")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.distanceAttenuationQuadratic.description")
-    @SerialEntry public float distanceAttenuationQuadratic = 0.0f;
-
-    @AutoGen(category = "reverb_tuning", group = "distance_and_attenuation")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.airAbsorptionRate.description")
-    @SerialEntry public float airAbsorptionRate = 0.003f;
-
-    @AutoGen(category = "reverb_tuning", group = "distance_and_attenuation")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.minAirAbsorption.description")
-    @SerialEntry public float minAirAbsorption = 0.1f;
-
-    // Room Size & Volume
-    @AutoGen(category = "reverb_tuning", group = "room_size_and_volume")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.roomVolumeMultiplier.description")
-    @SerialEntry public float roomVolumeMultiplier = 0.7f;
-
-    @AutoGen(category = "reverb_tuning", group = "room_size_and_volume")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.surfaceAreaMultiplier.description")
-    @SerialEntry public float surfaceAreaMultiplier = 6.0f;
-
-    @AutoGen(category = "reverb_tuning", group = "room_size_and_volume")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.roomComplexityDivisor.description")
-    @SerialEntry public float roomComplexityDivisor = 2.0f;
-
-    // Reverb Timing
-    @AutoGen(category = "reverb_tuning", group = "reverb_timing")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.lateReverbDelayMultiplier.description")
-    @SerialEntry public float lateReverbDelayMultiplier = 1.5f;
-
-    @AutoGen(category = "reverb_tuning", group = "reverb_timing")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.meters_per_second")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.soundSpeed.description")
-    @SerialEntry public float soundSpeed = 343.0f;
+    @AutoGen(category = "reverb_tuning", group = "decay")
+    @FloatSlider(min = 0.5f, max = 20, step = 0.5f)
+    @FormatTranslation("sound_physics_perfected.config.unit.seconds")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.maxDecayTime.description")
+    @SerialEntry public float maxDecayTime = 5.0f;
 
     // Gain & Strength
     @AutoGen(category = "reverb_tuning", group = "gain_and_strength")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.baseReverbGain.description")
-    @SerialEntry public float baseReverbGain = 0.1f;
+    @FloatSlider(min = 0, max = 3, step = 0.05f)
+    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.reflectionsMultiplier.description")
+    @SerialEntry public float reflectionsMultiplier = 1.0f;
 
     @AutoGen(category = "reverb_tuning", group = "gain_and_strength")
-    @FloatField(min = 0, max = 10000)
+    @FloatSlider(min = 0, max = 3, step = 0.05f)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.reverbGainMultiplier.description")
-    @SerialEntry public float reverbGainMultiplier = 0.4f;
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.lateReverbMultiplier.description")
+    @SerialEntry public float lateReverbMultiplier = 1.0f;
+
+    @AutoGen(category = "reverb_tuning", group = "gain_and_strength")
+    @FloatSlider(min = 0, max = 3, step = 0.05f)
+    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.echoMultiplier.description")
+    @SerialEntry public float echoMultiplier = 1.0f;
 
     @AutoGen(category = "reverb_tuning", group = "gain_and_strength")
     @FloatField(min = 0, max = 10000)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.maxOverallGain.description")
     @SerialEntry public float maxOverallGain = 1f;
 
-    @AutoGen(category = "reverb_tuning", group = "gain_and_strength")
+    // Reverb Timing
+    @AutoGen(category = "reverb_tuning", group = "reverb_timing")
     @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.sendFilterHfReduction.description")
-    @SerialEntry public float sendFilterHfReduction = 0.7f;
-
-    // Diffusion & Density
-    @AutoGen(category = "reverb_tuning", group = "diffusion")
-    @FloatField(min = 0, max = 1)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.minDiffusion.description")
-    @SerialEntry public float minDiffusion = 0.3f;
-
-    @AutoGen(category = "reverb_tuning", group = "diffusion")
-    @FloatField(min = 0, max = 1)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.maxDiffusion.description")
-    @SerialEntry public float maxDiffusion = 0.95f;
-
-    @AutoGen(category = "reverb_tuning", group = "density")
-    @FloatField(min = 0, max = 1)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.minDensity.description")
-    @SerialEntry public float minDensity = 0.3f;
-
-    @AutoGen(category = "reverb_tuning", group = "density")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.densityRoomSizeFactor.description")
-    @SerialEntry public float densityRoomSizeFactor = 100.0f;
-
-    // Frequency Response
-    @AutoGen(category = "reverb_tuning", group = "frequency_response")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.dynamicAbsorptionLfFactor.description")
-    @SerialEntry public float dynamicAbsorptionLfFactor = 3f;
-
-    @AutoGen(category = "reverb_tuning", group = "frequency_response")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.decayLfMultiplier.description")
-    @SerialEntry public float decayLfMultiplier = 1.2f;
-
-    @AutoGen(category = "reverb_tuning", group = "frequency_response")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.outdoorHfLeak.description")
-    @SerialEntry public float outdoorHfLeak = 0.7f;
-
-    // Echo & Modulation
-    @AutoGen(category = "reverb_tuning", group = "echo")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.echoTimeMultiplier.description")
-    @SerialEntry public float echoTimeMultiplier = 0.002f;
-
-    @AutoGen(category = "reverb_tuning", group = "echo")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.echoDepthMultiplier.description")
-    @SerialEntry public float echoDepthMultiplier = 0.1f;
-
-    @AutoGen(category = "reverb_tuning", group = "modulation")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.modulationTimeMultiplier.description")
-    @SerialEntry public float modulationTimeMultiplier = 0.01f;
-
-    @AutoGen(category = "reverb_tuning", group = "modulation")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.modulationDepthMultiplier.description")
-    @SerialEntry public float modulationDepthMultiplier = 0.1f;
+    @FormatTranslation("sound_physics_perfected.config.unit.meters_per_second")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.soundSpeed.description")
+    @SerialEntry public float soundSpeed = 343.0f;
 
     // Frequency References
     @AutoGen(category = "reverb_tuning", group = "frequency_references")
@@ -360,55 +265,9 @@ public class Config {
 
     @AutoGen(category = "reverb_tuning", group = "frequency_references")
     @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.hfRoomSizeFactor.description")
-    @SerialEntry public float hfRoomSizeFactor = 20.0f;
-
-    @AutoGen(category = "reverb_tuning", group = "frequency_references")
-    @FloatField(min = 0, max = 10000)
     @FormatTranslation("sound_physics_perfected.config.unit.hertz")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.baseLfReference.description")
     @SerialEntry public float baseLfReference = 250.0f;
-
-    @AutoGen(category = "reverb_tuning", group = "frequency_references")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.lfRoomSizeFactor.description")
-    @SerialEntry public float lfRoomSizeFactor = 2.0f;
-
-    // Rolloff
-    @AutoGen(category = "reverb_tuning", group = "rolloff")
-    @FloatField(min = 0, max = 10000)
-    @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.roomRolloffSizeFactor.description")
-    @SerialEntry public float roomRolloffSizeFactor = 50.0f;
-
-    // RT60 Calculation
-    @AutoGen(category = "reverb_tuning", group = "rt60")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.rt60SabineConstant.description")
-    @SerialEntry public float rt60SabineConstant = 0.161f;
-
-    @AutoGen(category = "reverb_tuning", group = "rt60")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.minTotalAbsorption.description")
-    @SerialEntry public float minTotalAbsorption = 0.1f;
-
-    // Interpolation Weights
-    @AutoGen(category = "reverb_tuning", group = "interpolation_weights")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.diffusionComplexityWeight.description")
-    @SerialEntry public float diffusionComplexityWeight = 1.0f;
-
-    @AutoGen(category = "reverb_tuning", group = "interpolation_weights")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.diffusionEnclosureWeight.description")
-    @SerialEntry public float diffusionEnclosureWeight = 1.0f;
-
-    @AutoGen(category = "reverb_tuning", group = "interpolation_weights")
-    @FloatField(min = 0, max = 10000)
-    @CustomDescription("yacl3.config.sound_physics_perfected:config.diffusionReverbWeight.description")
-    @SerialEntry public float diffusionReverbWeight = 1.0f;
 
     @AutoGen(category = "voicechat", group = "main")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
