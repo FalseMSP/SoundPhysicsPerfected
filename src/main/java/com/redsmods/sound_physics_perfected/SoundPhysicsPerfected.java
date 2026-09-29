@@ -5,8 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 //? if fabric {
-/*import dev.kikugie.fletching_table.annotation.fabric.Entrypoint;
-import net.fabricmc.api.ModInitializer;
+/*import net.fabricmc.api.ModInitializer;
 *///?}
 //? if neoforge {
 import net.neoforged.api.distmarker.Dist;
@@ -28,8 +27,6 @@ import net.minecraftforge.fml.common.Mod;
 @Mod(value = "@MODID@", dist = Dist.CLIENT)
 //?} else if forge {
 /*@Mod(value = "@MODID@")
-*///?} else {
-/*@Entrypoint
 *///?}
 public class SoundPhysicsPerfected /*? if fabric {*/ /*implements ModInitializer *//*?}*/ {
 

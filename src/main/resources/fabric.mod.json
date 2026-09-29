@@ -20,10 +20,19 @@
 	"icon": "assets/${id}/icon.png",
 	"environment": "client",
 	"entrypoints": {
+		"main": [
+			"com.redsmods.sound_physics_perfected.SoundPhysicsPerfected"
+		],
+		"modmenu": [
+			"com.redsmods.sound_physics_perfected.config.ModMenuIntegration"
+		],
 		"voicechat": [
 			"com.redsmods.sound_physics_perfected.integration.SVC"
 		]
 	},
+	"mixins": [
+		"sound_physics_perfected.mixins.json"
+	],
 	"depends": {
 		"fabricloader": "*",
 		"minecraft": "${mcdep}",

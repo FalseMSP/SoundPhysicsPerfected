@@ -4,6 +4,7 @@
 	"compatibilityLevel": "JAVA_17",
 	"refmap": "sound_physics_perfected.refmap.json",
 	"client": [
+		"ShadowInstanceToChannelMixin",
 		"SoundSystemMixin",
 		"SourceAccessor",
 		"SourceManagerAccessor"

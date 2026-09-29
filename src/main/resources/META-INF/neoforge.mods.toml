@@ -11,6 +11,9 @@ authors = "RedLife"
 description = "${description}"
 logoFile = "assets/${id}/icon.png"
 
+[[mixins]]
+config = "sound_physics_perfected.mixins.json"
+
 [["dependencies.${id}"]]
 modId = "neoforge"
 type = "required"

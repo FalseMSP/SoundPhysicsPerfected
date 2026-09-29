@@ -6,8 +6,6 @@ plugins {
     alias(libs.plugins.publishing)
     alias(libs.plugins.blossom)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.fletchingtable.fabric)
-    alias(libs.plugins.fletchingtable.neoforge)
     id("io.freefair.lombok") version "8.14"
 }
 
@@ -99,16 +97,6 @@ loom.runs {
             property("mixin.hotSwap", "true")
             property("mixin.debug.export", "true") // Puts mixin outputs in /run/.mixin.out
         }
-    }
-}
-
-fletchingTable {
-    mixins.create("main") {
-        mixin("default", "${mod.id}.mixins.json")
-    }
-
-    lang.create("main") {
-        patterns.add("assets/${mod.id}/lang/**")
     }
 }
 
