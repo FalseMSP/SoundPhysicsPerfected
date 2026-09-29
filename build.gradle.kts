@@ -114,6 +114,7 @@ repositories {
     maven("https://api.modrinth.com/maven") // Modrinth
     maven ("https://maven.maxhenkel.de/repository/public") // Simple Voice Chat API
     maven("https://maven.ryanhcode.dev/releases")
+    maven("https://maven.quiltmc.org/repository/release") // Quilt parsers - YACL's JSON library, for dev runs
 }
 
 dependencies {
@@ -141,6 +142,9 @@ dependencies {
     } else if (loader.isNeoforge) {
         "neoForge"("net.neoforged:neoforge:${deps.neoforgeVersion}")
         modImplementation("dev.isxander:yet-another-config-lib:${deps.yaclVersion}+${mc.version}-${loader.loader}") { isTransitive = false }
+        // YACL ships these inside its jar in production; runClient needs them explicitly since YACL is non-transitive.
+        "forgeRuntimeLibrary"("org.quiltmc.parsers:json:0.2.1")
+        "forgeRuntimeLibrary"("org.quiltmc.parsers:gson:0.2.1")
         if (mc.version == "1.21.1") {
             val sableCompanionVersion = "1.4.2"
             include(modApi("dev.ryanhcode.sable-companion:sable-companion-common-${mc.version}:[$sableCompanionVersion,)")!!)
