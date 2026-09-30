@@ -20,10 +20,14 @@ import com.redsmods.sound_physics_perfected.wrappers.RedPermeatedSoundInstance;
 import com.redsmods.sound_physics_perfected.wrappers.RedTickableInstance;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.phys.Vec3;
 //? if neoforge && =1.21.1 {
 import dev.ryanhcode.sable.companion.SableCompanion;
@@ -34,7 +38,9 @@ import dev.ryanhcode.sable.companion.math.BoundingBox3d;
 import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -136,7 +142,8 @@ public final class RaycastingHelper {
                        boolean barrierAsAir, boolean useExplosionResistance, double maxBlocksPermeated,
                        double stepSize, int raysCast, int raysBounced, int generation, boolean hasNewSounds,
                        boolean sourceReverb, double listenerEnclosure, boolean fullReverb, boolean water,
-                       double energyFullShare) {
+                       double energyFullShare, CachedTrail trail, TargetKey[] keys, double[][] cachedResults,
+                       long worldVersion, long nanos, boolean cacheable) {
         RayOps newOps() {
             if (fast) {
                 return new VoxelRayOps(new LevelVoxelWorld(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated, water));
@@ -146,7 +153,64 @@ public final class RaycastingHelper {
     }
 
     private record Result(Job job, ListenerTrace.Accumulator paths, double[] obstruction, ReverbParams environment,
-                          ReverbZones.SourceReverb[] sourceReverbs, long nanos) {
+                          ReverbZones.SourceReverb[] sourceReverbs, long nanos, ListenerTrace.Trail[] trails) {
+    }
+
+    // ================================================================================================================
+    // Trail caching: while the listener stands still and nothing around changes, the rays' paths are the same, so
+    // new sounds only need connecting to them, and a sound heard from the same spot before needs nothing at all.
+    // ================================================================================================================
+
+    /** Bumped (client thread) whenever a block that matters to sound changes near the listener. */
+    private static long worldVersion;
+    /** Paths are re-traced at least this often anyway (chunks loading, anything not seen as a block change). */
+    private static final long TRAIL_TTL_NANOS = 2_000_000_000L;
+    private static final int TRAIL_MAX_RESULTS = 512;
+    private static final int RESULT = ListenerTrace.STRIDE, RESULT_COUNT = RESULT, RESULT_OBSTRUCTION = RESULT + 1;
+
+    private record TargetKey(long x, long y, long z, long range) {
+    }
+
+    /** A finished trace's ray paths and per-sound results. Client thread, except the paths (read-only). */
+    private static final class CachedTrail {
+        final Level level;
+        final Vec3 eye;
+        final TraceSettings settings;
+        final long worldVersion;
+        final long nanos;
+        final ListenerTrace.Trail[] chunks;
+        final ReverbStats stats;
+        final Map<TargetKey, double[]> results = new HashMap<>();
+
+        CachedTrail(Level level, Vec3 eye, TraceSettings settings, long worldVersion, long nanos,
+                    ListenerTrace.Trail[] chunks, ReverbStats stats) {
+            this.level = level;
+            this.eye = eye;
+            this.settings = settings;
+            this.worldVersion = worldVersion;
+            this.nanos = nanos;
+            this.chunks = chunks;
+            this.stats = stats;
+        }
+    }
+
+    private static CachedTrail trailCache;
+
+    /** A block changed on the client (see ClientLevelMixin). */
+    public static void onBlockChanged(Level level, BlockPos pos, BlockState oldState, BlockState newState) {
+        if (oldState == newState || trailCache == null) return;
+        Vec3 eye = playerEyePos;
+        double dx = pos.getX() + 0.5 - eye.x, dy = pos.getY() + 0.5 - eye.y, dz = pos.getZ() + 0.5 - eye.z;
+        if (dx * dx + dy * dy + dz * dz > 256.0 * 256.0) return;
+        if (acousticKind(level, pos, oldState) == acousticKind(level, pos, newState)) return; // crops, redstone...
+        worldVersion++;
+    }
+
+    /** What the tracer sees in a block: nothing, water, or this block with this shape. */
+    private static Object acousticKind(Level level, BlockPos pos, BlockState state) {
+        VoxelShape shape = state.getCollisionShape(level, pos);
+        if (!shape.isEmpty()) return state.getBlock() == Blocks.BARRIER ? Blocks.BARRIER : java.util.List.of(state.getBlock(), shape);
+        return state.getFluidState().is(FluidTags.WATER) ? Blocks.WATER : Blocks.AIR;
     }
 
     // --- Per-sound reverb (sounds in other spaces) -----------------------------------------------------------------
@@ -233,6 +297,8 @@ public final class RaycastingHelper {
         lastStats = new ReverbStats();
         AcousticMaterials.clearCache(); // block tags can differ per server
         SOURCE_CACHE.clear();
+        trailCache = null;
+        worldVersion++;
     }
 
     // ================================================================================================================
@@ -247,7 +313,12 @@ public final class RaycastingHelper {
         boolean hasNewSounds = !soundQueue.isEmpty();
         boolean hasTickables = config.permeation ? !permeatedTickQueue.isEmpty() : !tickQueue.isEmpty();
         boolean idle = !hasNewSounds && !hasTickables;
-        if (idle && (!config.reverb || (eye.distanceToSqr(lastTraceEye) < 0.0625 && ticksSinceTrace < 10))) {
+        long now = System.nanoTime();
+        CachedTrail cached = trailCache;
+        boolean unchanged = cached != null && cached.level == level && cached.eye.equals(eye)
+                && cached.worldVersion == worldVersion && !subLevelsNearby;
+        if (idle && (!config.reverb || (unchanged && now - cached.nanos < TRAIL_TTL_NANOS)
+                || (eye.distanceToSqr(lastTraceEye) < 0.0625 && ticksSinceTrace < 10))) {
             return null; // nothing to place, and the room around a standing player has not changed
         }
 
@@ -295,6 +366,25 @@ public final class RaycastingHelper {
         subLevelsNearby = subLevelsNear(level, eye, Math.max(settings.maxTotalDistance, settings.segmentLength));
         boolean fast = config.fastRaytracing && !subLevelsNearby;
 
+        // Reuse the last trace's paths (and results) while nothing has moved: moving sub-levels rule that out.
+        boolean cacheable = !subLevelsNearby;
+        boolean reuse = unchanged && cacheable && cached.settings.connectsLike(settings)
+                && now - cached.nanos < TRAIL_TTL_NANOS;
+        if (reuse) {
+            fullReverb = false; // the room has not changed either
+        }
+        TargetKey[] keys = new TargetKey[targets.size()];
+        double[][] cachedResults = new double[targets.size()][];
+        for (int i = 0; i < targets.size(); i++) {
+            keys[i] = new TargetKey(Math.round(arrays.x[i] * 16.0), Math.round(arrays.y[i] * 16.0),
+                    Math.round(arrays.z[i] * 16.0),
+                    settings.permeation ? 0L : Double.doubleToLongBits(arrays.greenRange[i]));
+            if (reuse) {
+                cachedResults[i] = cached.results.get(keys[i]);
+                arrays.skip[i] = cachedResults[i] != null;
+            }
+        }
+
         lastTraceEye = eye;
         ticksSinceTrace = 0;
         if (fullReverb) {
@@ -307,7 +397,8 @@ public final class RaycastingHelper {
                 config.barrierAsAir, config.useExplosionResistance, config.maxBlocksPermeated,
                 config.permeationStepSize, config.raysCast, config.raysBounced, generation, hasNewSounds, sourceReverb,
                 currentReverb == null ? 0.0 : currentReverb.enclosure, fullReverb, config.waterAcoustics,
-                config.energyFullShare / 100.0);
+                config.energyFullShare / 100.0, reuse ? cached : null, keys, cachedResults, worldVersion, now,
+                cacheable);
     }
 
     private static RoomAcousticsModel.Settings roomSettings(Config c) {
@@ -329,26 +420,54 @@ public final class RaycastingHelper {
         double[] obstruction = new double[targetCount];
         List<CompletableFuture<ListenerTrace.Accumulator>> parts = new ArrayList<>();
 
-        parts.add(CompletableFuture.supplyAsync(() -> {
-            ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(targetCount);
-            RayOps ops = job.newOps();
-            for (int j = 0; j < targetCount; j++) {
-                obstruction[j] = ListenerTrace.traceDirect(ops, job.settings, rays, job.eye.x, job.eye.y, job.eye.z,
-                        job.arrays, j, acc);
+        boolean anyToTrace = false;
+        for (int j = 0; j < targetCount; j++) {
+            if (job.arrays.skip[j]) {
+                obstruction[j] = job.cachedResults[j][RESULT_OBSTRUCTION];
+            } else {
+                anyToTrace = true;
             }
-            return acc;
-        }, POOL));
-
-        int chunks = Math.max(1, Math.min(rays, THREADS * 3));
-        for (int c = 0; c < chunks && rays > 0; c++) {
-            int from = (int) ((long) rays * c / chunks);
-            int to = (int) ((long) rays * (c + 1) / chunks);
+        }
+        if (anyToTrace) {
             parts.add(CompletableFuture.supplyAsync(() -> {
                 ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(targetCount);
-                ListenerTrace.traceRays(job.newOps(), job.settings, job.eye.x, job.eye.y, job.eye.z, job.dirs,
-                        from, to, job.arrays, acc);
+                RayOps ops = job.newOps();
+                for (int j = 0; j < targetCount; j++) {
+                    if (job.arrays.skip[j]) continue;
+                    obstruction[j] = ListenerTrace.traceDirect(ops, job.settings, rays, job.eye.x, job.eye.y,
+                            job.eye.z, job.arrays, j, acc);
+                }
                 return acc;
             }, POOL));
+        }
+
+        ListenerTrace.Trail[] trails;
+        if (job.trail != null) {
+            // Same place, same world: connect the new sounds to the recorded paths.
+            trails = null;
+            for (ListenerTrace.Trail trail : anyToTrace ? job.trail.chunks : new ListenerTrace.Trail[0]) {
+                parts.add(CompletableFuture.supplyAsync(() -> {
+                    ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(targetCount);
+                    ListenerTrace.connectTrail(job.newOps(), job.settings, trail, job.arrays, acc);
+                    return acc;
+                }, POOL));
+            }
+        } else {
+            int chunks = Math.max(1, Math.min(rays, THREADS * 3));
+            trails = rays > 0 && job.cacheable ? new ListenerTrace.Trail[chunks] : null;
+            for (int c = 0; c < chunks && rays > 0; c++) {
+                int from = (int) ((long) rays * c / chunks);
+                int to = (int) ((long) rays * (c + 1) / chunks);
+                int chunk = c;
+                parts.add(CompletableFuture.supplyAsync(() -> {
+                    ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(targetCount);
+                    ListenerTrace.Trail trail = trails == null ? null : new ListenerTrace.Trail();
+                    ListenerTrace.traceRays(job.newOps(), job.settings, job.eye.x, job.eye.y, job.eye.z, job.dirs,
+                            from, to, job.arrays, acc, trail);
+                    if (trails != null) trails[chunk] = trail;
+                    return acc;
+                }, POOL));
+            }
         }
 
         ReverbZones.SourceReverb[] sourceReverbs = new ReverbZones.SourceReverb[targetCount];
@@ -367,8 +486,17 @@ public final class RaycastingHelper {
             for (CompletableFuture<ListenerTrace.Accumulator> part : parts) {
                 total.merge(part.join()); // merged in a fixed order, so results are deterministic
             }
+            if (job.trail != null) {
+                total.stats.merge(job.trail.stats); // the room is the one the paths were traced in
+            }
+            for (int j = 0; j < targetCount; j++) {
+                double[] cachedResult = job.cachedResults[j];
+                if (cachedResult == null) continue;
+                System.arraycopy(cachedResult, 0, total.sums, j * ListenerTrace.STRIDE, ListenerTrace.STRIDE);
+                total.counts[j] = (int) cachedResult[RESULT_COUNT];
+            }
             return new Result(job, total, obstruction, RoomAcousticsModel.estimate(total.stats, job.room),
-                    sourceReverbs, System.nanoTime() - start);
+                    sourceReverbs, System.nanoTime() - start, trails);
         });
     }
 
@@ -487,6 +615,7 @@ public final class RaycastingHelper {
         Job job = result.job;
         ListenerTrace.Accumulator paths = result.paths;
         lastStats = paths.stats;
+        remember(result);
         if (job.fullReverb || targetReverb == null) {
             targetReverb = result.environment;
         }
@@ -519,6 +648,29 @@ public final class RaycastingHelper {
             } catch (RuntimeException e) {
                 logError("Error placing a traced sound", e);
             }
+        }
+    }
+
+    /** Keeps a fresh trace's paths, and every traced sound's result, for reuse while nothing changes. */
+    private static void remember(Result result) {
+        Job job = result.job;
+        CachedTrail trail = job.trail;
+        if (trail == null) {
+            if (result.trails == null) return;
+            trail = new CachedTrail(job.level, job.eye, job.settings, job.worldVersion, job.nanos, result.trails,
+                    result.paths.stats);
+            trailCache = trail;
+        } else if (trail != trailCache) {
+            return;
+        }
+        if (trail.results.size() > TRAIL_MAX_RESULTS) trail.results.clear();
+        ListenerTrace.Accumulator paths = result.paths;
+        for (int j = 0; j < job.targets.size(); j++) {
+            if (job.arrays.skip[j]) continue;
+            double[] r = Arrays.copyOfRange(paths.sums, j * ListenerTrace.STRIDE, (j + 1) * ListenerTrace.STRIDE + 2);
+            r[RESULT_COUNT] = paths.counts[j];
+            r[RESULT_OBSTRUCTION] = result.obstruction[j];
+            trail.results.put(job.keys[j], r);
         }
     }
 

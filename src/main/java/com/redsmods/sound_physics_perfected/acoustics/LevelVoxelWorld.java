@@ -37,6 +37,17 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
     private AcousticMaterials.Entry entry;
     private BoxConsumer boxTarget;
 
+    /**
+     * The last few block states' classification. Rays cross the same few states again and again (stone, dirt...),
+     * and looking a shape up through the block is the single biggest cost of tracing.
+     */
+    private static final int KNOWN = 8;
+    private final BlockState[] knownState = new BlockState[KNOWN];
+    private final VoxelShape[] knownShape = new VoxelShape[KNOWN];
+    private final int[] knownKind = new int[KNOWN];
+    private final boolean[] knownFull = new boolean[KNOWN];
+    private int knownNext;
+
     public LevelVoxelWorld(Level level, boolean barrierAsAir, boolean useExplosionResistance, double maxBlocksPermeated) {
         this(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated, true);
     }
@@ -76,26 +87,45 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
 
         BlockState state = section.getBlockState(x & 15, y & 15, z & 15);
         if (state.isAir()) return EMPTY;
-        if (barrierAsAir && state.is(Blocks.BARRIER)) return EMPTY;
+        for (int i = 0; i < KNOWN; i++) {
+            if (knownState[i] == state) {
+                return select(state, knownKind[i], knownShape[i], knownFull[i]);
+            }
+        }
+        if (barrierAsAir && state.is(Blocks.BARRIER)) return remember(state, EMPTY, null, false);
 
         pos.set(x, y, z);
         VoxelShape shape = state.getCollisionShape(level, pos);
         if (shape.isEmpty()) {
             // Water (source, flowing, or filling a block without collision like seagrass) is its own medium.
             if (water && !state.getFluidState().isEmpty() && state.getFluidState().is(FluidTags.WATER)) {
-                loadedState = state;
-                loadedShape = Shapes.block();
-                loadedFull = true;
-                loadedWater = true;
-                return WATER;
+                return remember(state, WATER, Shapes.block(), true);
             }
-            return EMPTY;
+            return remember(state, EMPTY, null, false);
         }
-        loadedState = state;
-        loadedShape = shape;
-        loadedFull = shape == Shapes.block() || state.isCollisionShapeFullBlock(level, pos);
-        loadedWater = false;
-        return SOLID;
+        return remember(state, SOLID, shape, shape == Shapes.block() || state.isCollisionShapeFullBlock(level, pos));
+    }
+
+    private int remember(BlockState state, int kind, VoxelShape shape, boolean full) {
+        if (!state.getBlock().hasDynamicShape()) { // shapes that depend on the position can't be reused
+            int i = knownNext;
+            knownNext = (i + 1) % KNOWN;
+            knownState[i] = state;
+            knownKind[i] = kind;
+            knownShape[i] = shape;
+            knownFull[i] = full;
+        }
+        return select(state, kind, shape, full);
+    }
+
+    private int select(BlockState state, int kind, VoxelShape shape, boolean full) {
+        if (kind != EMPTY) {
+            loadedState = state;
+            loadedShape = shape;
+            loadedFull = full;
+            loadedWater = kind == WATER;
+        }
+        return kind;
     }
 
     @Override

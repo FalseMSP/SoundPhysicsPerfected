@@ -30,6 +30,8 @@ public final class ListenerTrace {
         public final double[] x, y, z;
         /** Green-ray (line of sight mode) range; red rays use the segment length instead. */
         public final double[] greenRange;
+        /** Sounds whose result is already known (cached): not traced. */
+        public final boolean[] skip;
 
         public Targets(int count) {
             this.count = count;
@@ -37,6 +39,7 @@ public final class ListenerTrace {
             this.y = new double[count];
             this.z = new double[count];
             this.greenRange = new double[count];
+            this.skip = new boolean[count];
         }
 
         public void set(int i, double x, double y, double z, double greenRange) {
@@ -82,9 +85,64 @@ public final class ListenerTrace {
         }
     }
 
+    /**
+     * The listener's ray paths (trail caching, after Vercidium): every bounce that connects to sounds, with what
+     * the path to it carries. While the listener stands still and nothing around changes, new sounds then only
+     * need connecting to these bounces. Written by one worker, read-only afterwards.
+     */
+    public static final class Trail {
+        static final int V = 10; // hx, hy, hz, pathLength, energy, energyLf, energyHf, ax, ay, az
+        int rays;
+        int[] rayEnd = new int[64]; // vertex count after each ray
+        double[] v = new double[64 * V];
+        int vertices;
+
+        void add(double hx, double hy, double hz, double pathLength, double energy, double energyLf,
+                 double energyHf, double ax, double ay, double az) {
+            if ((vertices + 1) * V > v.length) v = java.util.Arrays.copyOf(v, v.length * 2);
+            int o = vertices++ * V;
+            v[o] = hx;
+            v[o + 1] = hy;
+            v[o + 2] = hz;
+            v[o + 3] = pathLength;
+            v[o + 4] = energy;
+            v[o + 5] = energyLf;
+            v[o + 6] = energyHf;
+            v[o + 7] = ax;
+            v[o + 8] = ay;
+            v[o + 9] = az;
+        }
+
+        void endRay() {
+            if (rays == rayEnd.length) rayEnd = java.util.Arrays.copyOf(rayEnd, rays * 2);
+            rayEnd[rays++] = vertices;
+        }
+    }
+
+    /** Connects sounds to a recorded trail: the same result as {@link #traceRays}, without re-tracing the rays. */
+    public static void connectTrail(RayOps ops, TraceSettings s, Trail trail, Targets targets, Accumulator acc) {
+        boolean[] found = new boolean[targets.count];
+        double[] d = trail.v;
+        int vertex = 0;
+        for (int ray = 0; ray < trail.rays; ray++) {
+            java.util.Arrays.fill(found, false);
+            for (; vertex < trail.rayEnd[ray]; vertex++) {
+                int o = vertex * Trail.V;
+                connectVertex(ops, s, d[o], d[o + 1], d[o + 2], d[o + 3], d[o + 4], d[o + 5], d[o + 6], found,
+                        d[o + 7], d[o + 8], d[o + 9], targets, acc);
+            }
+        }
+    }
+
     /** Traces rays [from, to) of the direction table (xyz triples) into the accumulator. */
     public static void traceRays(RayOps ops, TraceSettings s, double ex, double ey, double ez,
                                  double[] dirs, int from, int to, Targets targets, Accumulator acc) {
+        traceRays(ops, s, ex, ey, ez, dirs, from, to, targets, acc, null);
+    }
+
+    /** As above, also recording the rays' connecting bounces into {@code trail} when given. */
+    public static void traceRays(RayOps ops, TraceSettings s, double ex, double ey, double ez,
+                                 double[] dirs, int from, int to, Targets targets, Accumulator acc, Trail trail) {
         ReverbStats stats = acc.stats;
         stats.segmentLength = s.segmentLength;
         boolean[] found = new boolean[targets.count]; // sounds this ray has already seen from a bounce
@@ -180,6 +238,7 @@ public final class ListenerTrace {
                 if (connecting) {
                     connectVertex(ops, s, hx, hy, hz, pathLength, energy, energyLf, energyHf, found, ax, ay, az,
                             targets, acc);
+                    if (trail != null) trail.add(hx, hy, hz, pathLength, energy, energyLf, energyHf, ax, ay, az);
                     remaining -= t;
                 } else {
                     reverbRemaining -= t;
@@ -213,6 +272,7 @@ public final class ListenerTrace {
                 pz = hz + dz * 0.01;
             }
             if (echo != null) echo.finish(stats);
+            if (trail != null) trail.endRay();
         }
     }
 
@@ -355,6 +415,7 @@ public final class ListenerTrace {
                                       boolean[] found, double ax, double ay, double az, Targets targets,
                                       Accumulator acc) {
         for (int j = 0; j < targets.count; j++) {
+            if (targets.skip[j]) continue;
             double dx = targets.x[j] - vx, dy = targets.y[j] - vy, dz = targets.z[j] - vz;
             double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
             if (s.permeation) {

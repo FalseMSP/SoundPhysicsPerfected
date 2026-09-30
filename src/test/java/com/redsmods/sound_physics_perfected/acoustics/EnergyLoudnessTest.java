@@ -85,4 +85,35 @@ class EnergyLoudnessTest {
         assertTrue(cloth[0] < stone[0], "cloth " + cloth[0] + " vs stone " + stone[0]);
         assertTrue(cloth[1] < cloth[0], "cloth treble " + cloth[1] + " vs bass " + cloth[0]);
     }
+
+    @Test
+    void replayingARecordedTrailGivesTheSameResult() {
+        GridWorld world = twoRooms(AcousticMaterial.STONE, true);
+        for (boolean permeation : new boolean[]{true, false}) {
+            TraceSettings s = new TraceSettings(3, 8, 64.0, permeation, true, 0.4, 3.0, 0.9, RedsAttenuationType.ENERGY);
+            double[] dirs = ListenerTrace.fibonacciSphere(RAYS);
+            ListenerTrace.Targets targets = new ListenerTrace.Targets(3);
+            targets.set(0, NEXT_ROOM[0], NEXT_ROOM[1], NEXT_ROOM[2], 16.0);
+            targets.set(1, 7.5, 1.5, 2.5, 16.0);
+            targets.set(2, 16.5, 3.5, 7.5, 16.0);
+
+            ListenerTrace.Accumulator traced = new ListenerTrace.Accumulator(3);
+            ListenerTrace.Trail[] trails = {new ListenerTrace.Trail(), new ListenerTrace.Trail()};
+            VoxelRayOps ops = new VoxelRayOps(world);
+            ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], dirs, 0, 90, targets, traced, trails[0]);
+            ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], dirs, 90, RAYS, targets, traced, trails[1]);
+
+            ListenerTrace.Accumulator replayed = new ListenerTrace.Accumulator(3);
+            for (ListenerTrace.Trail trail : trails) ListenerTrace.connectTrail(ops, s, trail, targets, replayed);
+            assertArrayEquals(traced.sums, replayed.sums, 1e-9, "permeation " + permeation);
+            assertArrayEquals(traced.counts, replayed.counts);
+
+            // A sound marked as already known is left alone.
+            targets.skip[1] = true;
+            ListenerTrace.Accumulator partial = new ListenerTrace.Accumulator(3);
+            for (ListenerTrace.Trail trail : trails) ListenerTrace.connectTrail(ops, s, trail, targets, partial);
+            assertEquals(0, partial.counts[1]);
+            assertEquals(traced.sums[ListenerTrace.OCC_LF], partial.sums[ListenerTrace.OCC_LF], 1e-9);
+        }
+    }
 }

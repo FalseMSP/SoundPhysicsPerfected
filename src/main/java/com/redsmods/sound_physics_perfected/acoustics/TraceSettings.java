@@ -38,6 +38,14 @@ public final class TraceSettings {
         this.attenuationType = attenuationType;
     }
 
+    /** Whether sounds connect to bounces identically under both (so a recorded trail can be reused). */
+    public boolean connectsLike(TraceSettings o) {
+        return o != null && bounces == o.bounces && segmentLength == o.segmentLength && permeation == o.permeation
+                && reverb == o.reverb && permeationAbsorption == o.permeationAbsorption
+                && maxBlocksPermeated == o.maxBlocksPermeated && bounceAbsorption == o.bounceAbsorption
+                && attenuationType == o.attenuationType;
+    }
+
     /** Path weight: transmission / distance falloff, as in earlier versions of the mod. */
     public double weight(double pathDistance, double obstruction, double distanceToSound) {
         double transmission = Math.pow(permeationAbsorption, obstruction);
