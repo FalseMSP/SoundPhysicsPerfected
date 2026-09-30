@@ -87,6 +87,11 @@ public abstract class SoundSystemMixin {
             if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance)
                     && sound.getAttenuation() != SoundInstance.Attenuation.NONE && !sound.isRelative()) {
                 Vec3 soundPos = new Vec3(sound.getX(), sound.getY(), sound.getZ());
+                // The listener's own sounds (steps, splashes, swimming, eating) come from their own body: nothing
+                // is in the way, so they play as in vanilla (still with reverb, and muffled with the head under water).
+                if (client.player.getBoundingBox().inflate(0.3).contains(soundPos)) {
+                    return;
+                }
                 if (Config.getInstance().procRange != -1 && soundPos.subtract(playerEyePos).length() > Config.getInstance().procRange) { // if sounds are too far, let it proc through vanilla means.
                     return;
                 }

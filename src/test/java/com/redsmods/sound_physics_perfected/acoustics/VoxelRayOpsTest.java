@@ -126,6 +126,11 @@ class VoxelRayOpsTest {
         assertTrue(through >= VoxelRayOps.WATER_SURFACE_WEIGHT, "surface crossing: " + through);
         assertTrue(within < 1.0, "within water: " + within);
         assertFalse(ops.clearPath(0.5, 3.5, 0.5, 0.5, -5.5, 0.5, 1.0), "no line of sight through the surface");
+        // Something at the surface (in the top water block, or just above it) is heard from both sides for free.
+        assertTrue(ops.obstruction(0.5, 3.5, 0.5, 0.5, -0.5, 0.5, 100) < 0.2, "sound in the top water block");
+        assertTrue(ops.obstruction(0.5, -5.5, 0.5, 0.5, 0.05, 0.5, 100) < 1.0, "listener under, sound on the surface");
+        // One block deeper it is under water again.
+        assertTrue(ops.obstruction(0.5, 3.5, 0.5, 0.5, -1.5, 0.5, 100) >= VoxelRayOps.WATER_SURFACE_WEIGHT);
     }
 
     @Test

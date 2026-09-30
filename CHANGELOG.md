@@ -10,7 +10,8 @@
   | The water surface | −22 dB | −51 dB |
 
   A sealed stone wall takes about 20 dB more treble than bass. New **Muffling** option (0 to 300%).
-- **Water.** Water surfaces reflect sound, so lakes and flooded caves ring. Sound barely crosses between air and water. With your head under water everything is muffled and sounds like being under water (new **Water Acoustics** option).
+- **Water.** Water surfaces reflect sound, so lakes and flooded caves ring. Sound barely crosses between air and water. With your head under water everything is muffled and sounds like being under water (new **Water Acoustics** option). Splashes, swimming and boat paddling happen at the surface and are heard from both sides of it; only sounds deeper down are under water.
+- **Your own sounds** (footsteps, splashes, swimming, eating) are no longer traced: they come from your own body, so nothing is in the way. They still get the room's reverb.
 - **Echogram decay.** Reverb decay now comes from how the rays' energy actually dies away, not only from average absorption. Stone walls over a carpeted floor keep ringing (1.1 s instead of 0.9 s), and rays aimed at an opening leave early. Uniform rooms sound as before.
 - **Reverb now actually follows your surroundings.** OpenAL copies a reverb's settings into its effect slot only when the effect is attached, and it was never re-attached after its settings were updated, so every place in the game was heard with the start-up reverb (a fixed 15 second tail). Rooms, caves, corridors and open fields now each sound like themselves.
 - **New physically based reverb model**, driven by the ray tracing:

@@ -22,6 +22,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -353,7 +354,12 @@ public final class RaycastingHelper {
         for (int i = 0; i < targets.size(); i++) {
             Target t = targets.get(i);
             float volume = t.kind == Kind.ONE_SHOT ? t.data.sound.getVolume() : t.tickable.getOriginalVolume();
-            arrays.set(i, t.position.x, t.position.y, t.position.z, 16.0 * volume);
+            Vec3 traced = t.position;
+            if (config.waterAcoustics) {
+                ResourceLocation id = t.kind == Kind.ONE_SHOT ? t.data.sound.getLocation() : t.tickable.getLocation();
+                traced = atWaterSurface(level, t.position, isSurfaceSound(id) ? 6 : 1.5);
+            }
+            arrays.set(i, traced.x, traced.y, traced.z, 16.0 * volume);
         }
 
         if (config.raysCast != directionsFor || directions == null) {
@@ -405,6 +411,33 @@ public final class RaycastingHelper {
                 currentReverb == null ? 0.0 : currentReverb.enclosure, fullReverb, config.waterAcoustics,
                 config.energyFullShare / 100.0, reuse ? cached : null, keys, cachedResults, worldVersion, now,
                 cacheable);
+    }
+
+    /**
+     * Vanilla plays splashes, swimming and boat paddling where the entity is, which is often a block or so under
+     * the water surface. Those sounds happen at the surface: trace them from just above it (the tracer does not
+     * charge a crossing into the sound's own block, so they are heard from above and below the water alike).
+     * Sounds deeper down stay under water.
+     *
+     * @param maxDepth how far under the surface a sound still counts as at the surface
+     */
+    private static Vec3 atWaterSurface(Level level, Vec3 position, double maxDepth) {
+        BlockPos pos = BlockPos.containing(position);
+        if (!level.getFluidState(pos).is(FluidTags.WATER)) return position;
+        for (int up = 1; up <= Math.ceil(maxDepth) + 1; up++) {
+            BlockPos above = pos.above(up);
+            if (level.getFluidState(above).is(FluidTags.WATER)) continue;
+            if (!level.getBlockState(above).getCollisionShape(level, above).isEmpty()) return position; // under ice etc.
+            double surface = above.getY();
+            return surface - position.y <= maxDepth ? new Vec3(position.x, surface + 0.05, position.z) : position;
+        }
+        return position;
+    }
+
+    /** Sounds that happen at the water surface whatever depth vanilla gives them (a fast fall lands deep). */
+    private static boolean isSurfaceSound(ResourceLocation id) {
+        String path = id.getPath();
+        return path.contains("splash") || path.contains("swim") || path.contains("paddle");
     }
 
     private static RoomAcousticsModel.Settings roomSettings(Config c) {

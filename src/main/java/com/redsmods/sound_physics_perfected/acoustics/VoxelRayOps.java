@@ -189,9 +189,13 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
             int kind = world.load(dda.x, dda.y, dda.z);
             // Solid blocks keep whatever medium surrounds them.
             int cellMedium = kind == VoxelWorld.SOLID ? medium : kind;
+            // Crossing into the sound's own block is free, as for solids: something splashing, paddling or
+            // bobbing at the surface is heard from both sides of it.
             if (cellMedium != medium && dda.tExit - dda.tEnter > EPSILON) {
-                total += WATER_SURFACE_WEIGHT;
-                totalHf += WATER_SURFACE_WEIGHT * WATER_SURFACE_HF;
+                if (!end) {
+                    total += WATER_SURFACE_WEIGHT;
+                    totalHf += WATER_SURFACE_WEIGHT * WATER_SURFACE_HF;
+                }
                 medium = cellMedium;
                 if (total >= maxWeighted) break;
             }
