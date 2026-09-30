@@ -125,6 +125,11 @@ public final class RaycastingHelper {
             0.5963f, 0.007f, 7.0795f, 0.011f, 0.25f, 0.0f, 1.18f, 0.348f, 0.9943f, 5000f, 250f, 0f, 1.0f, 3.0f, 0.3f);
     /** Treble that reaches ears under water, relative to bass. */
     public static final float UNDERWATER_HF = 0.25f;
+    /**
+     * Treble emphasis of transmission at 100% muffling: a stone wall then stops ~20 dB more treble than bass,
+     * glass stays fairly clear, wool is dull.
+     */
+    private static final double MUFFLE_AT_100_PERCENT = 2.5;
 
     /** Listener axes (right xyz, up xyz, forward xyz), for turning world-space reverb pans into listener space. */
     private static volatile float[] listenerBasis = {1, 0, 0, 0, 1, 0, 0, 0, -1};
@@ -362,7 +367,8 @@ public final class RaycastingHelper {
         TraceSettings settings = new TraceSettings(config.raysBounced, fullReverb ? config.reverbBounces : config.raysBounced,
                 16.0 * config.maxRayLength, config.permeation,
                 config.reverb, config.permeationAbsorption, config.maxBlocksPermeated,
-                Math.max(config.bounceAbsorptionMultiplier, 0.001), config.attenuationType);
+                Math.max(config.bounceAbsorptionMultiplier, 0.001), config.attenuationType,
+                MUFFLE_AT_100_PERCENT * config.muffleStrength / 100.0);
         subLevelsNearby = subLevelsNear(level, eye, Math.max(settings.maxTotalDistance, settings.segmentLength));
         boolean fast = config.fastRaytracing && !subLevelsNearby;
 
@@ -428,11 +434,15 @@ public final class RaycastingHelper {
                 anyToTrace = true;
             }
         }
-        if (anyToTrace) {
+        // Direct paths, a few sounds per task so a burst of new sounds does not wait on one thread.
+        int directTasks = anyToTrace ? Math.min(THREADS, (targetCount + 3) / 4) : 0;
+        for (int t = 0; t < directTasks; t++) {
+            int first = (int) ((long) targetCount * t / directTasks);
+            int last = (int) ((long) targetCount * (t + 1) / directTasks);
             parts.add(CompletableFuture.supplyAsync(() -> {
                 ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(targetCount);
                 RayOps ops = job.newOps();
-                for (int j = 0; j < targetCount; j++) {
+                for (int j = first; j < last; j++) {
                     if (job.arrays.skip[j]) continue;
                     obstruction[j] = ListenerTrace.traceDirect(ops, job.settings, rays, job.eye.x, job.eye.y,
                             job.eye.z, job.arrays, j, acc);
@@ -834,7 +844,8 @@ public final class RaycastingHelper {
             soundInstanceMap.put(wrapper.getOriginal(), replacement);
         }
         replacement.setEnergyGain(p.energyLf, p.energyHf, true);
-        debugMessage(wrapper.getOriginal());
+        debugMessage(wrapper.getOriginal(), String.format(" %s %.1f m: bass %.1f dB, treble %.1f dB",
+                p.lineOfSight ? "in view" : "hidden", p.trueDistance, db(p.energyLf), db(p.energyHf)));
         soundsToPlay.add(replacement);
         return replacement;
     }
@@ -886,10 +897,18 @@ public final class RaycastingHelper {
     }
 
     private static void debugMessage(SoundInstance original) {
+        debugMessage(original, "");
+    }
+
+    private static void debugMessage(SoundInstance original, String detail) {
         DebugType debug = Config.getInstance().debug;
         Minecraft client = Minecraft.getInstance();
         if (debug == DebugType.OFF || client.player == null) return;
-        client.player.displayClientMessage(Component.literal(original.toString()), debug == DebugType.ACTION_BAR);
+        client.player.displayClientMessage(Component.literal(original.getLocation() + detail), debug == DebugType.ACTION_BAR);
+    }
+
+    private static double db(float gain) {
+        return 20.0 * Math.log10(Math.max(gain, 1.0E-5f));
     }
 
     private static void playQueuedObjects() {

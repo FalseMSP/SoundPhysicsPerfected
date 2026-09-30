@@ -236,9 +236,12 @@ public final class ListenerTrace {
                 }
 
                 if (connecting) {
-                    connectVertex(ops, s, hx, hy, hz, pathLength, energy, energyLf, energyHf, found, ax, ay, az,
+                    // Connect from just off the surface, on the side the ray arrived from: a bounce off the water
+                    // surface is in the air (or under water) and has to cross the surface to reach the other side.
+                    double cx = hx + nx * 1.0E-3, cy = hy + ny * 1.0E-3, cz = hz + nz * 1.0E-3;
+                    connectVertex(ops, s, cx, cy, cz, pathLength, energy, energyLf, energyHf, found, ax, ay, az,
                             targets, acc);
-                    if (trail != null) trail.add(hx, hy, hz, pathLength, energy, energyLf, energyHf, ax, ay, az);
+                    if (trail != null) trail.add(cx, cy, cz, pathLength, energy, energyLf, energyHf, ax, ay, az);
                     remaining -= t;
                 } else {
                     reverbRemaining -= t;
@@ -368,7 +371,9 @@ public final class ListenerTrace {
                 env.totalEnergy += energy;
                 if (toListener > 1.0E-6) {
                     double inv = 1.0 / toListener;
-                    if (ops.clearPath(hx + tx * inv * 0.1, hy + ty * inv * 0.1, hz + tz * inv * 0.1, ex, ey, ez, 0.0)) {
+                    // From just off the surface on the ray's side: a reflection under the water surface is not in
+                    // view of a listener above it.
+                    if (ops.clearPath(hx + nx * 1.0E-3, hy + ny * 1.0E-3, hz + nz * 1.0E-3, ex, ey, ez, 0.0)) {
                         env.visibleEnergy += energy;
                         env.dirX -= tx * inv * energy;
                         env.dirZ -= tz * inv * energy;
@@ -422,7 +427,7 @@ public final class ListenerTrace {
                 if (distance + pathLength > s.segmentLength) continue;
                 double obstruction = ops.obstruction(vx, vy, vz, targets.x[j], targets.y[j], targets.z[j], s.maxBlocksPermeated);
                 double transmission = Math.pow(s.permeationAbsorption, obstruction);
-                double transmissionHf = Math.pow(s.permeationAbsorption, ops.lastObstructionHf());
+                double transmissionHf = s.transmissionHf(obstruction, ops.lastObstructionHf());
                 // weight() already includes one transmission factor: weight ~ energy, muffle ~ amplitude.
                 double weight = s.weight(pathLength, obstruction, distance) * transmission * energy;
                 acc.add(j, weight, ax, ay, az, distance, transmission, transmissionHf, 1);
@@ -494,10 +499,10 @@ public final class ListenerTrace {
             double obstruction = ops.obstruction(ex, ey, ez, tx, ty, tz, s.maxBlocksPermeated);
             double obstructionHf = ops.lastObstructionHf();
             acc.addEnergy(j, DIRECT_LF, obstruction <= 0.0 ? 1.0 : Math.pow(s.permeationAbsorption, obstruction));
-            acc.addEnergy(j, DIRECT_HF, obstruction <= 0.0 ? 1.0 : Math.pow(s.permeationAbsorption, obstructionHf));
+            acc.addEnergy(j, DIRECT_HF, obstruction <= 0.0 ? 1.0 : s.transmissionHf(obstruction, obstructionHf));
             if (distance <= s.segmentLength) {
                 double transmission = Math.pow(s.permeationAbsorption, obstruction);
-                double transmissionHf = Math.pow(s.permeationAbsorption, obstructionHf);
+                double transmissionHf = s.transmissionHf(obstruction, obstructionHf);
                 double weight = s.weight(0.0, obstruction, distance) * transmission;
                 acc.add(j, weight * rayCount, ux, uy, uz, distance, transmission, transmissionHf, rayCount);
             }

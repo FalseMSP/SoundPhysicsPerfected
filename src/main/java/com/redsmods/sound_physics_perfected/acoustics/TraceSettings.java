@@ -15,6 +15,11 @@ public final class TraceSettings {
     public final double maxBlocksPermeated;
     public final double bounceAbsorption;
     public final RedsAttenuationType attenuationType;
+    /**
+     * How much harder treble is stopped than bass by what a sound passes through, relative to the materials' own
+     * figures (1 = as listed, 0 = treble like bass). Real walls pass the bass and stop the treble (mass law).
+     */
+    public final double muffle;
 
     public TraceSettings(int bounces, double segmentLength, boolean permeation, boolean reverb,
                          double permeationAbsorption, double maxBlocksPermeated, double bounceAbsorption,
@@ -26,6 +31,14 @@ public final class TraceSettings {
     public TraceSettings(int bounces, int reverbBounces, double segmentLength, boolean permeation, boolean reverb,
                          double permeationAbsorption, double maxBlocksPermeated, double bounceAbsorption,
                          RedsAttenuationType attenuationType) {
+        this(bounces, reverbBounces, segmentLength, permeation, reverb, permeationAbsorption, maxBlocksPermeated,
+                bounceAbsorption, attenuationType, 1.0);
+    }
+
+    public TraceSettings(int bounces, int reverbBounces, double segmentLength, boolean permeation, boolean reverb,
+                         double permeationAbsorption, double maxBlocksPermeated, double bounceAbsorption,
+                         RedsAttenuationType attenuationType, double muffle) {
+        this.muffle = Math.max(muffle, 0.0);
         this.bounces = bounces;
         this.reverbBounces = Math.max(bounces, reverbBounces);
         this.segmentLength = segmentLength;
@@ -43,7 +56,12 @@ public final class TraceSettings {
         return o != null && bounces == o.bounces && segmentLength == o.segmentLength && permeation == o.permeation
                 && reverb == o.reverb && permeationAbsorption == o.permeationAbsorption
                 && maxBlocksPermeated == o.maxBlocksPermeated && bounceAbsorption == o.bounceAbsorption
-                && attenuationType == o.attenuationType;
+                && attenuationType == o.attenuationType && muffle == o.muffle;
+    }
+
+    /** Treble transmission through what was in the way, from the bass and treble obstruction. */
+    public double transmissionHf(double obstruction, double obstructionHf) {
+        return Math.pow(permeationAbsorption, obstruction + (obstructionHf - obstruction) * muffle);
     }
 
     /** Path weight: transmission / distance falloff, as in earlier versions of the mod. */

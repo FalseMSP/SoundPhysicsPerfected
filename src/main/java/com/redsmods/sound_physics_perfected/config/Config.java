@@ -102,6 +102,12 @@ public class Config {
     @SerialEntry public int energyFullShare = 10;
 
     @AutoGen(category = "general", group = "permeation")
+    @IntSlider(min = 0, max = 300, step = 10)
+    @FormatTranslation("sound_physics_perfected.config.unit.percent")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.muffleStrength.description")
+    @SerialEntry public int muffleStrength = 100;
+
+    @AutoGen(category = "general", group = "permeation")
     @DoubleSlider(min = 1, max = 10, step = 0.1)
     @FormatTranslation("sound_physics_perfected.config.unit.blocks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.maxBlocksPermeated.description")

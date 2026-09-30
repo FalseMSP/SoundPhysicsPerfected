@@ -116,4 +116,58 @@ class EnergyLoudnessTest {
             assertEquals(traced.sums[ListenerTrace.OCC_LF], partial.sums[ListenerTrace.OCC_LF], 1e-9);
         }
     }
+
+    /** A stone basin with water from y = 0 to 2 (surface at y = 3), air above. */
+    private static GridWorld pool() {
+        GridWorld world = new GridWorld().room(0, 0, 0, 10, 7, 10, AcousticMaterial.STONE);
+        world.fill(0, 0, 0, 10, 2, 10, AcousticMaterial.WATER);
+        return world;
+    }
+
+    @Test
+    void soundCrossesTheWaterSurfaceOnlyAtACost() {
+        double[] reference = gains(pool(), true, new double[]{2.5, 5.0, 5.5}, new double[]{7.5, 4.0, 5.5});
+        double[] fromAbove = gains(pool(), true, new double[]{2.5, 5.0, 5.5}, new double[]{7.5, 1.5, 5.5});
+        double[] fromBelow = gains(pool(), true, new double[]{2.5, 1.5, 5.5}, new double[]{7.5, 5.0, 5.5});
+        System.out.printf("pool reference %.3f above %.3f/%.3f below %.3f/%.3f%n", reference[0], fromAbove[0],
+                fromAbove[1], fromBelow[0], fromBelow[1]);
+        assertEquals(1.0, reference[0], 1e-9);
+        // Bounces off the surface are on the listener's side of it: every path crosses once (0.4^2.5 ~ 0.1).
+        assertTrue(fromAbove[0] < 0.2, "listener above, sound under water " + fromAbove[0]);
+        assertTrue(fromBelow[0] < 0.2, "listener under water, sound above " + fromBelow[0]);
+        assertTrue(fromAbove[1] < fromAbove[0] && fromBelow[1] < fromBelow[0], "the surface takes the treble first");
+    }
+
+    @Test
+    void reverbUnderTheWaterSurfaceIsNotInViewFromAbove() {
+        TraceSettings s = new TraceSettings(3, 64.0, true, true, 0.4, 3.0, 0.9, RedsAttenuationType.ENERGY);
+        double[] dirs = ListenerTrace.fibonacciSphere(32);
+        ListenerTrace.SourceEnvironment under = new ListenerTrace.SourceEnvironment();
+        ListenerTrace.traceSource(new VoxelRayOps(pool()), s, 7.5, 1.5, 5.5, 2.5, 5.0, 5.5, dirs, 5, under);
+        ListenerTrace.SourceEnvironment above = new ListenerTrace.SourceEnvironment();
+        ListenerTrace.traceSource(new VoxelRayOps(pool()), s, 7.5, 5.0, 5.5, 2.5, 5.0, 5.5, dirs, 5, above);
+        assertEquals(0.0, under.visibleFraction(), 1e-9);
+        assertTrue(above.visibleFraction() > 0.3, "above " + above.visibleFraction());
+    }
+
+    private static double[] sealedWall(double muffle) {
+        TraceSettings s = new TraceSettings(3, 3, 64.0, true, true, 0.4, 3.0, 0.9, RedsAttenuationType.ENERGY, muffle);
+        ListenerTrace.Targets targets = new ListenerTrace.Targets(1);
+        targets.set(0, NEXT_ROOM[0], NEXT_ROOM[1], NEXT_ROOM[2], 16.0);
+        ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(1);
+        VoxelRayOps ops = new VoxelRayOps(twoRooms(AcousticMaterial.STONE, false));
+        ListenerTrace.traceDirect(ops, s, RAYS, EYE[0], EYE[1], EYE[2], targets, 0, acc);
+        ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], ListenerTrace.fibonacciSphere(RAYS), 0, RAYS, targets, acc);
+        return new double[]{ListenerTrace.energyGain(acc.sums, 0, false, RAYS, SHARE),
+                ListenerTrace.energyGain(acc.sums, 0, true, RAYS, SHARE)};
+    }
+
+    @Test
+    void mufflingSetsHowMuchMoreTrebleThanBassAWallStops() {
+        double[] none = sealedWall(0.0), realistic = sealedWall(2.5);
+        double relative = 20 * Math.log10(realistic[1] / realistic[0]);
+        assertEquals(none[0], none[1], 1e-9, "0%: treble like bass");
+        assertEquals(none[0], realistic[0], 1e-9, "the bass does not change");
+        assertTrue(relative < -18 && relative > -26, "stone wall treble vs bass " + relative + " dB");
+    }
 }

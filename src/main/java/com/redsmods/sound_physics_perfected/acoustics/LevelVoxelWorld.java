@@ -28,6 +28,9 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
 
     private int cachedChunkX = Integer.MIN_VALUE, cachedChunkZ = Integer.MIN_VALUE;
     private LevelChunkSection[] cachedSections;
+    /** The section the last lookup was in (rays stay in one for ~16 steps), or null when it holds only air. */
+    private int sectionX = Integer.MIN_VALUE, sectionY = Integer.MIN_VALUE, sectionZ = Integer.MIN_VALUE;
+    private LevelChunkSection section;
 
     private BlockState loadedState;
     private VoxelShape loadedShape;
@@ -76,14 +79,28 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
         return cachedSections;
     }
 
+    /** Selects the section holding (x, y, z); null when it is empty, unloaded or out of the world. */
+    private LevelChunkSection sectionAt(int x, int y, int z) {
+        int sx = x >> 4, sy = y >> 4, sz = z >> 4;
+        if (sx != sectionX || sy != sectionY || sz != sectionZ) {
+            sectionX = sx;
+            sectionY = sy;
+            sectionZ = sz;
+            section = null;
+            LevelChunkSection[] sections = sectionsOf(x, z); // unloaded: behaves like air, as Level#clip does
+            int index = sy - minSection;
+            if (sections != null && index >= 0 && index < sections.length) {
+                LevelChunkSection candidate = sections[index];
+                if (candidate != null && !candidate.hasOnlyAir()) section = candidate;
+            }
+        }
+        return section;
+    }
+
     @Override
     public int load(int x, int y, int z) {
-        LevelChunkSection[] sections = sectionsOf(x, z);
-        if (sections == null) return EMPTY; // unloaded: behaves like air, as Level#clip does
-        int index = (y >> 4) - minSection;
-        if (index < 0 || index >= sections.length) return EMPTY;
-        LevelChunkSection section = sections[index];
-        if (section == null || section.hasOnlyAir()) return EMPTY;
+        LevelChunkSection section = sectionAt(x, y, z);
+        if (section == null) return EMPTY;
 
         BlockState state = section.getBlockState(x & 15, y & 15, z & 15);
         if (state.isAir()) return EMPTY;
@@ -130,12 +147,7 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
 
     @Override
     public boolean sectionEmpty(int x, int y, int z) {
-        LevelChunkSection[] sections = sectionsOf(x, z);
-        if (sections == null) return true;
-        int index = (y >> 4) - minSection;
-        if (index < 0 || index >= sections.length) return true;
-        LevelChunkSection section = sections[index];
-        return section == null || section.hasOnlyAir();
+        return sectionAt(x, y, z) == null;
     }
 
     @Override

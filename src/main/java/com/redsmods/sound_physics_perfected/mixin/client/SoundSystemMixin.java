@@ -3,6 +3,7 @@ package com.redsmods.sound_physics_perfected.mixin.client;
 import com.mojang.blaze3d.audio.Channel;
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
 import com.redsmods.sound_physics_perfected.RedSoundInstance;
+import com.redsmods.sound_physics_perfected.SourceEffects;
 import com.redsmods.sound_physics_perfected.ReverbHelpers.LegacyReverb;
 import com.redsmods.sound_physics_perfected.acoustics.ReverbParams;
 import com.redsmods.sound_physics_perfected.config.Config;
@@ -34,6 +35,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import static com.redsmods.sound_physics_perfected.RaycastingHelper.*;
 
@@ -142,65 +144,19 @@ public abstract class SoundSystemMixin {
             }
         }
 
-        float airAbsorption = mode == LegacyReverb.MODERN ? config.airAbsorption : 0.0f;
         RaycastingHelper.updateZones(instanceToChannel.keySet());
-        boolean zones = fxHandler.zonesAvailable();
         boolean underwater = RaycastingHelper.isUnderwater();
         // Clear the underwater filter once from sounds that only had it because the listener was under water.
-        boolean leftWater = spp$wasUnderwater && !underwater;
+        SourceEffects.Frame frame = SourceEffects.Frame.now(spp$wasUnderwater && !underwater);
         spp$wasUnderwater = underwater;
         for (Map.Entry<SoundInstance, ChannelAccess.ChannelHandle> entry : instanceToChannel.entrySet()) {
             SoundInstance instance = entry.getKey();
             ChannelAccess.ChannelHandle handle = entry.getValue();
             if (instance == null || handle == null) continue;
-
-            // Music (and optionally UI) is not "in the world": it gets neither reverb nor air absorption.
-            SoundSource category = instance.getSource();
-            boolean inWorld = category != SoundSource.MUSIC && !(config.disableFXOnUI && category == SoundSource.MASTER);
-            // What gets past walls: energy loudness, the older permeation muffle, or nothing.
-            float gain = 1.0f, hfRatio = 1.0f;
-            boolean filtered = false;
-            if (instance instanceof RedTickableInstance red && red.isEnergyGain()) {
-                gain = red.getEnergyLf();
-                hfRatio = red.getEnergyHfRatio();
-                filtered = true;
-            } else if (instance instanceof RedPermeatedSoundInstance permeated) {
-                gain = 1.0f - 0.8f * (1.0f - permeated.getPermeationIndex()); // at most -14 dB, as before
-                hfRatio = permeated.getHfRatio();
-                filtered = true;
+            Consumer<Channel> effects = SourceEffects.plan(instance, frame);
+            if (effects != null) {
+                handle.execute(effects); // on the sound thread, in order with the channel's own commands
             }
-            boolean muffleForWater = underwater && inWorld;
-            float directGain = gain, sendGain = gain, sendHf = hfRatio;
-            float directHf = muffleForWater ? hfRatio * RaycastingHelper.UNDERWATER_HF : hfRatio;
-            boolean directFilter = filtered || muffleForWater;
-            boolean clearWaterFilter = leftWater && inWorld && !filtered;
-            boolean send = reverb && inWorld;
-            boolean air = inWorld && airAbsorption > 0.0f && !instance.isRelative();
-            int zone = send ? RaycastingHelper.zoneOf(instance) : -1;
-            if (!directFilter && !send && !air && !clearWaterFilter) continue;
-
-            // Runs on the sound thread, in order with the channel's own play/stop commands.
-            handle.execute(channel -> {
-                int source = ((SourceAccessor) channel).getSource();
-                if (directFilter) {
-                    fxHandler.setDirectFilter(source, directGain, directHf);
-                } else if (clearWaterFilter) {
-                    AL10.alSourcei(source, EXTEfx.AL_DIRECT_FILTER, EXTEfx.AL_FILTER_NULL);
-                }
-                if (send) {
-                    switch (mode) {
-                        case VERSION140 -> fxHandler.applyLegacyReverbToSource(source);
-                        case VERSION100 -> fxHandler.applyInitalLegacyReverbToSource(source);
-                        default -> fxHandler.setReverbSend(source, sendGain, sendHf);
-                    }
-                }
-                if (air) {
-                    AL10.alSourcef(source, EXTEfx.AL_AIR_ABSORPTION_FACTOR, Math.min(airAbsorption, 10.0f));
-                }
-                if (zones) {
-                    fxHandler.attachZoneSend(source, zone);
-                }
-            });
         }
 
         RaycastingHelper.pruneFinished(instanceToChannel::containsKey);
