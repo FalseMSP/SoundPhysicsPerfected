@@ -5,7 +5,10 @@
 	"refmap": "sound_physics_perfected.refmap.json",
 	"client": [
 		"ClientLevelMixin",
+		"OptionsListEntryAccessor",
+		"OptionsSubScreenMixin",
 		"ShadowInstanceToChannelMixin",
+		"SoundOptionsScreenMixin",
 		"SoundSystemMixin",
 		"SourceAccessor"
 	],

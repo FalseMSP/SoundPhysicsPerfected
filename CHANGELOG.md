@@ -44,6 +44,7 @@
 
 ## Config
 
+- **Sound Physics section in Music & Sounds.** A Ray Tracing Quality preset (Low, Medium, High, Ultra) and sliders for Rays, Bounces, Reverb Bounces, Ray Length and Muffling, so you can trade CPU for accuracy without leaving the game. Changes are heard straight away; More Settings... opens the full config.
 - New: Fast Raytracing, Low Latency Budget, Air Absorption, Directional Reverb, Reverb Zones, Reverb Ray Bounces, Reverb Smoothing, Decay Time Multiplier, Max Decay Time, Early Reflections, Late Reverb, Distant Echoes, Muffling, Water Acoustics, Energy: Full Volume Share.
 - The Attenuation Mode now defaults to Energy for new configs. Existing configs keep their mode; switch to Energy to try it.
 - Removed the reverb tuning options of the old model (indoor/outdoor bias, room emphasis, density/diffusion/echo/modulation factors and so on). They only affected settings that were never applied. Global Reverb Intensity, Max Overall Gain, Sound Speed and the HF/LF references still work.
