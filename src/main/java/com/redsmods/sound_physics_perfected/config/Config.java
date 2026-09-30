@@ -200,6 +200,17 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.experimentalReverb.description")
     @SerialEntry public boolean experimentalReverb = true;
 
+    @AutoGen(category = "reverb_tuning", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.directionalReverb.description")
+    @SerialEntry public boolean directionalReverb = true;
+
+    @AutoGen(category = "reverb_tuning", group = "main")
+    @IntSlider(min = 0, max = 32, step = 1)
+    @FormatTranslation("sound_physics_perfected.config.unit.rays")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.reverbBounces.description")
+    @SerialEntry public int reverbBounces = 8;
+
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")

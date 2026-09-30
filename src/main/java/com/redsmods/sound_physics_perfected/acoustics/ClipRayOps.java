@@ -35,6 +35,7 @@ public final class ClipRayOps implements RayOps {
     private double hitT;
     private int hitNormalX, hitNormalY, hitNormalZ;
     private AcousticMaterial hitMaterial;
+    private double obstructionHf;
 
     public ClipRayOps(Level level, Entity entity, boolean barrierAsAir, boolean useExplosionResistance,
                       double maxBlocksPermeated, double stepSize) {
@@ -112,13 +113,23 @@ public final class ClipRayOps implements RayOps {
         return hit.getType() != HitResult.Type.BLOCK || from.distanceTo(hit.getLocation()) >= distance - tolerance;
     }
 
-    private double weightAt(BlockPos pos) {
-        return AcousticMaterials.of(level.getBlockState(pos)).transmissionWeight(useExplosionResistance, maxBlocksPermeated);
+    /** Adds one block crossing of the given length; returns the low-frequency weighted length. */
+    private double weightAt(BlockPos pos, double length) {
+        AcousticMaterials.Entry entry = AcousticMaterials.of(level.getBlockState(pos));
+        double weighted = length * entry.transmissionWeight(useExplosionResistance, maxBlocksPermeated);
+        obstructionHf += weighted * entry.material.transmissionHf;
+        return weighted;
     }
 
     @Override
     public double obstruction(double ax, double ay, double az, double bx, double by, double bz, double maxWeighted) {
+        obstructionHf = 0.0;
         return countBlocksBetween(new Vec3(ax, ay, az), new Vec3(bx, by, bz), maxWeighted);
+    }
+
+    @Override
+    public double lastObstructionHf() {
+        return obstructionHf;
     }
 
     //? if neoforge && =1.21.1 {
@@ -161,7 +172,7 @@ public final class ClipRayOps implements RayOps {
 
             if (SableCompanion.INSTANCE.distanceSquaredWithSubLevels(level, currentStart, start) >= end.distanceToSqr(start)) break;
 
-            total += globalHitLoc.distanceTo(globalExitPoint) * weightAt(hitBlockPos);
+            total += weightAt(hitBlockPos, globalHitLoc.distanceTo(globalExitPoint));
             currentStart = globalExitPoint.add(end.subtract(currentStart).normalize().scale(0.01));
         }
         return total;
@@ -191,7 +202,7 @@ public final class ClipRayOps implements RayOps {
             }
             if (currentStart.distanceTo(start) >= end.distanceTo(start)) break;
 
-            total += hit.getLocation().distanceTo(exitPoint) * weightAt(hitBlockPos);
+            total += weightAt(hitBlockPos, hit.getLocation().distanceTo(exitPoint));
             currentStart = exitPoint.add(direction.scale(0.01));
         }
         return total;

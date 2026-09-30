@@ -20,6 +20,7 @@ import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.EXTEfx;
 import org.spongepowered.asm.mixin.Mixin;
@@ -78,7 +79,9 @@ public abstract class SoundSystemMixin {
 
         try {
             sound.resolve(soundManager); // load pitches and whatnot into the sound data
-            if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance) && sound.getAttenuation() != SoundInstance.Attenuation.NONE) {
+            // Relative sounds are positioned around the listener rather than in the world, so they cannot be traced.
+            if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance)
+                    && sound.getAttenuation() != SoundInstance.Attenuation.NONE && !sound.isRelative()) {
                 Vec3 soundPos = new Vec3(sound.getX(), sound.getY(), sound.getZ());
                 if (Config.getInstance().procRange != -1 && soundPos.subtract(playerEyePos).length() > Config.getInstance().procRange) { // if sounds are too far, let it proc through vanilla means.
                     return;
@@ -148,6 +151,7 @@ public abstract class SoundSystemMixin {
             boolean inWorld = category != SoundSource.MUSIC && !(config.disableFXOnUI && category == SoundSource.MASTER);
             boolean permeated = instance instanceof RedPermeatedSoundInstance;
             float muffle = permeated ? 1.0f - ((RedPermeatedSoundInstance) instance).getPermeationIndex() : 0.0f;
+            float hfRatio = permeated ? ((RedPermeatedSoundInstance) instance).getHfRatio() : 1.0f;
             boolean send = reverb && inWorld;
             boolean air = inWorld && airAbsorption > 0.0f && !instance.isRelative();
             if (!permeated && !send && !air) continue;
@@ -156,13 +160,13 @@ public abstract class SoundSystemMixin {
             handle.execute(channel -> {
                 int source = ((SourceAccessor) channel).getSource();
                 if (permeated) {
-                    fxHandler.applyMuffleToSource(source, muffle);
+                    fxHandler.applyMuffleToSource(source, muffle, hfRatio);
                 }
                 if (send) {
                     switch (mode) {
                         case VERSION140 -> fxHandler.applyLegacyReverbToSource(source);
                         case VERSION100 -> fxHandler.applyInitalLegacyReverbToSource(source);
-                        default -> fxHandler.attachReverbSend(source, muffle);
+                        default -> fxHandler.attachReverbSend(source, muffle, hfRatio);
                     }
                 }
                 if (air) {
@@ -177,8 +181,15 @@ public abstract class SoundSystemMixin {
     @Inject(method = "updateSource(Lnet/minecraft/client/Camera;)V", at = @At("TAIL"))
     private void onFrame(Camera camera, CallbackInfo ci) {
         Minecraft client = Minecraft.getInstance();
-        if (client.level != null && client.player != null) {
-            RaycastingHelper.onFrame(client.level, client.player);
+        if (client.level == null || client.player == null) return;
+        Vector3f left = camera.getLeftVector(), up = camera.getUpVector(), look = camera.getLookVector();
+        RaycastingHelper.setListenerBasis(left.x(), left.y(), left.z(), up.x(), up.y(), up.z(), look.x(), look.y(), look.z());
+        RaycastingHelper.onFrame(client.level, client.player);
+
+        // Reverb direction is relative to where the camera faces: keep it current between ticks.
+        Config config = Config.getInstance();
+        if (config.reverb && config.directionalReverb && config.legacyReverb == LegacyReverb.MODERN && fxHandler.efxInitialized) {
+            fxHandler.applyEnvironment(RaycastingHelper.getCurrentReverb());
         }
     }
 

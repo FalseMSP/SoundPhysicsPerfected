@@ -45,10 +45,19 @@ public final class RoomAcousticsModel {
         public final double echoMultiplier;
         public final double hfReference;
         public final double lfReference;
+        public final boolean directional;
 
         public Settings(double speedOfSound, double intensity, double maxGain, double decayMultiplier,
                         double maxDecayTime, double reflectionsMultiplier, double lateMultiplier,
                         double echoMultiplier, double hfReference, double lfReference) {
+            this(speedOfSound, intensity, maxGain, decayMultiplier, maxDecayTime, reflectionsMultiplier, lateMultiplier,
+                    echoMultiplier, hfReference, lfReference, true);
+        }
+
+        public Settings(double speedOfSound, double intensity, double maxGain, double decayMultiplier,
+                        double maxDecayTime, double reflectionsMultiplier, double lateMultiplier,
+                        double echoMultiplier, double hfReference, double lfReference, boolean directional) {
+            this.directional = directional;
             this.speedOfSound = Math.max(speedOfSound, 1.0);
             this.intensity = Math.max(intensity, 0.0);
             this.maxGain = maxGain;
@@ -142,12 +151,17 @@ public final class RoomAcousticsModel {
         // ratio of 2 leaves a long low-level rumble. HF ratios behave. So longer bass decay is not requested.
         double lfRatio = Math.min(tLow / tMid, 1.0);
 
+        // --- Direction -----------------------------------------------------------------------------
+        float[] early = cfg.directional ? focus(s.earlyX, s.earlyY, s.earlyZ, s.earlyWeight) : ZERO;
+        float[] tail = cfg.directional ? focus(s.lateX, s.lateY, s.lateZ, s.lateWeight) : ZERO;
+
         return new ReverbParams(
                 (float) density, (float) diffusion, (float) gain, (float) gainHF, (float) gainLF,
                 (float) tMid, (float) (tHigh / tMid), (float) lfRatio,
                 (float) reflections, (float) reflectionsDelay, (float) late, (float) lateDelay,
                 (float) echoTime, (float) echoDepth, 0.25f, 0.0f,
                 0.994f, (float) cfg.hfReference, (float) cfg.lfReference, 0.0f,
+                early[0], early[1], early[2], tail[0], tail[1], tail[2],
                 (float) enclosure, (float) meanFreePath, (float) absMid);
     }
 
@@ -158,6 +172,33 @@ public final class RoomAcousticsModel {
                 0.1f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                 0.25f, 0.0f, 0.25f, 0.0f, 0.994f, (float) cfg.hfReference, (float) cfg.lfReference, 0.0f,
                 0.0f, 0.0f, 1.0f);
+    }
+
+    private static final float[] ZERO = {0, 0, 0};
+    /**
+     * Mean horizontal direction length at which reverb starts to lean one way, and at which it is fully focused.
+     * A closed room averages to under 0.1; a lone wall 2.5 blocks away gives ~0.26; a cave mouth ~0.85.
+     */
+    static final double PAN_INNER = 0.08, PAN_OUTER = 0.58;
+    /**
+     * Largest EAX pan magnitude used. Measured on OpenAL Soft's stereo output: 0.5 leans the reverb ~9 dB to one
+     * side (clearly directional, both ears still hear it); 1.0 puts it entirely in one ear.
+     */
+    static final double PAN_MAX_FOCUS = 0.5;
+
+    /**
+     * Turns a weighted sum of unit directions into an EAX pan vector: direction of the mean, and a focus that
+     * blends from fully diffuse to fully directional as the mean gets longer (a closed room averages out to ~0).
+     */
+    static float[] focus(double x, double y, double z, double weight) {
+        if (weight <= 0.0) return ZERO;
+        x /= weight;
+        y /= weight;
+        z /= weight;
+        double length = Math.sqrt(x * x + y * y + z * z);
+        if (length < 1.0E-6) return ZERO;
+        double f = clamp((length - PAN_INNER) / (PAN_OUTER - PAN_INNER), 0.0, 1.0) * PAN_MAX_FOCUS;
+        return new float[]{(float) (x / length * f), (float) (y / length * f), (float) (z / length * f)};
     }
 
     private static double effectiveAbsorption(double surfaceAbsorption, double escapeProbability) {

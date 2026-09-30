@@ -33,4 +33,10 @@ public interface RayOps {
      * accumulating once the total reaches maxWeighted (the returned value may overshoot it by the last block).
      */
     double obstruction(double ax, double ay, double az, double bx, double by, double bz, double maxWeighted);
+
+    /**
+     * The high-frequency counterpart of the last {@link #obstruction} result: the same path, with each material's
+     * {@link AcousticMaterial#transmissionHf} factor applied (walls stop treble far better than bass).
+     */
+    double lastObstructionHf();
 }

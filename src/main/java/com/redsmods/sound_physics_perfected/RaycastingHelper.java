@@ -106,6 +106,8 @@ public final class RaycastingHelper {
     private static volatile ReverbStats lastStats = new ReverbStats();
     private static volatile ReverbParams targetReverb;
     private static volatile ReverbParams currentReverb;
+    /** Listener axes (right xyz, up xyz, forward xyz), for turning world-space reverb pans into listener space. */
+    private static volatile float[] listenerBasis = {1, 0, 0, 0, 1, 0, 0, 0, -1};
 
     private RaycastingHelper() {
     }
@@ -254,7 +256,7 @@ public final class RaycastingHelper {
             directionsFor = config.raysCast;
         }
 
-        TraceSettings settings = new TraceSettings(config.raysBounced, 16.0 * config.maxRayLength, config.permeation,
+        TraceSettings settings = new TraceSettings(config.raysBounced, config.reverbBounces, 16.0 * config.maxRayLength, config.permeation,
                 config.reverb, config.permeationAbsorption, config.maxBlocksPermeated,
                 Math.max(config.bounceAbsorptionMultiplier, 0.001), config.attenuationType);
         subLevelsNearby = subLevelsNear(level, eye, Math.max(settings.maxTotalDistance, settings.segmentLength));
@@ -270,7 +272,7 @@ public final class RaycastingHelper {
     private static RoomAcousticsModel.Settings roomSettings(Config c) {
         return new RoomAcousticsModel.Settings(c.soundSpeed, c.globalReverbIntensity, c.maxOverallGain,
                 c.decayTimeMultiplier, c.maxDecayTime, c.reflectionsMultiplier, c.lateReverbMultiplier,
-                c.echoMultiplier, c.baseHfReference, c.baseLfReference);
+                c.echoMultiplier, c.baseHfReference, c.baseLfReference, c.directionalReverb);
     }
 
     private static CompletableFuture<Result> launch(Job job) {
@@ -389,6 +391,7 @@ public final class RaycastingHelper {
         final Vec3 direction;
         final double distance;
         final double muffle;
+        final double muffleHf;
         final boolean lineOfSight;
         final float confidence;
         final float attenuation;
@@ -410,10 +413,12 @@ public final class RaycastingHelper {
                 this.direction = mean.lengthSqr() > 1.0E-8 ? mean.normalize() : toSound.normalize();
                 this.distance = paths.sums[o + ListenerTrace.DISTANCE] / w;
                 this.muffle = paths.sums[o + ListenerTrace.MUFFLE] / w;
+                this.muffleHf = paths.sums[o + ListenerTrace.MUFFLE_HF] / w;
             } else {
                 this.direction = Vec3.ZERO;
                 this.distance = 0.0;
                 this.muffle = 0.0;
+                this.muffleHf = 0.0;
             }
 
             RedsAttenuationType type = job.settings.attenuationType;
@@ -475,6 +480,7 @@ public final class RaycastingHelper {
         Vec3 position = p.apparentPosition();
         float confidence = p.confidence;
         float permeationIndex = (float) p.muffle;
+        float permeationIndexHf = (float) p.muffleHf;
         if (Config.getInstance().shortcutDirectionality && p.lineOfSight) {
             // With a clear line of sight the sound comes from where it is, at full confidence.
             position = p.target.tickable != null ? p.target.tickable.getOriginalPosition()
@@ -488,12 +494,14 @@ public final class RaycastingHelper {
                 sound.setTargetVolume(0);
                 sound.setTargetPosition(sound.getOriginalPosition());
                 sound.setPermeationIndex(0);
+                sound.setPermeationIndexHf(0);
                 sound.setAttenuationMultiplier(0);
                 return;
             }
             sound.setTargetPosition(position);
             sound.setTargetVolume(volume);
             sound.setPermeationIndex(permeationIndex);
+            sound.setPermeationIndexHf(permeationIndexHf);
             sound.setAttenuationMultiplier(p.attenuation);
             return;
         }
@@ -503,7 +511,7 @@ public final class RaycastingHelper {
         RedSoundInstance wrapper = (RedSoundInstance) p.sound;
         RedPermeatedSoundInstance replacement = new RedPermeatedSoundInstance(wrapper.getLocation(),
                 wrapper.getSound(), wrapper.getSource(), position, Math.max(0.01f, volume), wrapper.getPitch(),
-                wrapper.getOriginal(), permeationIndex, p.attenuation);
+                wrapper.getOriginal(), permeationIndex, permeationIndexHf, p.attenuation);
         soundPermInstanceMap.put(wrapper.getOriginal(), replacement);
         debugMessage(wrapper.getOriginal());
         soundsToPlay.add(replacement);
@@ -581,6 +589,17 @@ public final class RaycastingHelper {
     public static String lastTraceSummary() {
         return String.format(java.util.Locale.ROOT, "trace %.1f ms, %d sounds, %s", lastTraceMillis, lastTraceSounds,
                 subLevelsNearby || !Config.getInstance().fastRaytracing ? "clip" : "voxel");
+    }
+
+    /** Called every frame with the camera's axes (right = -left). */
+    public static void setListenerBasis(float leftX, float leftY, float leftZ, float upX, float upY, float upZ,
+                                        float lookX, float lookY, float lookZ) {
+        listenerBasis = new float[]{-leftX, -leftY, -leftZ, upX, upY, upZ, lookX, lookY, lookZ};
+    }
+
+    /** Listener axes: right xyz, up xyz, forward xyz. Any thread. */
+    public static float[] getListenerBasis() {
+        return listenerBasis;
     }
 
     /** The smoothed reverb for the listener's surroundings, or null before the first trace. Any thread. */

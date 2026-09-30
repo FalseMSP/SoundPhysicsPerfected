@@ -11,8 +11,8 @@ package com.redsmods.sound_physics_perfected.acoustics;
  * threads can each fill their own array and the results are merged afterwards without locking.
  */
 public final class ListenerTrace {
-    public static final int STRIDE = 6;
-    public static final int WEIGHT = 0, DIR_X = 1, DIR_Y = 2, DIR_Z = 3, DISTANCE = 4, MUFFLE = 5;
+    public static final int STRIDE = 7;
+    public static final int WEIGHT = 0, DIR_X = 1, DIR_Y = 2, DIR_Z = 3, DISTANCE = 4, MUFFLE = 5, MUFFLE_HF = 6;
 
     private ListenerTrace() {
     }
@@ -51,7 +51,8 @@ public final class ListenerTrace {
             this.counts = new int[targets];
         }
 
-        void add(int target, double weight, double dirX, double dirY, double dirZ, double distance, double muffle, int count) {
+        void add(int target, double weight, double dirX, double dirY, double dirZ, double distance, double muffle,
+                 double muffleHf, int count) {
             int o = target * STRIDE;
             sums[o + WEIGHT] += weight;
             sums[o + DIR_X] += weight * dirX;
@@ -59,6 +60,7 @@ public final class ListenerTrace {
             sums[o + DIR_Z] += weight * dirZ;
             sums[o + DISTANCE] += weight * distance;
             sums[o + MUFFLE] += weight * muffle;
+            sums[o + MUFFLE_HF] += weight * muffleHf;
             counts[target] += count;
         }
 
@@ -82,14 +84,21 @@ public final class ListenerTrace {
             double ax = dx, ay = dy, az = dz;
             double pathLength = 0.0;
             double energy = 1.0;
+            double chainEnergy = 1.0; // energy left in the ray itself (no shortcuts), for the reverb direction
             double legacyDistance = 0.0;
             double remaining = s.maxTotalDistance;
+            double reverbRemaining = s.segmentLength * Math.max(1, s.reverbBounces);
+            int lastBounce = s.reverb ? s.reverbBounces : s.bounces;
 
-            for (int bounce = 0; bounce <= s.bounces && remaining > 0.0; bounce++) {
-                double segment = Math.min(s.segmentLength, remaining);
+            for (int bounce = 0; bounce <= lastBounce; bounce++) {
+                // The first bounces connect to sounds as before; later ones only feed the room estimate.
+                boolean connecting = bounce <= s.bounces && remaining > 0.0;
+                double budget = connecting ? remaining : reverbRemaining;
+                if (budget <= 0.0 || (!connecting && !s.reverb)) break;
+                double segment = Math.min(s.segmentLength, budget);
                 if (!ops.firstHit(px, py, pz, dx, dy, dz, segment)) {
                     // Escaped into open air: that energy never comes back.
-                    stats.escape(bounce);
+                    stats.escape(bounce, connecting);
                     break;
                 }
                 double t = ops.hitT();
@@ -99,12 +108,19 @@ public final class ListenerTrace {
                 double cosIncidence = Math.abs(dx * nx + dy * ny + dz * nz);
 
                 pathLength += t;
-                legacyDistance = (legacyDistance + t) / s.bounceAbsorption;
-                stats.hit(bounce, t, material, cosIncidence);
+                if (connecting) legacyDistance = (legacyDistance + t) / s.bounceAbsorption;
+                stats.hit(bounce, t, material, cosIncidence, connecting);
+                if (bounce == 0) {
+                    // Reverb panning is horizontal: the floor is always the nearest reflector, and a pan that
+                    // points straight down would collapse the reflections to mono on stereo output.
+                    double near = Math.max(t, 1.0);
+                    stats.early(dx, 0.0, dz, material.reflectivity() / (near * near));
+                }
 
                 // Energy kept by this reflection: the surface's own reflectivity times the user's bounce loss
                 // (bounceAbsorption is an amplitude factor, hence squared).
                 double reflection = s.bounceAbsorption * s.bounceAbsorption * material.reflectivity();
+                chainEnergy *= reflection;
 
                 boolean shortcut = false;
                 if (s.reverb) {
@@ -116,35 +132,68 @@ public final class ListenerTrace {
                         visible = ops.clearPath(hx + tx * inv * 0.1, hy + ty * inv * 0.1, hz + tz * inv * 0.1,
                                 ex, ey, ez, 0.0);
                     }
-                    stats.blueRay(visible, legacyDistance);
+                    if (connecting) stats.blueRay(visible, legacyDistance);
                     if (visible && toListener > 1.0E-6) {
-                        // A diffuse reflection straight back to the listener is the shortest path through here.
                         double inv = 1.0 / toListener;
-                        ax = -tx * inv;
-                        ay = -ty * inv;
-                        az = -tz * inv;
-                        pathLength = toListener;
-                        energy = reflection;
-                        legacyDistance = Math.max(toListener - 0.1, 0.0) / s.bounceAbsorption;
-                        shortcut = true;
+                        if (bounce >= 1) stats.late(-tx * inv, 0.0, -tz * inv, chainEnergy);
+                        if (connecting) {
+                            // A diffuse reflection straight back to the listener is the shortest path through here.
+                            ax = -tx * inv;
+                            ay = -ty * inv;
+                            az = -tz * inv;
+                            pathLength = toListener;
+                            energy = reflection;
+                            legacyDistance = Math.max(toListener - 0.1, 0.0) / s.bounceAbsorption;
+                            shortcut = true;
+                        }
                     }
                 }
                 if (!shortcut) {
                     energy *= reflection;
                 }
 
-                connectVertex(ops, s, hx, hy, hz, pathLength, energy, ax, ay, az, targets, acc);
+                if (connecting) {
+                    connectVertex(ops, s, hx, hy, hz, pathLength, energy, ax, ay, az, targets, acc);
+                    remaining -= t;
+                } else {
+                    reverbRemaining -= t;
+                }
 
-                // Specular reflection about the (axis aligned) surface normal.
+                // Reflect: mirror-like, blended towards a diffuse direction by the surface's roughness.
                 if (nx != 0) dx = -dx;
                 if (ny != 0) dy = -dy;
                 if (nz != 0) dz = -dz;
+                if (material.scattering > 0.0f) {
+                    long h = mix(((long) ray << 8) ^ bounce ^ 0x5DEECE66DL);
+                    double u1 = (h >>> 11) * 0x1.0p-53;
+                    double u2 = (mix(h) >>> 11) * 0x1.0p-53;
+                    // Lambertian sample: surface normal plus a uniformly random unit vector.
+                    double rz = 2.0 * u1 - 1.0, rr = Math.sqrt(Math.max(0.0, 1.0 - rz * rz)), phi = 2.0 * Math.PI * u2;
+                    double lx = nx + rr * Math.cos(phi), ly = ny + rr * Math.sin(phi), lz = nz + rz;
+                    double ll = Math.sqrt(lx * lx + ly * ly + lz * lz);
+                    if (ll > 1.0E-6) {
+                        double sc = material.scattering;
+                        double qx = dx * (1 - sc) + lx / ll * sc, qy = dy * (1 - sc) + ly / ll * sc, qz = dz * (1 - sc) + lz / ll * sc;
+                        double ql = Math.sqrt(qx * qx + qy * qy + qz * qz);
+                        if (ql > 1.0E-6 && (qx * nx + qy * ny + qz * nz) / ql > 1.0E-3) {
+                            dx = qx / ql;
+                            dy = qy / ql;
+                            dz = qz / ql;
+                        }
+                    }
+                }
                 px = hx + dx * 0.01;
                 py = hy + dy * 0.01;
                 pz = hz + dz * 0.01;
-                remaining -= t;
             }
         }
+    }
+
+    /** SplitMix64 finaliser: deterministic per ray and bounce, so identical geometry gives identical results. */
+    private static long mix(long z) {
+        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
+        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
+        return z ^ (z >>> 31);
     }
 
     private static void connectVertex(RayOps ops, TraceSettings s, double vx, double vy, double vz,
@@ -157,14 +206,15 @@ public final class ListenerTrace {
                 if (distance + pathLength > s.segmentLength) continue;
                 double obstruction = ops.obstruction(vx, vy, vz, targets.x[j], targets.y[j], targets.z[j], s.maxBlocksPermeated);
                 double transmission = Math.pow(s.permeationAbsorption, obstruction);
+                double transmissionHf = Math.pow(s.permeationAbsorption, ops.lastObstructionHf());
                 // weight() already includes one transmission factor: weight ~ energy, muffle ~ amplitude.
                 double weight = s.weight(pathLength, obstruction, distance) * transmission * energy;
-                acc.add(j, weight, ax, ay, az, distance, transmission, 1);
+                acc.add(j, weight, ax, ay, az, distance, transmission, transmissionHf, 1);
             } else {
                 if (distance + pathLength > targets.greenRange[j]) continue;
                 if (!ops.clearPath(vx, vy, vz, targets.x[j], targets.y[j], targets.z[j], 1.0)) continue;
                 double weight = s.weight(pathLength, 0.0, distance) * energy;
-                acc.add(j, weight, ax, ay, az, distance, 0.0, 1);
+                acc.add(j, weight, ax, ay, az, distance, 0.0, 0.0, 1);
             }
         }
     }
@@ -189,17 +239,19 @@ public final class ListenerTrace {
         }
         if (s.permeation) {
             double obstruction = ops.obstruction(ex, ey, ez, tx, ty, tz, s.maxBlocksPermeated);
+            double obstructionHf = ops.lastObstructionHf();
             if (distance <= s.segmentLength) {
                 double transmission = Math.pow(s.permeationAbsorption, obstruction);
+                double transmissionHf = Math.pow(s.permeationAbsorption, obstructionHf);
                 double weight = s.weight(0.0, obstruction, distance) * transmission;
-                acc.add(j, weight * rayCount, ux, uy, uz, distance, transmission, rayCount);
+                acc.add(j, weight * rayCount, ux, uy, uz, distance, transmission, transmissionHf, rayCount);
             }
             return obstruction;
         }
         boolean visible = ops.clearPath(ex, ey, ez, tx, ty, tz, 1.0);
         if (distance <= targets.greenRange[j] && visible) {
             double weight = s.weight(0.0, 0.0, distance);
-            acc.add(j, weight * rayCount, ux, uy, uz, distance, 0.0, rayCount);
+            acc.add(j, weight * rayCount, ux, uy, uz, distance, 0.0, 0.0, rayCount);
         }
         return visible ? 0.0 : Double.POSITIVE_INFINITY;
     }

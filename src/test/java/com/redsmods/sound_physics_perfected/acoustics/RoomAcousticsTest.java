@@ -114,6 +114,74 @@ class RoomAcousticsTest {
         assertEquals(1.0, acc.sums[ListenerTrace.MUFFLE] / acc.sums[ListenerTrace.WEIGHT], 0.05);
     }
 
+    private static TraceSettings reverbSettings() {
+        return new TraceSettings(3, 8, 64.0, true, true, 0.4, 3.0, 0.9, RedsAttenuationType.VERCIDIUM_LINEAR);
+    }
+
+    private static ReverbParams reverb8(GridWorld world, double x, double y, double z) {
+        ListenerTrace.Targets none = new ListenerTrace.Targets(0);
+        ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(0);
+        ListenerTrace.traceRays(new VoxelRayOps(world), reverbSettings(), x, y, z, ListenerTrace.fibonacciSphere(RAYS), 0, RAYS, none, acc);
+        return RoomAcousticsModel.estimate(acc.stats, RoomAcousticsModel.Settings.defaults());
+    }
+
+    @Test
+    void reverbComesFromInsideTheCaveWhenStandingAtItsMouth() {
+        GridWorld world = new GridWorld().room(0, 0, 0, 29, 9, 29, AcousticMaterial.STONE)
+                .fill(-20, -1, -20, 50, -1, -1, AcousticMaterial.SOIL);
+        for (int x = 13; x <= 16; x++) for (int y = 0; y <= 4; y++) world.clear(x, y, -1);
+        ReverbParams p = reverb8(world, 14.5, EYE, -4.5);
+        assertTrue(p.lateReverbPanZ > 0.4, "late reverb should point into the cave (+z): " + p.lateReverbPanZ);
+        assertTrue(p.lateReverbPanZ <= 0.5 + 1e-6, "never fully one-sided: " + p.lateReverbPanZ);
+        assertEquals(0.0, p.lateReverbPanY, 1e-6, "panning is horizontal");
+    }
+
+    @Test
+    void reflectionsLeanTowardsALoneWallButRoomsStayDiffuse() {
+        GridWorld wall = new GridWorld().ground(AcousticMaterial.SOIL, 90).fill(3, 0, -40, 3, 6, 40, AcousticMaterial.STONE);
+        ReverbParams outside = reverb8(wall, 0.5, EYE, 0.5);
+        assertTrue(outside.reflectionsPanX > 0.07, "reflections should lean east: " + outside.reflectionsPanX);
+        ReverbParams room = reverb8(new GridWorld().room(0, 0, 0, 4, 2, 4, AcousticMaterial.STONE), 2.5, EYE, 2.5);
+        float lean = Math.abs(room.reflectionsPanX) + Math.abs(room.reflectionsPanZ) + Math.abs(room.lateReverbPanX) + Math.abs(room.lateReverbPanZ);
+        assertTrue(lean < 0.05, "a closed room surrounds you: " + lean);
+    }
+
+    @Test
+    void wallsPassBassBetterThanTrebleDependingOnMaterial() {
+        double[] sound = {6.5, 1.0, 0.5};
+        double[] hfRatio = new double[3];
+        AcousticMaterial[] materials = {AcousticMaterial.GLASS, AcousticMaterial.STONE, AcousticMaterial.CLOTH};
+        for (int i = 0; i < 3; i++) {
+            GridWorld world = new GridWorld().fill(3, -3, -5, 3, 6, 5, materials[i]); // thin wall, open elsewhere
+            ListenerTrace.Accumulator acc = trace(world, 0.5, EYE, 0.5, sound);
+            hfRatio[i] = acc.sums[ListenerTrace.MUFFLE_HF] / acc.sums[ListenerTrace.MUFFLE];
+            assertTrue(hfRatio[i] < 1.0, materials[i] + " should cut treble");
+        }
+        assertTrue(hfRatio[0] > hfRatio[1] && hfRatio[1] > hfRatio[2], "glass > stone > wool: " + java.util.Arrays.toString(hfRatio));
+    }
+
+    @Test
+    void scatteredTracesAreDeterministic() {
+        GridWorld world = new GridWorld().room(0, 0, 0, 9, 4, 9, AcousticMaterial.STONE);
+        ReverbStats a = trace(world, 4.5, EYE, 4.5).stats;
+        ReverbStats b = trace(world, 4.5, EYE, 4.5).stats;
+        assertEquals(a.laterDistanceSum, b.laterDistanceSum, 0.0);
+        assertEquals(a.lateX, b.lateX, 0.0);
+    }
+
+    @Test
+    void pansFollowTheCamera() {
+        // A tail coming from the east (+x): facing north it is on the right, facing east it is ahead.
+        ReverbParams p = new ReverbParams(1, 1, 0.3f, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0.25f, 0, 0.25f, 0, 0.994f, 5000, 250, 0,
+                0, 0, 0, 1, 0, 0, 1, 1, 0.1f);
+        float[] north = com.redsmods.sound_physics_perfected.OpenALEffectsHandlerAccess.pans(p, new float[]{1, 0, 0, 0, 1, 0, 0, 0, -1});
+        assertEquals(1.0f, north[3], 1e-6f);
+        assertEquals(0.0f, north[5], 1e-6f);
+        float[] east = com.redsmods.sound_physics_perfected.OpenALEffectsHandlerAccess.pans(p, new float[]{0, 0, 1, 0, 1, 0, 1, 0, 0});
+        assertEquals(0.0f, east[3], 1e-6f);
+        assertEquals(1.0f, east[5], 1e-6f);
+    }
+
     @Test
     void smoothingConvergesAndSplitsStructureFromLevels() {
         ReverbParams a = RoomAcousticsModel.openAir(RoomAcousticsModel.Settings.defaults());

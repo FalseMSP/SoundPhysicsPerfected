@@ -27,6 +27,8 @@ public class OpenALEffectsHandler {
     private ReverbParams loadedParams;
     private boolean legacyParamsLoaded;
     private long lastStructuralLoad;
+    /** Listener-space pan vectors currently loaded (reflections xyz, late reverb xyz). */
+    private final float[] loadedPans = new float[6];
     /** Minimum time between reverb network rebuilds (decay, density, diffusion... changes). */
     private static final long STRUCTURAL_INTERVAL_NANOS = 250_000_000L;
 
@@ -45,6 +47,7 @@ public class OpenALEffectsHandler {
      */
     public void applyEnvironment(ReverbParams p) {
         if (!efxInitialized || p == null) return;
+        float[] pans = listenerSpacePans(p, RaycastingHelper.getListenerBasis());
         long now = System.nanoTime();
         if (loadedParams != null && !legacyParamsLoaded) {
             boolean structural = p.differsStructurallyFrom(loadedParams);
@@ -55,7 +58,9 @@ public class OpenALEffectsHandler {
                 p = p.withStructureOf(loadedParams);
                 structural = false;
             }
-            if (!structural && !p.differsInLevelsFrom(loadedParams)) return;
+            boolean turned = false;
+            for (int i = 0; i < 6; i++) turned |= Math.abs(pans[i] - loadedPans[i]) > 0.03f;
+            if (!structural && !turned && !p.differsInLevelsFrom(loadedParams)) return;
             if (structural) lastStructuralLoad = now;
         } else {
             lastStructuralLoad = now;
@@ -81,6 +86,8 @@ public class OpenALEffectsHandler {
         alEffectf(reverbEffect, AL_EAXREVERB_HFREFERENCE, p.hfReference);
         alEffectf(reverbEffect, AL_EAXREVERB_LFREFERENCE, p.lfReference);
         alEffectf(reverbEffect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, p.roomRolloffFactor);
+        alEffectfv(reverbEffect, AL_EAXREVERB_REFLECTIONS_PAN, new float[]{pans[0], pans[1], pans[2]});
+        alEffectfv(reverbEffect, AL_EAXREVERB_LATE_REVERB_PAN, new float[]{pans[3], pans[4], pans[5]});
         // Air absorption is already part of the modelled HF decay; do not let EFX limit it a second time.
         alEffecti(reverbEffect, AL_EAXREVERB_DECAY_HFLIMIT, AL10.AL_FALSE);
         alAuxiliaryEffectSloti(auxFXSlot, AL_EFFECTSLOT_EFFECT, reverbEffect);
@@ -88,6 +95,26 @@ public class OpenALEffectsHandler {
 
         loadedParams = p;
         legacyParamsLoaded = false;
+        System.arraycopy(pans, 0, loadedPans, 0, 6);
+    }
+
+    /**
+     * EAX pan vectors are relative to the listener, in left-handed coordinates (+X right, +Y up, +Z forward),
+     * while the environment keeps them in world space; project onto the listener's axes.
+     * basis = right xyz, up xyz, forward xyz.
+     */
+    static float[] listenerSpacePans(ReverbParams p, float[] basis) {
+        return new float[]{
+                dot(p.reflectionsPanX, p.reflectionsPanY, p.reflectionsPanZ, basis, 0),
+                dot(p.reflectionsPanX, p.reflectionsPanY, p.reflectionsPanZ, basis, 3),
+                dot(p.reflectionsPanX, p.reflectionsPanY, p.reflectionsPanZ, basis, 6),
+                dot(p.lateReverbPanX, p.lateReverbPanY, p.lateReverbPanZ, basis, 0),
+                dot(p.lateReverbPanX, p.lateReverbPanY, p.lateReverbPanZ, basis, 3),
+                dot(p.lateReverbPanX, p.lateReverbPanY, p.lateReverbPanZ, basis, 6)};
+    }
+
+    private static float dot(float x, float y, float z, float[] basis, int o) {
+        return x * basis[o] + y * basis[o + 1] + z * basis[o + 2];
     }
 
     /** The legacy modes were always heard with the initial parameters; put those back when switching to them. */
@@ -108,9 +135,14 @@ public class OpenALEffectsHandler {
      * (0 = clear, 1 = fully muffled), so a muffled sound does not produce bright, unmuffled reverb.
      */
     public void attachReverbSend(int sourceId, float muffleStrength) {
+        attachReverbSend(sourceId, muffleStrength, lerp(1.0f, 0.1f, clamp(muffleStrength, 0.0f, 1.0f)));
+    }
+
+    /** @param hfRatio how much of the treble gets through relative to the bass (1 = unfiltered) */
+    public void attachReverbSend(int sourceId, float muffleStrength, float hfRatio) {
         float m = clamp(muffleStrength, 0.0f, 1.0f);
         EXTEfx.alFilterf(sendFilter, AL_LOWPASS_GAIN, lerp(1.0f, 0.2f, m));
-        EXTEfx.alFilterf(sendFilter, AL_LOWPASS_GAINHF, lerp(1.0f, 0.1f, m));
+        EXTEfx.alFilterf(sendFilter, AL_LOWPASS_GAINHF, clamp(hfRatio, 0.01f, 1.0f));
         AL11.alSource3i(sourceId, AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
     }
 
@@ -392,6 +424,14 @@ public class OpenALEffectsHandler {
      * Muffle filter stuff
      **/
     public void applyMuffleToSource(int sourceId, float muffleStrength) {
+        applyMuffleToSource(sourceId, muffleStrength, lerp(1.0f, 0.1f, clamp(muffleStrength, 0.0f, 1.0f)));
+    }
+
+    /**
+     * @param muffleStrength 0 = clear, 1 = fully muffled (sets the overall filter gain)
+     * @param hfRatio        treble that gets through relative to bass, from the materials in the way
+     */
+    public void applyMuffleToSource(int sourceId, float muffleStrength, float hfRatio) {
         if (!efxInitialized) return;
         try {
             // Clamp muffle strength between 0.0 (no muffling) and 1.0 (maximum muffling)
@@ -399,7 +439,7 @@ public class OpenALEffectsHandler {
 
             // Calculate filter parameters based on muffle strength
             float lowpassGain = lerp(1.0f, 0.2f, muffleStrength);     // Overall volume reduction
-            float lowpassGainHF = lerp(1.0f, 0.1f, muffleStrength);   // High frequency attenuation
+            float lowpassGainHF = clamp(hfRatio, 0.01f, 1.0f);        // High frequency attenuation
 
             EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAIN, lowpassGain);
             EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAINHF, lowpassGainHF);

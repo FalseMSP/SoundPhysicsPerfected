@@ -35,6 +35,10 @@ public final class ReverbStats {
     public double farDistanceSum;
     public double farReflectivitySum;
 
+    // Where reflections come from (world space, weighted sums of unit vectors from the listener)
+    public double earlyX, earlyY, earlyZ, earlyWeight;
+    public double lateX, lateY, lateZ, lateWeight;
+
     // Quantities used by the legacy (1.0.0 / 1.4.0) reverb modes, with their original definitions.
     public double legacyWallDistanceSum;
     public double legacyWallDistanceCount;
@@ -44,6 +48,11 @@ public final class ReverbStats {
     public int legacyLeakDenominator;
 
     public void hit(int bounce, double distance, AcousticMaterial material, double cosIncidence) {
+        hit(bounce, distance, material, cosIncidence, true);
+    }
+
+    /** @param legacy whether this segment also counts for the legacy reverb modes (original bounce range only) */
+    public void hit(int bounce, double distance, AcousticMaterial material, double cosIncidence, boolean legacy) {
         if (bounce == 0) {
             firstHits++;
             firstDistanceSum += distance;
@@ -62,17 +71,39 @@ public final class ReverbStats {
         absorptionLowSum += material.absorptionLow;
         absorptionMidSum += material.absorptionMid;
         absorptionHighSum += material.absorptionHigh;
-        legacyLeakDenominator++;
+        if (legacy) legacyLeakDenominator++;
     }
 
     public void escape(int bounce) {
+        escape(bounce, true);
+    }
+
+    public void escape(int bounce, boolean legacy) {
         if (bounce == 0) {
             firstEscapes++;
         } else {
             laterEscapes++;
         }
-        legacyEscapes++;
-        legacyLeakDenominator++;
+        if (legacy) {
+            legacyEscapes++;
+            legacyLeakDenominator++;
+        }
+    }
+
+    /** A first reflection in direction (x,y,z) from the listener; nearer, harder surfaces weigh more. */
+    public void early(double x, double y, double z, double weight) {
+        earlyX += x * weight;
+        earlyY += y * weight;
+        earlyZ += z * weight;
+        earlyWeight += weight;
+    }
+
+    /** Energy scattered back to the listener from a later reflection in direction (x,y,z). */
+    public void late(double x, double y, double z, double weight) {
+        lateX += x * weight;
+        lateY += y * weight;
+        lateZ += z * weight;
+        lateWeight += weight;
     }
 
     public void blueRay(boolean visible, double legacyDistance) {
@@ -106,6 +137,14 @@ public final class ReverbStats {
         farHits += o.farHits;
         farDistanceSum += o.farDistanceSum;
         farReflectivitySum += o.farReflectivitySum;
+        earlyX += o.earlyX;
+        earlyY += o.earlyY;
+        earlyZ += o.earlyZ;
+        earlyWeight += o.earlyWeight;
+        lateX += o.lateX;
+        lateY += o.lateY;
+        lateZ += o.lateZ;
+        lateWeight += o.lateWeight;
         legacyWallDistanceSum += o.legacyWallDistanceSum;
         legacyWallDistanceCount += o.legacyWallDistanceCount;
         legacyVisible += o.legacyVisible;

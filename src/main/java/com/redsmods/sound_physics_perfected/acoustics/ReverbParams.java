@@ -28,6 +28,13 @@ public final class ReverbParams {
     public final float lfReference;
     public final float roomRolloffFactor;
 
+    /**
+     * World-space direction the early reflections / late reverb come from, scaled by how focused they are
+     * (0 = all around, 1 = entirely from that direction). Converted to listener space when applied.
+     */
+    public final float reflectionsPanX, reflectionsPanY, reflectionsPanZ;
+    public final float lateReverbPanX, lateReverbPanY, lateReverbPanZ;
+
     // Diagnostics (not sent to OpenAL)
     public final float enclosure;
     public final float meanFreePath;
@@ -39,6 +46,26 @@ public final class ReverbParams {
                         float echoTime, float echoDepth, float modulationTime, float modulationDepth,
                         float airAbsorptionGainHF, float hfReference, float lfReference, float roomRolloffFactor,
                         float enclosure, float meanFreePath, float absorption) {
+        this(density, diffusion, gain, gainHF, gainLF, decayTime, decayHFRatio, decayLFRatio, reflectionsGain,
+                reflectionsDelay, lateReverbGain, lateReverbDelay, echoTime, echoDepth, modulationTime, modulationDepth,
+                airAbsorptionGainHF, hfReference, lfReference, roomRolloffFactor, 0, 0, 0, 0, 0, 0,
+                enclosure, meanFreePath, absorption);
+    }
+
+    public ReverbParams(float density, float diffusion, float gain, float gainHF, float gainLF,
+                        float decayTime, float decayHFRatio, float decayLFRatio,
+                        float reflectionsGain, float reflectionsDelay, float lateReverbGain, float lateReverbDelay,
+                        float echoTime, float echoDepth, float modulationTime, float modulationDepth,
+                        float airAbsorptionGainHF, float hfReference, float lfReference, float roomRolloffFactor,
+                        float reflectionsPanX, float reflectionsPanY, float reflectionsPanZ,
+                        float lateReverbPanX, float lateReverbPanY, float lateReverbPanZ,
+                        float enclosure, float meanFreePath, float absorption) {
+        this.reflectionsPanX = finite(reflectionsPanX);
+        this.reflectionsPanY = finite(reflectionsPanY);
+        this.reflectionsPanZ = finite(reflectionsPanZ);
+        this.lateReverbPanX = finite(lateReverbPanX);
+        this.lateReverbPanY = finite(lateReverbPanY);
+        this.lateReverbPanZ = finite(lateReverbPanZ);
         this.density = clamp(density, 0.0f, 1.0f);
         this.diffusion = clamp(diffusion, 0.0f, 1.0f);
         this.gain = clamp(gain, 0.0f, 1.0f);
@@ -88,6 +115,12 @@ public final class ReverbParams {
                 lerp(hfReference, target.hfReference, t),
                 lerp(lfReference, target.lfReference, t),
                 lerp(roomRolloffFactor, target.roomRolloffFactor, t),
+                lerp(reflectionsPanX, target.reflectionsPanX, t),
+                lerp(reflectionsPanY, target.reflectionsPanY, t),
+                lerp(reflectionsPanZ, target.reflectionsPanZ, t),
+                lerp(lateReverbPanX, target.lateReverbPanX, t),
+                lerp(lateReverbPanY, target.lateReverbPanY, t),
+                lerp(lateReverbPanZ, target.lateReverbPanZ, t),
                 lerp(enclosure, target.enclosure, t),
                 lerp(meanFreePath, target.meanFreePath, t),
                 lerp(absorption, target.absorption, t));
@@ -126,7 +159,13 @@ public final class ReverbParams {
                 || Math.abs(echoDepth - o.echoDepth) > 0.01f
                 || Math.abs(echoTime - o.echoTime) > 0.002f
                 || Math.abs(airAbsorptionGainHF - o.airAbsorptionGainHF) > 0.0005f
-                || Math.abs(roomRolloffFactor - o.roomRolloffFactor) > 0.01f;
+                || Math.abs(roomRolloffFactor - o.roomRolloffFactor) > 0.01f
+                || Math.abs(reflectionsPanX - o.reflectionsPanX) > 0.02f
+                || Math.abs(reflectionsPanY - o.reflectionsPanY) > 0.02f
+                || Math.abs(reflectionsPanZ - o.reflectionsPanZ) > 0.02f
+                || Math.abs(lateReverbPanX - o.lateReverbPanX) > 0.02f
+                || Math.abs(lateReverbPanY - o.lateReverbPanY) > 0.02f
+                || Math.abs(lateReverbPanZ - o.lateReverbPanZ) > 0.02f;
     }
 
     /** These levels with the structural parameters of another set (bit-identical, so OpenAL sees no change). */
@@ -136,6 +175,7 @@ public final class ReverbParams {
                 reflectionsGain, reflectionsDelay, lateReverbGain, lateReverbDelay,
                 echoTime, echoDepth, s.modulationTime, s.modulationDepth,
                 airAbsorptionGainHF, s.hfReference, s.lfReference, roomRolloffFactor,
+                reflectionsPanX, reflectionsPanY, reflectionsPanZ, lateReverbPanX, lateReverbPanY, lateReverbPanZ,
                 enclosure, meanFreePath, absorption);
     }
 
@@ -147,6 +187,10 @@ public final class ReverbParams {
         return a + (b - a) * t;
     }
 
+    private static float finite(float v) {
+        return Float.isFinite(v) ? v : 0.0f;
+    }
+
     static float clamp(float v, float min, float max) {
         if (Float.isNaN(v)) return min;
         return v < min ? min : (v > max ? max : v);
@@ -155,8 +199,11 @@ public final class ReverbParams {
     @Override
     public String toString() {
         return String.format(Locale.ROOT,
-                "Reverb: decay=%.2fs hf=%.2f lf=%.2f late=%.2f@%.0fms refl=%.2f@%.0fms gainHF=%.2f echo=%.2f@%.0fms | enclosed=%.0f%% mfp=%.1f abs=%.2f",
+                "Reverb: decay=%.2fs hf=%.2f lf=%.2f late=%.2f@%.0fms refl=%.2f@%.0fms gainHF=%.2f echo=%.2f@%.0fms pan=%.2f/%.2f | enclosed=%.0f%% mfp=%.1f abs=%.2f",
                 decayTime, decayHFRatio, decayLFRatio, lateReverbGain, lateReverbDelay * 1000, reflectionsGain,
-                reflectionsDelay * 1000, gainHF, echoDepth, echoTime * 1000, enclosure * 100, meanFreePath, absorption);
+                reflectionsDelay * 1000, gainHF, echoDepth, echoTime * 1000,
+                Math.sqrt(reflectionsPanX * reflectionsPanX + reflectionsPanY * reflectionsPanY + reflectionsPanZ * reflectionsPanZ),
+                Math.sqrt(lateReverbPanX * lateReverbPanX + lateReverbPanY * lateReverbPanY + lateReverbPanZ * lateReverbPanZ),
+                enclosure * 100, meanFreePath, absorption);
     }
 }

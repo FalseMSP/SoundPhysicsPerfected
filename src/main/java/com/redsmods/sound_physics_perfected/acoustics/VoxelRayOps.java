@@ -14,6 +14,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
     private double hitT;
     private int hitNormalX, hitNormalY, hitNormalZ;
     private AcousticMaterial hitMaterial;
+    private double obstructionHf;
 
     // Scratch state for the box visitor.
     private static final int MODE_FIRST_HIT = 0;
@@ -118,6 +119,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
         double dx = bx - ax, dy = by - ay, dz = bz - az;
         double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (distance < EPSILON) {
+            obstructionHf = 0.0;
             return 0.0;
         }
         double inv = 1.0 / distance;
@@ -126,7 +128,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
         dz *= inv;
         int endX = VoxelTraversal.floor(bx), endY = VoxelTraversal.floor(by), endZ = VoxelTraversal.floor(bz);
 
-        double total = 0.0;
+        double total = 0.0, totalHf = 0.0;
         dda.init(ax, ay, az, dx, dy, dz, distance);
         do {
             if (dda.x == endX && dda.y == endY && dda.z == endZ) {
@@ -144,14 +146,22 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                     length = boxLength;
                 }
                 if (length > 0.0) {
-                    total += length * world.loadedTransmissionWeight();
+                    double weighted = length * world.loadedTransmissionWeight();
+                    total += weighted;
+                    totalHf += weighted * world.loadedMaterial().transmissionHf;
                     if (total >= maxWeighted) {
                         break;
                     }
                 }
             }
         } while (dda.advance());
+        obstructionHf = totalHf;
         return total;
+    }
+
+    @Override
+    public double lastObstructionHf() {
+        return obstructionHf;
     }
 
     private void beginBoxes(int mode, double ox, double oy, double oz, double dx, double dy, double dz,

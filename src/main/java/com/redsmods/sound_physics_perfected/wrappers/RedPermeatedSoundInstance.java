@@ -15,13 +15,22 @@ import net.minecraft.world.phys.Vec3;
  */
 public class RedPermeatedSoundInstance extends RedTickableInstance {
     @Getter float permeationIndex;
+    /** Like permeationIndex, for high frequencies (walls stop treble more than bass). */
+    @Getter float permeationIndexHf;
     int tickCount = 0;
     private float targetMuffle;
+    private float targetMuffleHf;
 
     public RedPermeatedSoundInstance(ResourceLocation soundID, Sound sound, SoundSource category, Vec3 position, float volume, float pitch, SoundInstance wrapped, float permeationIndex, float attenuationMultiplier) {
+        this(soundID, sound, category, position, volume, pitch, wrapped, permeationIndex, permeationIndex, attenuationMultiplier);
+    }
+
+    public RedPermeatedSoundInstance(ResourceLocation soundID, Sound sound, SoundSource category, Vec3 position, float volume, float pitch, SoundInstance wrapped, float permeationIndex, float permeationIndexHf, float attenuationMultiplier) {
         super(soundID, sound, category,position, volume, pitch, wrapped, attenuationMultiplier);
         this.permeationIndex = permeationIndex;
         this.targetMuffle = permeationIndex;
+        this.permeationIndexHf = permeationIndexHf;
+        this.targetMuffleHf = permeationIndexHf;
         super.updatePos();
         super.updateVolume();
     }
@@ -29,6 +38,16 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     public void setPermeationIndex(float permeationIndex) {
         if (super.isStopped()) return;
         this.targetMuffle = permeationIndex;
+    }
+
+    public void setPermeationIndexHf(float permeationIndexHf) {
+        if (super.isStopped()) return;
+        this.targetMuffleHf = permeationIndexHf;
+    }
+
+    /** Treble that gets through relative to bass (1 = no extra high-frequency loss). */
+    public float getHfRatio() {
+        return permeationIndex > 1.0E-4f ? Math.min(1.0f, permeationIndexHf / permeationIndex) : 0.0f;
     }
 
     @Override
@@ -47,17 +66,20 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
     }
 
     public void updateMuffle() {
-        // Calculate the difference between current and target muffle
-        float delta = targetMuffle - permeationIndex;
+        permeationIndex = ease(permeationIndex, targetMuffle);
+        permeationIndexHf = ease(permeationIndexHf, targetMuffleHf);
+    }
+
+    private static float ease(float current, float target) {
+        float delta = target - current;
         float maxChange = Math.max(Math.abs(delta / Math.max(Config.getInstance().tickRate, 1)), 0.3f);
 
         // Already there, or so far off that easing would lag audibly: jump
         if (Math.abs(delta) <= 0.001f || Math.abs(delta) > maxChange * Config.getInstance().tickRate) {
-            permeationIndex = targetMuffle;
-            return;
+            return target;
         }
 
         float change = Math.min(maxChange, Math.abs(delta));
-        permeationIndex += delta > 0 ? change : -change;
+        return current + (delta > 0 ? change : -change);
     }
 }
