@@ -64,7 +64,8 @@ public final class SourceEffects {
         int zone = send ? RaycastingHelper.zoneOf(instance) : -1;
         boolean zones = frame.zones;
         LegacyReverb mode = frame.mode;
-        if (!directFilter && !send && !air && !clearWaterFilter) return null;
+        float[] velocity = Doppler.velocityOf(instance); // measured from the sound's real movement
+        if (!directFilter && !send && !air && !clearWaterFilter && velocity == null) return null;
 
         return channel -> {
             int source = ((SourceAccessor) channel).getSource();
@@ -85,6 +86,9 @@ public final class SourceEffects {
             }
             if (zones) {
                 fx.attachZoneSend(source, zone);
+            }
+            if (velocity != null) {
+                AL10.alSource3f(source, AL10.AL_VELOCITY, velocity[0], velocity[1], velocity[2]);
             }
         };
     }

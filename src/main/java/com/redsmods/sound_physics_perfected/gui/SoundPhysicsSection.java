@@ -93,9 +93,14 @@ public final class SoundPhysicsSection {
                 c -> c.muffleStrength, (c, v) -> c.muffleStrength = v,
                 v -> Component.translatable("sound_physics_perfected.config.unit.percent", v),
                 () -> unsaved = true);
+        ConfigSlider doppler = slider("doppler", 0, 300, 10,
+                c -> c.dopplerStrength, (c, v) -> c.dopplerStrength = v,
+                v -> v == 0 ? Component.translatable("options.off")
+                        : Component.translatable("sound_physics_perfected.config.unit.percent", v),
+                () -> unsaved = true);
         Button more = Button.builder(Component.translatable(KEY + "more"),
                         button -> Minecraft.getInstance().setScreen(Config.configScreen(reopen.get())))
-                .width(150)
+                .width(FULL_WIDTH)
                 .tooltip(Tooltip.create(Component.translatable(KEY + "more.tooltip")))
                 .build();
 
@@ -103,7 +108,8 @@ public final class SoundPhysicsSection {
         addRow(list, qualityButton, null);
         addRow(list, rays, bounces);
         addRow(list, reverbBounces, rayLength);
-        addRow(list, muffling, more);
+        addRow(list, muffling, doppler);
+        addRow(list, more, null);
     }
 
     /** A slider for one of the settings the presets set. */

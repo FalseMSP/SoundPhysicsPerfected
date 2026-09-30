@@ -165,6 +165,12 @@ public class Config {
     @CustomDescription("yacl3.config.sound_physics_perfected:config.airAbsorption.description")
     @SerialEntry public float airAbsorption = 1.0f;
 
+    @AutoGen(category = "general", group = "main")
+    @IntSlider(min = 0, max = 300, step = 10)
+    @FormatTranslation("sound_physics_perfected.config.unit.percent")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.dopplerStrength.description")
+    @SerialEntry public int dopplerStrength = 100;
+
     public static class StringValueFactory implements ListGroup.ValueFactory<String> {
         @Override
         public String provideNewValue() {

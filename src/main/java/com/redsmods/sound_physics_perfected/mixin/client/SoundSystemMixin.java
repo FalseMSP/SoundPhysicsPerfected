@@ -2,6 +2,7 @@ package com.redsmods.sound_physics_perfected.mixin.client;
 
 import com.mojang.blaze3d.audio.Channel;
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
+import com.redsmods.sound_physics_perfected.Doppler;
 import com.redsmods.sound_physics_perfected.RedSoundInstance;
 import com.redsmods.sound_physics_perfected.SourceEffects;
 import com.redsmods.sound_physics_perfected.ReverbHelpers.LegacyReverb;
@@ -154,6 +155,8 @@ public abstract class SoundSystemMixin {
         }
 
         RaycastingHelper.updateZones(instanceToChannel.keySet());
+        Doppler.tick(client.player.getEyePosition(), instanceToChannel.keySet(), config.dopplerStrength / 100.0f,
+                config.soundSpeed);
         boolean underwater = RaycastingHelper.isUnderwater();
         // Clear the underwater filter once from sounds that only had it because the listener was under water.
         SourceEffects.Frame frame = SourceEffects.Frame.now(spp$wasUnderwater && !underwater);
@@ -241,6 +244,7 @@ public abstract class SoundSystemMixin {
 
     @Inject(method = "loadLibrary()V", at = @At("TAIL"))
     private void onAudioEngineStart(CallbackInfo ci) {
+        Doppler.reset();
         fxHandler.efxInitialized = false;
         fxHandler.efxUnsupported = false;
         fxHandler.initializeReverb();
