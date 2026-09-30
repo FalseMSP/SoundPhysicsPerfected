@@ -149,7 +149,7 @@ public final class RaycastingHelper {
                        double stepSize, int raysCast, int raysBounced, int generation, boolean hasNewSounds,
                        boolean sourceReverb, double listenerEnclosure, boolean fullReverb, boolean water,
                        double energyFullShare, CachedTrail trail, TargetKey[] keys, double[][] cachedResults,
-                       long worldVersion, long nanos, boolean cacheable) {
+                       long worldVersion, long nanos, boolean cacheable, long quality) {
         RayOps newOps() {
             if (fast) {
                 return new VoxelRayOps(new LevelVoxelWorld(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated, water));
@@ -186,10 +186,13 @@ public final class RaycastingHelper {
         final long nanos;
         final ListenerTrace.Trail[] chunks;
         final ReverbStats stats;
+        /** Ray count and reverb bounces it was traced with (see {@link #quality}). */
+        final long quality;
         final Map<TargetKey, double[]> results = new HashMap<>();
 
         CachedTrail(Level level, Vec3 eye, TraceSettings settings, long worldVersion, long nanos,
-                    ListenerTrace.Trail[] chunks, ReverbStats stats) {
+                    ListenerTrace.Trail[] chunks, ReverbStats stats, long quality) {
+            this.quality = quality;
             this.level = level;
             this.eye = eye;
             this.settings = settings;
@@ -201,6 +204,11 @@ public final class RaycastingHelper {
     }
 
     private static CachedTrail trailCache;
+
+    /** The quality settings a trail depends on beyond its TraceSettings: changing them re-traces at once. */
+    private static long quality(Config config) {
+        return ((long) config.raysCast << 16) | (config.reverbBounces & 0xFFFF);
+    }
 
     /** A block changed on the client (see ClientLevelMixin). */
     public static void onBlockChanged(Level level, BlockPos pos, BlockState oldState, BlockState newState) {
@@ -321,9 +329,12 @@ public final class RaycastingHelper {
         boolean idle = !hasNewSounds && !hasTickables;
         long now = System.nanoTime();
         CachedTrail cached = trailCache;
+        long quality = quality(config);
+        // Quality changed (e.g. on the Music & Sounds screen): trace and re-measure the room right away.
+        boolean qualityChanged = cached != null && cached.quality != quality;
         boolean unchanged = cached != null && cached.level == level && cached.eye.equals(eye)
-                && cached.worldVersion == worldVersion && !subLevelsNearby;
-        if (idle && (!config.reverb || (unchanged && now - cached.nanos < TRAIL_TTL_NANOS)
+                && cached.worldVersion == worldVersion && !subLevelsNearby && !qualityChanged;
+        if (idle && !qualityChanged && (!config.reverb || (unchanged && now - cached.nanos < TRAIL_TTL_NANOS)
                 || (eye.distanceToSqr(lastTraceEye) < 0.0625 && ticksSinceTrace < 10))) {
             return null; // nothing to place, and the room around a standing player has not changed
         }
@@ -369,7 +380,8 @@ public final class RaycastingHelper {
 
         // The room only needs re-measuring (with the long reverb bounce chains) when the listener moved or every
         // 10 ticks; traces in between, run for new sounds, keep the last estimate.
-        boolean fullReverb = eye.distanceToSqr(lastFullReverbEye) > 0.25 || ticksSinceFullReverb >= 10;
+        boolean fullReverb = eye.distanceToSqr(lastFullReverbEye) > 0.25 || ticksSinceFullReverb >= 10
+                || qualityChanged;
         TraceSettings settings = new TraceSettings(config.raysBounced, fullReverb ? config.reverbBounces : config.raysBounced,
                 16.0 * config.maxRayLength, config.permeation,
                 config.reverb, config.permeationAbsorption, config.maxBlocksPermeated,
@@ -410,7 +422,7 @@ public final class RaycastingHelper {
                 config.permeationStepSize, config.raysCast, config.raysBounced, generation, hasNewSounds, sourceReverb,
                 currentReverb == null ? 0.0 : currentReverb.enclosure, fullReverb, config.waterAcoustics,
                 config.energyFullShare / 100.0, reuse ? cached : null, keys, cachedResults, worldVersion, now,
-                cacheable);
+                cacheable, quality);
     }
 
     /**
@@ -707,7 +719,7 @@ public final class RaycastingHelper {
         if (trail == null) {
             if (result.trails == null) return;
             trail = new CachedTrail(job.level, job.eye, job.settings, job.worldVersion, job.nanos, result.trails,
-                    result.paths.stats);
+                    result.paths.stats, job.quality);
             trailCache = trail;
         } else if (trail != trailCache) {
             return;
