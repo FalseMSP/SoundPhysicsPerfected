@@ -188,7 +188,7 @@ public final class RaycastingHelper {
     /** Bumped (client thread) whenever a block that matters to sound changes near the listener. */
     private static long worldVersion;
     /** Paths are re-traced at least this often anyway (chunks loading, anything not seen as a block change). */
-    private static final long TRAIL_TTL_NANOS = 2_000_000_000L;
+    private static final long TRAIL_TTL_NANOS = 10_000_000_000L; // block changes and chunk loads are seen directly
     private static final int TRAIL_MAX_RESULTS = 512;
     private static final int RESULT = ListenerTrace.STRIDE, RESULT_COUNT = RESULT, RESULT_OBSTRUCTION = RESULT + 1;
 
@@ -226,6 +226,37 @@ public final class RaycastingHelper {
 
     private static CachedTrail trailCache;
 
+    /**
+     * Which cells are known to be empty, kept across traces for as long as the world and the settings that decide
+     * emptiness stay the same: blocks that change and chunks that (re)load drop their part of it, and it starts over
+     * every 20 s in case anything slipped past those hooks.
+     */
+    private static LevelVoxelWorld.CellMemo memo;
+    private static Level memoLevel;
+    private static long memoKey, memoSince;
+    private static final long MEMO_TTL_NANOS = 20_000_000_000L;
+
+    private static LevelVoxelWorld.CellMemo cellMemo(Level level, Config config, long now) {
+        long key = (config.barrierAsAir ? 1 : 0) | (config.waterAcoustics ? 2 : 0);
+        if (memo == null || memoLevel != level || memoKey != key || now - memoSince > MEMO_TTL_NANOS
+                || memo.size() > 16384) {
+            memo = new LevelVoxelWorld.CellMemo();
+            memoLevel = level;
+            memoKey = key;
+            memoSince = now;
+        }
+        return memo;
+    }
+
+    /** A chunk was (re)loaded on the client (see ClientLevelMixin). */
+    public static void onChunkLoaded(int chunkX, int chunkZ) {
+        LevelVoxelWorld.CellMemo m = memo;
+        if (m != null) m.dropChunk(chunkX, chunkZ);
+        Vec3 eye = playerEyePos;
+        double dx = (chunkX << 4) + 8 - eye.x, dz = (chunkZ << 4) + 8 - eye.z;
+        if (dx * dx + dz * dz < 272.0 * 272.0) worldVersion++; // near enough to be in the cached paths
+    }
+
     /** The quality settings a trail depends on beyond its TraceSettings: changing them re-traces at once. */
     private static long quality(Config config) {
         long flags = (config.waterAcoustics ? 1 : 0) | (config.useExplosionResistance ? 2 : 0)
@@ -238,11 +269,18 @@ public final class RaycastingHelper {
         if (oldState == newState) return;
         Vec3 eye = playerEyePos;
         double dx = pos.getX() + 0.5 - eye.x, dy = pos.getY() + 0.5 - eye.y, dz = pos.getZ() + 0.5 - eye.z;
-        if (dx * dx + dy * dy + dz * dz > 256.0 * 256.0) return;
+        if (dx * dx + dy * dy + dz * dz > 256.0 * 256.0) {
+            // Too far to matter to the cached paths, but the memo may still know the section.
+            LevelVoxelWorld.CellMemo m = memo;
+            if (m != null) m.dropSection(pos.getX() >> 4, pos.getY() >> 4, pos.getZ() >> 4);
+            return;
+        }
         if (java.util.Objects.equals(acousticKind(level, pos, oldState), acousticKind(level, pos, newState))) {
             return; // crops, redstone...
         }
         worldVersion++;
+        LevelVoxelWorld.CellMemo m = memo;
+        if (m != null) m.dropSection(pos.getX() >> 4, pos.getY() >> 4, pos.getZ() >> 4);
     }
 
     /** What the tracer sees in a block: nothing, water, or this block with this shape. */
@@ -375,8 +413,15 @@ public final class RaycastingHelper {
         }
         boolean unchanged = cached != null && cached.level == level && cached.eye.equals(eye)
                 && cached.worldVersion == worldVersion && !subLevelsNearby && !qualityChanged;
+        // While walking the room is re-measured about 4 times a second (it is smoothed over 0.25 s anyway), right
+        // away after a jump of more than 4 blocks (teleport, portal), and every 10 ticks when standing still.
+        double moved = eye.distanceToSqr(lastFullReverbEye);
+        boolean fullReverb = (moved > 0.25 && ticksSinceFullReverb >= 5) || moved > 16.0 || ticksSinceFullReverb >= 10
+                || qualityChanged;
         if (idle && !qualityChanged && (!config.reverb || (unchanged && now - cached.nanos < TRAIL_TTL_NANOS)
-                || (eye.distanceToSqr(lastTraceEye) < 0.0625 && ticksSinceTrace < 10))) {
+                || (eye.distanceToSqr(lastTraceEye) < 0.0625 && ticksSinceTrace < 10)
+                // Nothing to place and no room to measure: only the legacy reverb modes use such a trace.
+                || (!fullReverb && config.legacyReverb == LegacyReverb.MODERN))) {
             return null; // nothing to place, and the room around a standing player has not changed
         }
 
@@ -423,11 +468,6 @@ public final class RaycastingHelper {
 
         // The room only needs re-measuring (with the long reverb bounce chains) when the listener moved or every
         // 10 ticks; traces in between, run for new sounds, keep the last estimate.
-        // While walking the room is re-measured about 4 times a second (it is smoothed over 0.25 s anyway), right
-        // away after a jump of more than 4 blocks (teleport, portal), and every 10 ticks when standing still.
-        double moved = eye.distanceToSqr(lastFullReverbEye);
-        boolean fullReverb = (moved > 0.25 && ticksSinceFullReverb >= 5) || moved > 16.0 || ticksSinceFullReverb >= 10
-                || qualityChanged;
         TraceSettings settings = new TraceSettings(config.raysBounced, fullReverb ? config.reverbBounces : config.raysBounced,
                 16.0 * config.maxRayLength, config.permeation,
                 config.reverb, config.permeationAbsorption, config.maxBlocksPermeated,
@@ -469,7 +509,7 @@ public final class RaycastingHelper {
                 config.permeationStepSize, config.raysCast, config.raysBounced, generation, hasNewSounds, sourceReverb,
                 currentReverb == null ? 0.0 : currentReverb.enclosure, fullReverb, config.waterAcoustics,
                 config.energyFullShare / 100.0, reuse ? cached : null, keys, cachedResults, worldVersion, now,
-                cacheable, quality, reuse ? cached.memo : new LevelVoxelWorld.CellMemo());
+                cacheable, quality, cellMemo(level, config, now));
     }
 
     /**
@@ -1059,6 +1099,7 @@ public final class RaycastingHelper {
         inFlight = null;
         inFlightOriginals = Collections.newSetFromMap(new IdentityHashMap<>());
         trailCache = null;
+        memo = null;
         worldVersion++;
         zoneOfSound.clear(); // may hold entity-bound sounds, and through them the old level
         bypass.clear();
@@ -1131,6 +1172,12 @@ public final class RaycastingHelper {
 
     private static int threads() {
         return POOL.getPoolSize();
+    }
+
+    /** Whether playing sounds queue for their re-trace this tick (every Tick Rate ticks, all on the same tick). */
+    public static boolean isRetraceTick() {
+        int rate = Math.max(Config.getInstance().tickRate, 1);
+        return tickCounter % rate == 0;
     }
 
     public static boolean isUnderwater() {

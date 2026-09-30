@@ -12,6 +12,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Tells the tracer when a block changes, so cached ray paths are only reused while the world around is unchanged. */
 @Mixin(ClientLevel.class)
 public abstract class ClientLevelMixin {
+    @Inject(method = "onChunkLoaded", at = @At("HEAD"))
+    private void spp$chunkLoaded(net.minecraft.world.level.ChunkPos pos, CallbackInfo ci) {
+        RaycastingHelper.onChunkLoaded(pos.x, pos.z);
+    }
+
     @Inject(method = "sendBlockUpdated", at = @At("HEAD"))
     private void spp$blockChanged(BlockPos pos, BlockState oldState, BlockState newState, int flags, CallbackInfo ci) {
         RaycastingHelper.onBlockChanged((ClientLevel) (Object) this, pos, oldState, newState);

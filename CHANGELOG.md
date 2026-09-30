@@ -33,12 +33,22 @@
 ## Performance and latency
 
 - New **Fast Raytracing** (on by default): rays walk the block grid directly instead of using Minecraft's generic ray casting. It switches itself off near Sable sub-levels.
-- **Trail caching** (after Vercidium). While you stand still and no block that matters to sound changes, the rays' paths are reused. New sounds are only connected to them, and a sound at a spot already traced needs no tracing at all. The room is not re-measured either. Paths are re-traced at least every 2 seconds.
+- **Trail caching** (after Vercidium). While you stand still and no block that matters to sound changes, the rays' paths are reused. New sounds are only connected to them, and a sound at a spot already traced needs no tracing at all. The room is not re-measured either. Block changes and chunk loads near you are seen directly, so paths are kept for up to 10 seconds.
 - **The tracer uses the CPU as needed.** It runs as many threads as the machine can spare (all cores but two, up to 16). Threads start when there is work and stop when idle, and a trace is split by its size, so a big trace spreads over every free core. On Ultra while walking past buzzing bees, traces take 3 ms instead of 5 ms (worst 5 ms instead of 9 ms), so new sounds still start at once.
 - The bounces that only measure the room check whether you can see them just to steer the reverb's direction. They now skip that check when the ray has almost no energy left, or when Directional Reverb is off. Within one trace they share the answer per block face. That's 20–25% less CPU on Ultra while walking, and the direction stays within 0.03 of the exact result.
 - While walking, the room is re-measured about 4 times a second instead of every half block (it is smoothed over 0.25 s anyway), and the in-between traces skip the echogram. That's about 17% less CPU on Ultra.
 - Each tracer thread remembers the block states it has already classified. Looking a block's shape up used to be the single biggest cost of tracing.
-- Measured in game with every feature on: 400 sounds in 23 s in a cave used 2220 ms of ray tracing CPU in 1.17.5, and now use about 200 ms (11x less). Standing still costs almost nothing.
+- **A shared empty-cell memo.** Rays cross the same cells again and again: a cave trace on Ultra does about 4 million lookups in about 50 chunk sections. One bit per cell remembers "known empty", shared by every tracer thread and kept from trace to trace. Blocks that change and chunks that (re)load drop their part of it, and it resets itself every 20 seconds. Results are identical.
+- **Batched re-traces.** Playing sounds (bees, minecarts, machines) are re-traced together in one trace, where each used to cost a trace of all rays. Traces with nothing to place and no room to measure are skipped.
+- **Leaner echogram.** Its cost now grows with the number of bounces, not with 256 distance bins, which is 7x faster per ray outdoors. The voxel walk also works out a cell's exit distance only when it needs it.
+- Measured in game with every feature on:
+
+  | Test (Medium preset) | 1.17.5 | Now |
+  |---|---|---|
+  | 400 sounds in 23 s in a cave | 2220 ms of ray tracing CPU | about 170 ms (13x less) |
+  | Walking past four bees with a new sound every 250 ms | | about 250 ms per 12 s |
+
+  On Ultra, the walking test takes about 3.1 s. Standing still costs almost nothing, and traced sounds still start with no measurable delay on every preset.
 - **Sounds start sooner.** Traced sounds used to start 60 to 140 ms after they were triggered; they now start with no measurable delay (new **Low Latency Budget** option, default 3 ms).
 - No more blocking of the game thread while sounds are placed, and no more per-sound reverb recomputation every tick.
 - Fixed a memory leak where every sound ever played stayed referenced for the whole session.

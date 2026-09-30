@@ -81,7 +81,9 @@ public class RedTickableInstance implements TickableSoundInstance {
         tickCount++;
         if (stopped || Config.getInstance().tickRate == 0) return; // DONE or ticking sounds is off
         // Blacklisted sounds are not re-traced, but still follow their original's position, volume and pitch.
-        if (!isBlacklisted && tickCount % Config.getInstance().tickRate == 0) // only update once every .1 second
+        // All playing sounds are re-traced on the same tick, together in one trace (each on its own phase used to
+        // cost a whole trace of all rays per sound).
+        if (!isBlacklisted && RaycastingHelper.isRetraceTick())
             if (!RaycastingHelper.tickQueue.contains(this))
                 RaycastingHelper.tickQueue.add(this);
         updatePos();

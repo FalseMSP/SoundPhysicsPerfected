@@ -70,8 +70,27 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
         private final java.util.concurrent.ConcurrentHashMap<Long, long[]> sections =
                 new java.util.concurrent.ConcurrentHashMap<>();
 
+        private static long key(int sx, int sy, int sz) {
+            return ((long) sx & 0x3FFFFF) << 42 | ((long) sy & 0xFFFFF) << 22 | ((long) sz & 0x3FFFFF);
+        }
+
+        /** A block in this section changed between empty and not: forget what was known about the section. */
+        public void dropSection(int sx, int sy, int sz) {
+            sections.remove(key(sx, sy, sz));
+        }
+
+        /** A chunk was (re)loaded: its data may all be new. */
+        public void dropChunk(int cx, int cz) {
+            long x = (long) cx & 0x3FFFFF, z = (long) cz & 0x3FFFFF;
+            sections.keySet().removeIf(k -> (k >>> 42) == x && (k & 0x3FFFFF) == z);
+        }
+
+        public int size() {
+            return sections.size();
+        }
+
         long[] section(int sx, int sy, int sz) {
-            long key = ((long) sx & 0x3FFFFF) << 42 | ((long) sy & 0xFFFFF) << 22 | ((long) sz & 0x3FFFFF);
+            long key = key(sx, sy, sz);
             long[] cells = sections.get(key);
             if (cells == null) {
                 long[] fresh = new long[64];
