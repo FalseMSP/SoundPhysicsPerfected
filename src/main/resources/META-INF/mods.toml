@@ -25,7 +25,7 @@ versionRange="{mcdep}"
 ordering="NONE"
 side="BOTH"
 
-[["dependencies.${id}"]]
+[[dependencies.${id}]]
 modId = "yet_another_config_lib_v3"
 mandatory=true
 versionRange = "[${yacl_version},)"
