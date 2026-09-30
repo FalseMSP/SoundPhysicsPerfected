@@ -10,6 +10,7 @@
   "${id}.config.unit.ticks": "%s ticks",
   "${id}.config.unit.steps": "%s steps",
   "${id}.config.unit.rays": "%s rays",
+  "${id}.config.unit.bounces": "%s bounces",
   "${id}.config.unit.chunks": "%s chunks",
   "${id}.config.unit.seconds": "%s s",
   "${id}.config.unit.milliseconds": "%s ms",

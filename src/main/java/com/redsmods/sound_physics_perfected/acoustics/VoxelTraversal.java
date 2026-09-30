@@ -86,12 +86,15 @@ public final class VoxelTraversal {
         int axis = exitX <= exitY && exitX <= exitZ ? 0 : (exitY <= exitZ ? 1 : 2);
         double t = axis == 0 ? exitX : (axis == 1 ? exitY : exitZ);
         if (t > maxT) return false;
-        if (t < tEnter) return advance(); // numerically at the edge already
+        // Leaving where it entered (exactly along an edge or a corner): a plain step always makes progress.
+        if (t <= tEnter) return advance();
 
-        // Land in the neighbouring cell across the exited face; the other axes follow the ray.
-        int nx = axis == 0 ? (stepX > 0 ? bx + size : bx - 1) : floor(ox + dx * t);
-        int ny = axis == 1 ? (stepY > 0 ? by + size : by - 1) : floor(oy + dy * t);
-        int nz = axis == 2 ? (stepZ > 0 ? bz + size : bz - 1) : floor(oz + dz * t);
+        // Land in the neighbouring cell across the exited face; the other axes follow the ray. On an exact cell
+        // boundary the ray is entering the cell on its side of it: a ray going negative enters the lower one (a
+        // plain floor picked the upper one, and two sections could then hand the ray back and forth forever).
+        int nx = axis == 0 ? (stepX > 0 ? bx + size : bx - 1) : floorAlong(ox + dx * t, stepX);
+        int ny = axis == 1 ? (stepY > 0 ? by + size : by - 1) : floorAlong(oy + dy * t, stepY);
+        int nz = axis == 2 ? (stepZ > 0 ? bz + size : bz - 1) : floorAlong(oz + dz * t, stepZ);
         x = nx;
         y = ny;
         z = nz;
@@ -107,6 +110,12 @@ public final class VoxelTraversal {
     /** Sign of the step along the given axis (the ray's direction sign). */
     public int step(int axis) {
         return axis == 0 ? stepX : (axis == 1 ? stepY : stepZ);
+    }
+
+    /** The cell a ray moving with this step sign is in at coordinate v (on a boundary: the one it is entering). */
+    private static int floorAlong(double v, int step) {
+        int f = floor(v);
+        return step < 0 && f == v ? f - 1 : f;
     }
 
     public static int floor(double v) {

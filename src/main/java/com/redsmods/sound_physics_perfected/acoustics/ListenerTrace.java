@@ -148,7 +148,7 @@ public final class ListenerTrace {
         boolean[] found = new boolean[targets.count]; // sounds this ray has already seen from a bounce
         // The echogram only matters when rays keep going to measure the room (the in-between traces for new sounds
         // keep the last room estimate).
-        Echo echo = s.reverb && s.reverbBounces > s.bounces ? new Echo(s.reverbBounces + 1) : null;
+        Echo echo = s.reverb && s.measureRoom ? new Echo(s.reverbBounces + 1) : null;
         for (int ray = from; ray < to; ray++) {
             stats.rays++;
             java.util.Arrays.fill(found, false);
@@ -173,6 +173,13 @@ public final class ListenerTrace {
                 if (budget <= 0.0 || (!connecting && !s.reverb)) break;
                 double segment = Math.min(s.segmentLength, budget);
                 if (!ops.firstHit(px, py, pz, dx, dy, dz, segment)) {
+                    if (connecting && segment < s.segmentLength) {
+                        // Out of connecting budget, not out in the open: carry on for the room estimate only.
+                        stats.legacyEscape(); // (the legacy modes counted it as an escape)
+                        remaining = 0.0;
+                        bounce--;
+                        continue;
+                    }
                     // Escaped into open air: that energy never comes back.
                     stats.escape(bounce, connecting);
                     if (echo != null) echo.escaped = true;
@@ -352,6 +359,14 @@ public final class ListenerTrace {
             echo.start();
             double px = sx, py = sy, pz = sz;
             double dx = dirs[ray * 3], dy = dirs[ray * 3 + 1], dz = dirs[ray * 3 + 2];
+            if (ops.firstHit(px, py, pz, dx, dy, dz, 1.0E-3)) {
+                // A sound inside its own block (note block, jukebox, chest...) is heard from its faces: start
+                // where the ray leaves that block, not with a hit at distance 0 inside it.
+                double exit = cellExit(px, py, pz, dx, dy, dz) + 1.0E-4;
+                px += dx * exit;
+                py += dy * exit;
+                pz += dz * exit;
+            }
             double energy = 1.0;
             for (int bounce = 0; bounce <= bounces; bounce++) {
                 if (!ops.firstHit(px, py, pz, dx, dy, dz, s.segmentLength)) {
@@ -408,6 +423,17 @@ public final class ListenerTrace {
             }
             echo.finish(stats);
         }
+    }
+
+    /** Distance along the ray to where it leaves the unit cell it starts in. */
+    static double cellExit(double px, double py, double pz, double dx, double dy, double dz) {
+        return Math.min(axisExit(px, dx), Math.min(axisExit(py, dy), axisExit(pz, dz)));
+    }
+
+    private static double axisExit(double p, double d) {
+        if (d > 0.0) return (Math.floor(p) + 1.0 - p) / d;
+        if (d < 0.0) return (p - Math.floor(p)) / -d;
+        return Double.POSITIVE_INFINITY;
     }
 
     /** SplitMix64 finaliser: deterministic per ray and bounce, so identical geometry gives identical results. */

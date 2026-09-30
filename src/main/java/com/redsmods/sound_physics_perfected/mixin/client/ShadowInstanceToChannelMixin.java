@@ -24,7 +24,8 @@ public abstract class ShadowInstanceToChannelMixin {
     @Mutable
     private Map<SoundInstance, ChannelAccess.ChannelHandle> instanceToChannel;
 
-    @Inject(method = "<init>", at = @At("TAIL"))
+    // Any constructor (not remapped): its parameters change between versions (MusicManager came and went).
+    @Inject(method = "<init>", at = @At("TAIL"), remap = false)
     private void simulated$wrapInstanceToChannel(CallbackInfo ci) {
         Map<SoundInstance, ChannelAccess.ChannelHandle> original = this.instanceToChannel;
         this.instanceToChannel = new java.util.AbstractMap<>() {
@@ -57,11 +58,12 @@ public abstract class ShadowInstanceToChannelMixin {
                                                    ChannelAccess.ChannelHandle value) {
                 // SoundEngine#play registers the channel before queueing "attach buffer and play": set the
                 // filters and sends now, so a short sound's attack is muffled too, not only from the next tick.
-                if (key != null && value != null && fxHandler.efxInitialized) {
+                if (key != null && value != null && fxHandler.efxInitialized
+                        && net.minecraft.client.Minecraft.getInstance().level != null) { // no in-world effects in menus
                     try {
                         java.util.function.Consumer<com.mojang.blaze3d.audio.Channel> effects =
                                 com.redsmods.sound_physics_perfected.SourceEffects.plan(key,
-                                        com.redsmods.sound_physics_perfected.SourceEffects.Frame.now(false));
+                                        com.redsmods.sound_physics_perfected.SourceEffects.Frame.now(false), true);
                         if (effects != null) value.execute(effects);
                     } catch (RuntimeException e) {
                         // Never break SoundEngine#play: the sound plays, and the next tick sets its effects.

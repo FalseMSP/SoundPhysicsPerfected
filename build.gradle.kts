@@ -328,7 +328,7 @@ tasks.processResources {
 
     props.forEach(inputs::property)
 
-    filesMatching("**/lang/en_us.json") { // Defaults description to English translation
+    filesMatching(listOf("**/lang/en_us.json", "**/lang/tr_tr.json")) { // ${name}/${description} and \\n escapes
         expand(props)
         filteringCharset = "UTF-8"
     }

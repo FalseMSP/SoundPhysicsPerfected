@@ -30,8 +30,12 @@ public class SVC implements VoicechatPlugin {
     private ClientLocationalAudioChannel locationalAudioChannel;
     private VoicechatClientApi clientApi;
 
+    /** Voice volume to apply after voice chat set its own gain (see onOpenALSoundPost), per OpenAL source. */
+    private final Map<Integer, Float> volumeFactors = new java.util.concurrent.ConcurrentHashMap<>();
+
     public SVC() {
-        audioChannels = new HashMap<>();
+        // Voice chat plays every speaker on its own thread.
+        audioChannels = new java.util.concurrent.ConcurrentHashMap<>();
     }
 
     @Override
@@ -50,6 +54,8 @@ public class SVC implements VoicechatPlugin {
     public void registerEvents(EventRegistration registration) {
         // This is the key event - it gives us direct access to the OpenAL source
         registration.registerEvent(OpenALSoundEvent.class, this::onOpenALSound);
+        registration.registerEvent(OpenALSoundEvent.Post.class, this::onOpenALSoundPost);
+        registration.registerEvent(DestroyOpenALContextEvent.class, this::onDestroyALContext);
         registration.registerEvent(ClientVoicechatConnectionEvent.class, this::onConnection);
         registration.registerEvent(CreateOpenALContextEvent.class, this::onCreateALContext);
         registration.registerEvent(ClientSoundEvent.class, this::onClientSound);
@@ -62,7 +68,7 @@ public class SVC implements VoicechatPlugin {
                 .setName("Own voice")
                 .setNameTranslationKey("category.sound_physics_perfected.own_voice")
                 .setDescription("The volume of your own voice")
-                .setDescriptionTranslationKey("category.sound_physics_remastered.own_voice.description")
+                .setDescriptionTranslationKey("category.sound_physics_perfected.own_voice.description")
                 .build();
         event.getVoicechat().registerVolumeCategory(ownVoice);
     }
@@ -73,7 +79,10 @@ public class SVC implements VoicechatPlugin {
         // Your OpenAL initialization code here
         long context = event.getContext();
         long device = event.getDevice();
-        fxHandler.initializeReverb(context,device);
+        synchronized (fxHandler) {
+            fxHandler.forgetResources(); // a new context has none of the old one's objects
+            fxHandler.initializeReverb(context, device);
+        }
         System.out.println("succ init openal yipee");
     }
 
@@ -94,7 +103,31 @@ public class SVC implements VoicechatPlugin {
         }
     }
 
+    private void onDestroyALContext(DestroyOpenALContextEvent event) {
+        synchronized (fxHandler) {
+            fxHandler.forgetResources(); // destroyed with the context
+        }
+        volumeFactors.clear();
+    }
+
+    /**
+     * Voice chat sets the source's gain (the speaker's and category volume) after the main event, so the muffled
+     * volume is applied here, on top of it.
+     */
+    private void onOpenALSoundPost(OpenALSoundEvent.Post event) {
+        Float factor = volumeFactors.get(event.getSource());
+        if (factor == null || !Config.getInstance().voicechatMuffleVolume) return;
+        float gain = org.lwjgl.openal.AL10.alGetSourcef(event.getSource(), org.lwjgl.openal.AL10.AL_GAIN);
+        org.lwjgl.openal.AL10.alSourcef(event.getSource(), org.lwjgl.openal.AL10.AL_GAIN, gain * factor);
+    }
+
     private void onOpenALSound(OpenALSoundEvent event) {
+        synchronized (fxHandler) { // one handler (and its shared filters) for every speaker's thread
+            handleOpenALSound(event);
+        }
+    }
+
+    private void handleOpenALSound(OpenALSoundEvent event) {
         int openALSource = event.getSource();
         Position position = event.getPosition();
         UUID channelId = event.getChannelId();
@@ -110,8 +143,8 @@ public class SVC implements VoicechatPlugin {
             org.lwjgl.openal.AL10.alSourcei(openALSource,
                     EXTEfx.AL_DIRECT_FILTER, fxHandler.getDirectBlockFilter());
             if (Config.getInstance().voicechatReverbSelf) {
-                fxHandler.applyReverbToSource(openALSource);
-                org.lwjgl.openal.AL10.alSourcef(openALSource, org.lwjgl.openal.AL10.AL_GAIN, 0.0f);
+                // Only the reverb of your own voice: the direct path is silenced by the filter above.
+                fxHandler.applyReverbToSource(openALSource, 0.0f);
             }
             return;
         }
@@ -143,16 +176,10 @@ public class SVC implements VoicechatPlugin {
 
     private void applyOpenALEffects(int openALSource, float occlusion) {
         try {
-            if(Config.getInstance().voicechatReverb)  fxHandler.applyReverbToSource(openALSource);
+            // The reverb is muffled like the voice: a player behind walls does not come through clearly in it.
+            if(Config.getInstance().voicechatReverb)  fxHandler.applyReverbToSource(openALSource, occlusion);
             if(Config.getInstance().voicechatMuffle)  fxHandler.applyMuffleToSource(openALSource, occlusion);
-
-//            System.out.println("Applying effects to OpenAL source: " + openALSource +
-//                    ", occlusion: " + String.format("%.2f", occlusion));
-            if(Config.getInstance().voicechatMuffleVolume) {
-                float volumeMultiplier = 1-occlusion;
-                volumeMultiplier = Math.max(0.0f, Math.min(1.0f, volumeMultiplier));
-                org.lwjgl.openal.AL10.alSourcef(openALSource, org.lwjgl.openal.AL10.AL_GAIN, volumeMultiplier);
-            }
+            volumeFactors.put(openALSource, Math.max(0.0f, Math.min(1.0f, 1 - occlusion))); // applied in Post
 
         } catch (Exception e) {
             System.err.println("Failed to apply OpenAL effects: " + e.getMessage());

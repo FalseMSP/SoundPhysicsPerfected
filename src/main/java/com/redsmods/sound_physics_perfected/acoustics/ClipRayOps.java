@@ -67,13 +67,38 @@ public final class ClipRayOps implements RayOps {
         if (hit.getType() != HitResult.Type.BLOCK) {
             return false;
         }
-        hitT = from.distanceTo(hit.getLocation());
         Direction side = hit.getDirection();
-        hitNormalX = side.getStepX();
-        hitNormalY = side.getStepY();
-        hitNormalZ = side.getStepZ();
+        Vec3 normal = new Vec3(side.getStepX(), side.getStepY(), side.getStepZ());
+        Vec3 location = hit.getLocation();
+        //? if neoforge && =1.21.1 {
+        // A hit on a Sable sub-level comes back in its plot: bring it (and its face) back to where the ship is.
+        SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(level, location);
+        if (subLevel != null) {
+            location = subLevel.logicalPose().transformPosition(location);
+            normal = subLevel.logicalPose().transformNormal(normal);
+        }
+        //?}
+        hitT = from.distanceTo(location);
+        // The tracer reflects off axis-aligned faces: a rotated ship's face counts as its nearest axis.
+        double ax = Math.abs(normal.x), ay = Math.abs(normal.y), az = Math.abs(normal.z);
+        int axis = ax >= ay && ax >= az ? 0 : (ay >= az ? 1 : 2);
+        hitNormalX = axis == 0 ? (normal.x >= 0 ? 1 : -1) : 0;
+        hitNormalY = axis == 1 ? (normal.y >= 0 ? 1 : -1) : 0;
+        hitNormalZ = axis == 2 ? (normal.z >= 0 ? 1 : -1) : 0;
         hitMaterial = AcousticMaterials.of(level.getBlockState(hit.getBlockPos())).material;
         return true;
+    }
+
+    /** Where a hit really is (a sub-level hit is reported in its plot). */
+    private Vec3 worldLocation(BlockHitResult hit) {
+        Vec3 location = hit.getLocation();
+        //? if neoforge && =1.21.1 {
+        SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(level, location);
+        if (subLevel != null) {
+            return subLevel.logicalPose().transformPosition(location);
+        }
+        //?}
+        return location;
     }
 
     @Override
@@ -110,7 +135,7 @@ public final class ClipRayOps implements RayOps {
             return true;
         }
         BlockHitResult hit = clip(from, to);
-        return hit.getType() != HitResult.Type.BLOCK || from.distanceTo(hit.getLocation()) >= distance - tolerance;
+        return hit.getType() != HitResult.Type.BLOCK || from.distanceTo(worldLocation(hit)) >= distance - tolerance;
     }
 
     /** Adds one block crossing of the given length; returns the low-frequency weighted length. */

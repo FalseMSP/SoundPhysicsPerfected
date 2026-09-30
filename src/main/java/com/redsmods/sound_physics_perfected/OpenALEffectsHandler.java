@@ -69,13 +69,14 @@ public class OpenALEffectsHandler {
         float[] pans = listenerSpacePans(p, RaycastingHelper.getListenerBasis());
         long now = System.nanoTime();
         if (state.loaded != null) {
-            boolean structural = p.differsStructurallyFrom(state.loaded);
-            if (structural && now - state.lastStructuralLoad < STRUCTURAL_INTERVAL_NANOS) {
-                // OpenAL Soft rebuilds (and cross-fades) its reverb network whenever decay, density etc. change.
-                // Doing that every tick of a transition splits tails between networks, so those parameters
-                // follow at a slower rate while levels keep updating every tick.
+            boolean structural = p.differsStructurallyFrom(state.loaded)
+                    && now - state.lastStructuralLoad >= STRUCTURAL_INTERVAL_NANOS;
+            if (!structural) {
+                // OpenAL Soft rebuilds (and cross-fades) its reverb network whenever decay, density etc. change at
+                // all, even by less than our thresholds. Doing that every tick splits tails between networks, so
+                // those parameters only change on a structural load, at most every 250 ms; levels, pans and gains
+                // keep updating every tick.
                 p = p.withStructureOf(state.loaded);
-                structural = false;
             }
             boolean turned = false;
             for (int i = 0; i < 6; i++) turned |= Math.abs(pans[i] - state.pans[i]) > 0.03f;
@@ -194,6 +195,7 @@ public class OpenALEffectsHandler {
 
     /** Reverb send through a low-pass: {@code gain} overall, {@code hfRatio} of the treble on top of that. */
     public void setReverbSend(int sourceId, float gain, float hfRatio) {
+        if (!efxInitialized) return;
         EXTEfx.alFilterf(sendFilter, AL_LOWPASS_GAIN, clamp(gain, 0.0f, 1.0f));
         EXTEfx.alFilterf(sendFilter, AL_LOWPASS_GAINHF, clamp(hfRatio, 0.01f, 1.0f));
         AL11.alSource3i(sourceId, AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
@@ -201,6 +203,11 @@ public class OpenALEffectsHandler {
 
     /** Current environment + reverb send for one source. Used by voice chat, on its own context and thread. */
     public void applyReverbToSource(int sourceId) {
+        applyReverbToSource(sourceId, 0.0f);
+    }
+
+    /** As above, with the send muffled like the source (0 = clear, 1 = fully muffled). */
+    public void applyReverbToSource(int sourceId, float muffleStrength) {
         if (!efxInitialized) return;
         if (!EXTEfx.alIsAuxiliaryEffectSlot(auxFXSlot)) {
             System.err.println("auxFXSlot " + auxFXSlot + " is not valid in the current context");
@@ -209,7 +216,7 @@ public class OpenALEffectsHandler {
             return;
         }
         applyEnvironment(RaycastingHelper.getCurrentReverb());
-        attachReverbSend(sourceId, 0.0f);
+        attachReverbSend(sourceId, muffleStrength);
     }
 
     /** Re-creates the EFX objects if the context lost them (e.g. device reset). Returns whether EFX is usable. */
@@ -402,6 +409,7 @@ public class OpenALEffectsHandler {
             legacyParamsLoaded = true;
             zonesAvailable = ALC10.alcGetInteger(currentDevice, EXTEfx.ALC_MAX_AUXILIARY_SENDS) >= 2;
             efxInitialized = true;
+            generation++;
             System.out.println("Reverb system initialized successfully");
 
         } catch (Exception e) {
@@ -425,6 +433,32 @@ public class OpenALEffectsHandler {
         EXTEfx.alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY, 0.03f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_AIR_ABSORPTION_GAINHF, 0.99f);
         EXTEfx.alEffectf(reverbEffect, EXTEfx.AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, 0.0f);
+    }
+
+    /** Bumped whenever the EFX objects are (re)created, so per-source state knows to apply everything again. */
+    public int generation() {
+        return generation;
+    }
+
+    private int generation;
+
+    /** Removes a source's reverb send (for when reverb is switched off while it plays). */
+    public void detachReverbSend(int sourceId) {
+        if (!efxInitialized) return;
+        AL11.alSource3i(sourceId, AL_AUXILIARY_SEND_FILTER, EXTEfx.AL_EFFECTSLOT_NULL, 0, EXTEfx.AL_FILTER_NULL);
+    }
+
+    /**
+     * The sound engine is shutting down and its OpenAL context (with every object in it) is about to be destroyed:
+     * forget the objects without deleting them, as live sources may still use them and pending source updates may
+     * still run.
+     */
+    public void forgetResources() {
+        efxInitialized = false;
+        auxFXSlot = reverbEffect = muffleFilter = sendFilter = directBlockFilter = 0;
+        java.util.Arrays.fill(zoneSlots, 0);
+        java.util.Arrays.fill(zoneEffects, 0);
+        mainState.loaded = null;
     }
 
     public void cleanupEFXResources() {

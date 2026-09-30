@@ -11,6 +11,8 @@ import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.resources.sounds.TickableSoundInstance;
+import net.minecraft.client.sounds.SoundManager;
+import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
@@ -59,7 +61,7 @@ public class RedTickableInstance implements TickableSoundInstance {
         tickCount = 1;
         targetPosition = position;
         targetVolume = volume;
-        isBlacklisted = isSoundTickBlacklisted(sound.toString());
+        isBlacklisted = isSoundTickBlacklisted(location.toString()); // the event id, as the main blacklist uses
         originalVolume = wrapped.getVolume();
         originalPosition = new Vec3(wrapped.getX(),wrapped.getY(),wrapped.getZ());
         this.attenuationMultiplier = attenuationMultiplier;
@@ -76,13 +78,10 @@ public class RedTickableInstance implements TickableSoundInstance {
     public void tick() {
         updateWrapped();
 
-        if (isBlacklisted) {
-            return;
-        }
-
         tickCount++;
         if (stopped || Config.getInstance().tickRate == 0) return; // DONE or ticking sounds is off
-        if (tickCount % Config.getInstance().tickRate == 0) // only update once every .1 second
+        // Blacklisted sounds are not re-traced, but still follow their original's position, volume and pitch.
+        if (!isBlacklisted && tickCount % Config.getInstance().tickRate == 0) // only update once every .1 second
             if (!RaycastingHelper.tickQueue.contains(this))
                 RaycastingHelper.tickQueue.add(this);
         updatePos();
@@ -104,11 +103,27 @@ public class RedTickableInstance implements TickableSoundInstance {
                     wrapped.getZ() - originalPosition.z
             );
             originalPosition = new Vec3(wrapped.getX(), wrapped.getY(), wrapped.getZ());
+            // Follow the source's movement, keeping the offset the last trace gave it (it used to reset the target
+            // to the current position every tick, so a moving sound never took a new traced position).
             x += delta.x;
             y += delta.y;
             z += delta.z;
-            targetPosition = new Vec3(x,y,z);
+            targetPosition = targetPosition.add(delta);
         }
+    }
+
+    /** Whether this sound is kept out of re-tracing by the tick blacklist. */
+    public boolean isTickBlacklisted() {
+        return isBlacklisted;
+    }
+
+    /**
+     * The original was already resolved when it was intercepted; resolving it again (vanilla does when this plays)
+     * would pick another random variant and change its pitch under the playing sound.
+     */
+    @Override
+    public WeighedSoundEvents resolve(SoundManager soundManager) {
+        return soundManager.getSoundEvent(location);
     }
 
     @Override
@@ -131,6 +146,12 @@ public class RedTickableInstance implements TickableSoundInstance {
             energyLf = targetEnergyLf;
             energyHf = targetEnergyHf;
         }
+    }
+
+    /** Back to the older loudness modes (the attenuation mode was switched while this played). */
+    public void clearEnergyGain() {
+        energyGain = false;
+        energyLf = energyHf = targetEnergyLf = targetEnergyHf = 1.0f;
     }
 
     /** Treble that gets through relative to bass, for the energy loudness filter. */
@@ -236,6 +257,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     }
 
     protected void updatePitch() {
+        if (!(wrapped instanceof TickableSoundInstance)) return; // a one-shot's pitch never changes
         pitch = wrapped.getPitch();
     }
 }

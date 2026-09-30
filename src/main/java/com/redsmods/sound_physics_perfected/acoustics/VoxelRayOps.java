@@ -62,7 +62,8 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
     private int originMedium(double ox, double oy, double oz, double dx, double dy, double dz) {
         int kind = world.load(VoxelTraversal.floor(ox + dx * 1.0E-4), VoxelTraversal.floor(oy + dy * 1.0E-4),
                 VoxelTraversal.floor(oz + dz * 1.0E-4));
-        return kind == VoxelWorld.WATER ? VoxelWorld.WATER : VoxelWorld.EMPTY;
+        return kind == VoxelWorld.WATER || (kind == VoxelWorld.SOLID && world.loadedWaterlogged())
+                ? VoxelWorld.WATER : VoxelWorld.EMPTY;
     }
 
     @Override
@@ -88,6 +89,14 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                     return true;
                 }
             } else {
+                if (world.loadedWaterlogged() && medium != VoxelWorld.WATER && dda.tExit - dda.tEnter > EPSILON) {
+                    // Water fills a waterlogged block around its shape: coming from the air, that is a surface.
+                    if (dda.tEnter > maxDistance) return false;
+                    hitT = dda.tEnter;
+                    setNormal(dda.enterAxis, dx, dy, dz);
+                    hitMaterial = AcousticMaterial.WATER;
+                    return true;
+                }
                 if (world.loadedIsFullCube()) {
                     // A zero-length visit is a ray grazing an edge/corner, or leaving the face it starts on.
                     if (dda.tExit - dda.tEnter > EPSILON) {
@@ -188,7 +197,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
             boolean end = dda.x == endX && dda.y == endY && dda.z == endZ;
             int kind = world.load(dda.x, dda.y, dda.z);
             // Solid blocks keep whatever medium surrounds them.
-            int cellMedium = kind == VoxelWorld.SOLID ? medium : kind;
+            int cellMedium = kind == VoxelWorld.SOLID ? (world.loadedWaterlogged() ? VoxelWorld.WATER : medium) : kind;
             // Crossing into the sound's own block is free, as for solids: something splashing, paddling or
             // bobbing at the surface is heard from both sides of it.
             if (cellMedium != medium && dda.tExit - dda.tEnter > EPSILON) {

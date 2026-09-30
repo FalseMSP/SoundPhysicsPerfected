@@ -66,6 +66,47 @@
 
 ## Fixes
 
+From a multi-agent code review, each finding checked before fixing:
+
+- **The tracer could hang forever.** A ray running exactly along the edge where empty 16x16x16 sections meet, going in negative x and z, could be handed back and forth between them. That thread then spun at 100% and no sound was traced again until the next world change. Fixed, with a regression test, and checked against a brute-force reference on 80,000 random rays.
+- **Moving sounds** (minecarts, bees, entity-bound sounds) kept their first traced position forever: every tick reset it. They now follow both their source and new traces.
+- **Pitch no longer changes a tick after a sound starts.** Sounds with pitch variants picked a new random variant when replayed.
+- **Reverb no longer restarts while you walk.** Tiny drifts in decay and density were sent every tick, and OpenAL Soft rebuilds its reverb for any change to those. They now change at most every 250 ms.
+- **Switching effects off works on sounds already playing.** Turning reverb, air absorption or zones off now takes them off. Unchanged per-sound settings are also no longer re-sent every tick.
+- **Water:**
+  - Waterlogged blocks (slabs, stairs, fences) count as water.
+  - Sounds from inside their own block (note blocks, jukeboxes) get the reverb of the room around them.
+  - Head-relative ambience is not muffled again under water.
+- **Sable sub-levels:**
+  - Ships now block and reflect sound where they actually are, not in their plot 20 million blocks away.
+  - Sounds on ships are range-checked and re-traced where they are.
+- **Leaving a world, stopping all sounds, or the sound engine shutting down:**
+  - Nothing of the old world is kept in memory.
+  - Menus get no in-world effects.
+  - Shutdown no longer deletes objects that are still in use.
+  - A failure while starting a trace plays its sounds unprocessed instead of losing them.
+- **Voice chat:**
+  - The muffled voice volume now actually applies. Voice chat set its own gain afterwards, so it did nothing.
+  - The reverb of a muffled voice is muffled too.
+  - Several speakers at once no longer mix up each other's muffling.
+  - The own-voice category shows its description.
+- **Loaders and versions:**
+  - The Fabric 1.21.9 build no longer claims 1.21.11, where it would crash.
+  - The sound engine hook no longer depends on one constructor signature.
+  - On 1.21.6+, traced sounds report "started" to other mods instead of null.
+  - A Forge 1.20.1 dedicated server without YetAnotherConfigLib starts.
+  - YetAnotherConfigLib loads before this mod.
+  - Turkish translations show proper line breaks and the mod description.
+- **Config:**
+  - Sliders can reach their defaults again (Process Range, Permeation Absorption, Bounce Absorption, Permeation Step).
+  - The HF/LF reference fields match what EAX accepts.
+  - Bounce counts are labelled "bounces", not "rays".
+- **Smaller fixes:**
+  - The tick blacklist matches sound event ids, as the main blacklist does.
+  - A ray that runs out of distance no longer counts as escaping to open air.
+  - Block changes during the first trace are noticed.
+  - Toggling Water Acoustics or other tracing options re-traces at once.
+
 - NeoForge and Forge now see the mod's dependencies. The dependency tables were written as one quoted key, so a missing YetAnotherConfigLib crashed the game at the title screen instead of showing the loader's "missing dependency" screen. The Minecraft version range is now in the loaders' own format.
 
 ## Development

@@ -48,6 +48,8 @@ public class SoundPhysicsPerfected /*? if fabric {*/ /*implements ModInitializer
 	//?}
     //? if forge {
     /*public SoundPhysicsPerfected() {
+        // Client only: YACL (and everything this mod does) is client-side, and a server may not have YACL.
+        if (!net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient()) return;
         Config.CONFIG.load();
         ModLoadingContext.get().registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class, () -> new ConfigScreenHandler.ConfigScreenFactory(
                 (mc, parent) -> Config.CONFIG.generateGui().generateScreen(parent)

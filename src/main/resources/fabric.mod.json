@@ -44,7 +44,7 @@
 
 	},
 	"suggests": {
-		"voicechat": ">=${mcdep}-${voicechat_api_version}"
+		"voicechat": "*"
 	},
 	"custom": {
 		"modmenu": {

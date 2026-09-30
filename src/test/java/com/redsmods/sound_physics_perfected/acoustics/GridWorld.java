@@ -7,6 +7,8 @@ import java.util.Map;
 final class GridWorld implements VoxelWorld {
     private final Map<Long, AcousticMaterial> cells = new HashMap<>();
     private final Map<Long, double[]> boxes = new HashMap<>();
+    private final java.util.Set<Long> waterlogged = new java.util.HashSet<>();
+    private boolean loadedWaterlogged;
     /** Number of occupied cells per 16^3 section, for {@link #sectionEmpty}. */
     private final Map<Long, Integer> sectionCounts = new HashMap<>();
     boolean reportSections = true;
@@ -26,6 +28,13 @@ final class GridWorld implements VoxelWorld {
     GridWorld setPartial(int x, int y, int z, AcousticMaterial material, double... box) {
         if (cells.put(key(x, y, z), material) == null) sectionCounts.merge(key(x >> 4, y >> 4, z >> 4), 1, Integer::sum);
         boxes.put(key(x, y, z), box);
+        return this;
+    }
+
+    /** A partial block with water around its box. */
+    GridWorld setWaterlogged(int x, int y, int z, AcousticMaterial material, double... box) {
+        setPartial(x, y, z, material, box);
+        waterlogged.add(key(x, y, z));
         return this;
     }
 
@@ -63,6 +72,7 @@ final class GridWorld implements VoxelWorld {
         long k = key(x, y, z);
         loaded = cells.get(k);
         loadedBox = loaded == null ? null : boxes.get(k);
+        loadedWaterlogged = waterlogged.contains(k);
         if (loaded == null) return EMPTY;
         return loaded == AcousticMaterial.WATER ? WATER : SOLID;
     }
@@ -70,6 +80,11 @@ final class GridWorld implements VoxelWorld {
     @Override
     public boolean sectionEmpty(int x, int y, int z) {
         return reportSections && sectionCounts.getOrDefault(key(x >> 4, y >> 4, z >> 4), 0) <= 0;
+    }
+
+    @Override
+    public boolean loadedWaterlogged() {
+        return loadedWaterlogged;
     }
 
     @Override

@@ -224,16 +224,20 @@ public final class RaycastingHelper {
 
     /** The quality settings a trail depends on beyond its TraceSettings: changing them re-traces at once. */
     private static long quality(Config config) {
-        return ((long) config.raysCast << 16) | (config.reverbBounces & 0xFFFF);
+        long flags = (config.waterAcoustics ? 1 : 0) | (config.useExplosionResistance ? 2 : 0)
+                | (config.barrierAsAir ? 4 : 0) | (config.fastRaytracing ? 8 : 0);
+        return flags << 48 | ((long) config.raysCast & 0xFFFFFFL) << 16 | (config.reverbBounces & 0xFFFF);
     }
 
     /** A block changed on the client (see ClientLevelMixin). */
     public static void onBlockChanged(Level level, BlockPos pos, BlockState oldState, BlockState newState) {
-        if (oldState == newState || trailCache == null) return;
+        if (oldState == newState) return;
         Vec3 eye = playerEyePos;
         double dx = pos.getX() + 0.5 - eye.x, dy = pos.getY() + 0.5 - eye.y, dz = pos.getZ() + 0.5 - eye.z;
         if (dx * dx + dy * dy + dz * dz > 256.0 * 256.0) return;
-        if (acousticKind(level, pos, oldState) == acousticKind(level, pos, newState)) return; // crops, redstone...
+        if (java.util.Objects.equals(acousticKind(level, pos, oldState), acousticKind(level, pos, newState))) {
+            return; // crops, redstone...
+        }
         worldVersion++;
     }
 
@@ -250,7 +254,10 @@ public final class RaycastingHelper {
     private static final long SOURCE_CACHE_NANOS = 2_000_000_000L;
     private record CachedSourceReverb(ReverbZones.SourceReverb reverb, long nanos) {
     }
-    private static final Map<Long, CachedSourceReverb> SOURCE_CACHE = new ConcurrentHashMap<>();
+    private record SourceCellKey(long sound, long eye) {
+    }
+
+    private static final Map<SourceCellKey, CachedSourceReverb> SOURCE_CACHE = new ConcurrentHashMap<>();
     private static final ReverbZones ZONES = new ReverbZones();
     private static final Map<SoundInstance, Integer> zoneOfSound = new IdentityHashMap<>();
 
@@ -294,9 +301,19 @@ public final class RaycastingHelper {
             inFlight = null;
         }
         if (inFlight == null && (!frame || !soundQueue.isEmpty())) {
-            Job job = prepareJob(level, player);
+            Job job;
+            try {
+                job = prepareJob(level, player);
+                if (job != null) inFlight = launch(job);
+                polled.clear();
+            } catch (RuntimeException e) {
+                logError("Error starting a sound trace; playing its sounds unprocessed", e);
+                for (SoundInstance original : polled) handBack(original);
+                polled.clear();
+                inFlight = null;
+                job = null;
+            }
             if (job != null) {
-                inFlight = launch(job);
                 int budget = Config.getInstance().lowLatencyBudgetMs;
                 if (job.hasNewSounds() && budget > 0) {
                     // Let brand new sounds start this tick instead of the next one when the trace is quick.
@@ -349,6 +366,9 @@ public final class RaycastingHelper {
         long quality = quality(config);
         // Quality changed (e.g. on the Music & Sounds screen): trace and re-measure the room right away.
         boolean qualityChanged = cached != null && cached.quality != quality;
+        if (qualityChanged) {
+            trailCache = null; // never reused again, even if the next trace cannot record a new trail
+        }
         boolean unchanged = cached != null && cached.level == level && cached.eye.equals(eye)
                 && cached.worldVersion == worldVersion && !subLevelsNearby && !qualityChanged;
         if (idle && !qualityChanged && (!config.reverb || (unchanged && now - cached.nanos < TRAIL_TTL_NANOS)
@@ -357,6 +377,7 @@ public final class RaycastingHelper {
         }
 
         List<Target> targets = new ArrayList<>();
+        polled.clear();
         while (!soundQueue.isEmpty()) {
             SoundData data = soundQueue.poll();
             SoundInstance original = ((RedSoundInstance) data.sound).getOriginal();
@@ -364,15 +385,16 @@ public final class RaycastingHelper {
                 notProcd.remove(original);
                 continue;
             }
+            polled.add(original);
             targets.add(new Target(Kind.ONE_SHOT, data, null, subLevelToWorld(level, data.position)));
         }
         if (config.permeation) {
             for (RedPermeatedSoundInstance sound : permeatedTickQueue) {
-                targets.add(new Target(Kind.PERMEATED, null, sound, sound.getOriginalPosition()));
+                targets.add(new Target(Kind.PERMEATED, null, sound, subLevelToWorld(level, sound.getOriginalPosition())));
             }
         } else {
             for (RedTickableInstance sound : tickQueue) {
-                targets.add(new Target(Kind.TICKABLE, null, sound, sound.getOriginalPosition()));
+                targets.add(new Target(Kind.TICKABLE, null, sound, subLevelToWorld(level, sound.getOriginalPosition())));
             }
         }
         tickQueue.clear();
@@ -406,7 +428,7 @@ public final class RaycastingHelper {
                 16.0 * config.maxRayLength, config.permeation,
                 config.reverb, config.permeationAbsorption, config.maxBlocksPermeated,
                 Math.max(config.bounceAbsorptionMultiplier, 0.001), config.attenuationType,
-                MUFFLE_AT_100_PERCENT * config.muffleStrength / 100.0);
+                MUFFLE_AT_100_PERCENT * config.muffleStrength / 100.0, fullReverb);
         subLevelsNearby = subLevelsNear(level, eye, Math.max(settings.maxTotalDistance, settings.segmentLength));
         boolean fast = config.fastRaytracing && !subLevelsNearby;
 
@@ -589,7 +611,7 @@ public final class RaycastingHelper {
         if ((distance < 6.0 || job.listenerEnclosure > 0.9) && ops.clearPath(eye.x, eye.y, eye.z, sx, sy, sz, 1.0)) {
             return null;
         }
-        long key = cellKey(sx, sy, sz) * 31L + cellKey(eye.x, eye.y, eye.z);
+        SourceCellKey key = new SourceCellKey(cellKey(sx, sy, sz), cellKey(eye.x, eye.y, eye.z));
         long now = System.nanoTime();
         CachedSourceReverb cached = SOURCE_CACHE.get(key);
         if (cached != null && now - cached.nanos < SOURCE_CACHE_NANOS) {
@@ -855,6 +877,9 @@ public final class RaycastingHelper {
         if (p.energy) {
             return placeEnergy(p, false);
         }
+        if (p.target.tickable != null) {
+            p.target.tickable.clearEnergyGain(); // the attenuation mode was switched while it played
+        }
         if (p.totalWeight == 0.0 && p.target.tickable != null) {
             RedTickableInstance sound = p.target.tickable;
             sound.setTargetVolume(0);
@@ -927,6 +952,9 @@ public final class RaycastingHelper {
         if (p.energy) {
             return placeEnergy(p, true);
         }
+        if (p.target.tickable != null) {
+            p.target.tickable.clearEnergyGain();
+        }
         Vec3 position = p.apparentPosition();
         float confidence = p.confidence;
         float permeationIndex = (float) p.muffle;
@@ -997,6 +1025,18 @@ public final class RaycastingHelper {
     // Sound lifecycle hooks
     // ================================================================================================================
 
+    /** Sounds taken off the queue for the trace being prepared, to hand back to vanilla if preparing it fails. */
+    private static final List<SoundInstance> polled = new ArrayList<>();
+
+    /** Plays an intercepted original as vanilla would (never lose a sound). */
+    private static void handBack(SoundInstance original) {
+        notProcd.remove(original);
+        if (!cancelled.remove(original)) {
+            bypass.add(original);
+            soundsToPlay.add(original);
+        }
+    }
+
     /** An original was stopped: drop it if it is still waiting for its trace. */
     public static void onOriginalStopped(SoundInstance original) {
         if (!notProcd.contains(original)) return;
@@ -1014,6 +1054,9 @@ public final class RaycastingHelper {
         inFlightOriginals = Collections.newSetFromMap(new IdentityHashMap<>());
         trailCache = null;
         worldVersion++;
+        zoneOfSound.clear(); // may hold entity-bound sounds, and through them the old level
+        bypass.clear();
+        underwater = false;
         soundQueue.clear();
         tickQueue.clear();
         permeatedTickQueue.clear();
@@ -1024,11 +1067,16 @@ public final class RaycastingHelper {
         soundPermInstanceMap.clear();
     }
 
+    private static boolean waitingToLoop(RedTickableInstance sound) {
+        return sound.isLooping() && sound.getDelay() > 0 && !sound.isStopped();
+    }
+
     /** Forget replacements that have finished playing (the maps used to grow for the whole session). */
     public static void pruneFinished(Predicate<SoundInstance> isActive) {
         if (tickCounter % 20 != 0) return;
-        soundInstanceMap.values().removeIf(replacement -> !isActive.test(replacement));
-        soundPermInstanceMap.values().removeIf(replacement -> !isActive.test(replacement));
+        // A looping sound with a delay leaves the channel map between plays; keep its mapping until it stops.
+        soundInstanceMap.values().removeIf(replacement -> !isActive.test(replacement) && !waitingToLoop(replacement));
+        soundPermInstanceMap.values().removeIf(replacement -> !isActive.test(replacement) && !waitingToLoop(replacement));
         bypass.removeIf(original -> !isActive.test(original));
     }
 
@@ -1138,7 +1186,7 @@ public final class RaycastingHelper {
     }
 
     /** Sounds on a Sable sub-level are positioned in its plot; move them to where the sub-level actually is. */
-    private static Vec3 subLevelToWorld(Level level, Vec3 position) {
+    public static Vec3 subLevelToWorld(Level level, Vec3 position) {
         //? if neoforge && =1.21.1 {
         SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(level, position);
         if (subLevel != null) {

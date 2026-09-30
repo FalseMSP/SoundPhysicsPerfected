@@ -46,7 +46,7 @@ public class Config {
 
     @AutoGen(category = "general", group = "main")
     @IntSlider(min = 0, max = 16, step = 1)
-    @FormatTranslation("sound_physics_perfected.config.unit.rays")
+    @FormatTranslation("sound_physics_perfected.config.unit.bounces")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.raysBounced.description")
     @SerialEntry public int raysBounced = QualityPreset.MEDIUM.bounces;
 
@@ -57,7 +57,7 @@ public class Config {
     @SerialEntry public int maxRayLength = QualityPreset.MEDIUM.rayLength; // chunks
 
     @AutoGen(category = "general", group = "main")
-    @IntSlider(min = -1, max = 1000, step = 10)
+    @IntField(min = -1, max = 1000) // a slider from -1 in steps of 10 could not reach 0, 200 or 1000
     @FormatTranslation("sound_physics_perfected.config.unit.blocks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.procRange.description")
     @SerialEntry public int procRange = 200; // blocks
@@ -80,7 +80,7 @@ public class Config {
     @SerialEntry public boolean permeation = true;
 
     @AutoGen(category = "general", group = "permeation")
-    @DoubleSlider(min = 0.01, max = 2, step = 0.05)
+    @DoubleSlider(min = 0.0625, max = 2, step = 0.0625)
     @FormatTranslation("sound_physics_perfected.config.unit.blocks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeationStepSize.description")
     @SerialEntry public double permeationStepSize = 0.0625; // changed to 1/16 of a block bc u don't *need* 0.01 precision lets be so fr
@@ -114,7 +114,7 @@ public class Config {
     @SerialEntry public double maxBlocksPermeated = 3;
 
     @AutoGen(category = "general", group = "permeation")
-    @DoubleSlider(min = 0.001, max = 1, step = 0.01)
+    @DoubleSlider(min = 0, max = 1, step = 0.01)
     @FormatTranslation("sound_physics_perfected.config.unit.multiplier")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.permeationAbsorption.description")
     @SerialEntry public double permeationAbsorption = 0.4;
@@ -135,7 +135,7 @@ public class Config {
     @SerialEntry public boolean disableFXOnUI = false;
 
     @AutoGen(category = "general", group = "main")
-    @DoubleSlider(min = 0.001, max = 1, step = 0.01)
+    @DoubleSlider(min = 0, max = 1, step = 0.01)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.bounceAbsorptionMultiplier.description")
     @SerialEntry public double bounceAbsorptionMultiplier = 0.9;
 
@@ -235,7 +235,7 @@ public class Config {
 
     @AutoGen(category = "reverb_tuning", group = "main")
     @IntSlider(min = 0, max = 32, step = 1)
-    @FormatTranslation("sound_physics_perfected.config.unit.rays")
+    @FormatTranslation("sound_physics_perfected.config.unit.bounces")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.reverbBounces.description")
     @SerialEntry public int reverbBounces = QualityPreset.MEDIUM.reverbBounces;
 
@@ -297,13 +297,13 @@ public class Config {
 
     // Frequency References
     @AutoGen(category = "reverb_tuning", group = "frequency_references")
-    @FloatField(min = 0, max = 10000)
+    @FloatField(min = 1000, max = 20000) // the EAX range
     @FormatTranslation("sound_physics_perfected.config.unit.hertz")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.baseHfReference.description")
     @SerialEntry public float baseHfReference = 5000.0f;
 
     @AutoGen(category = "reverb_tuning", group = "frequency_references")
-    @FloatField(min = 0, max = 10000)
+    @FloatField(min = 20, max = 1000) // the EAX range
     @FormatTranslation("sound_physics_perfected.config.unit.hertz")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.baseLfReference.description")
     @SerialEntry public float baseLfReference = 250.0f;

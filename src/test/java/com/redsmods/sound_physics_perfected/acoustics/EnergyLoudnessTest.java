@@ -170,4 +170,32 @@ class EnergyLoudnessTest {
         assertEquals(none[0], realistic[0], 1e-9, "the bass does not change");
         assertTrue(relative < -18 && relative > -26, "stone wall treble vs bass " + relative + " dB");
     }
+
+    @Test
+    void aSoundInsideItsOwnBlockStillHearsItsRoom() {
+        // A note block in the middle of a stone room: its rays start where they leave the block.
+        GridWorld world = new GridWorld().room(0, 0, 0, 8, 4, 8, AcousticMaterial.STONE).set(4, 0, 4, AcousticMaterial.WOOD);
+        TraceSettings s = new TraceSettings(3, 64.0, true, true, 0.4, 3.0, 0.9, RedsAttenuationType.ENERGY);
+        ListenerTrace.SourceEnvironment env = new ListenerTrace.SourceEnvironment();
+        ListenerTrace.traceSource(new VoxelRayOps(world), s, 4.5, 0.5, 4.5, 1.5, 1.62, 1.5,
+                ListenerTrace.fibonacciSphere(32), 5, env);
+        assertTrue(env.visibleFraction() > 0.3, "visible " + env.visibleFraction());
+        assertTrue(env.stats.firstDistanceSum / env.stats.firstHits > 0.5, "rays reach the walls, not the block itself");
+    }
+
+    @Test
+    void runningOutOfDistanceIsNotAnEscape() {
+        // One ray down a sealed corridor (x 0..37): 35 blocks to the far wall leaves 5 of the 40-block connecting
+        // budget, too short to reach the other end. That is running out of distance, not escaping: the ray carries on
+        // for the room estimate and hits the wall behind the listener.
+        AcousticMaterial mirror = new AcousticMaterial("mirror", 0.01f, 0.01f, 0.01f, 0.0f, 2.0f); // no scattering
+        GridWorld corridor = new GridWorld().room(0, 0, 0, 37, 2, 2, mirror);
+        TraceSettings s = new TraceSettings(1, 3, 40.0, true, true, 0.4, 3.0, 0.9, RedsAttenuationType.ENERGY);
+        ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(0);
+        ListenerTrace.traceRays(new VoxelRayOps(corridor), s, 35.0, 1.5, 1.5, new double[]{-1, 0, 0}, 0, 1,
+                new ListenerTrace.Targets(0), acc);
+        assertEquals(0, acc.stats.firstEscapes + acc.stats.laterEscapes, "escapes from a sealed corridor");
+        assertTrue(acc.stats.laterHits >= 2, "the ray went on bouncing: " + acc.stats.laterHits);
+        assertEquals(1, acc.stats.legacyEscapes, "the legacy modes still count it as they always did");
+    }
 }

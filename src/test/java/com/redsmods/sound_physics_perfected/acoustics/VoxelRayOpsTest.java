@@ -141,4 +141,41 @@ class VoxelRayOpsTest {
         // A sound inside a block (jukebox...) is still reachable with the one block tolerance.
         assertTrue(ops.clearPath(0.5, 0.5, 0.5, 5.5, 0.5, 0.5, 1.0));
     }
+
+    @Test
+    void raysAlongSectionEdgesAlwaysFinish() {
+        // Negative x and z exactly along the vertical edge where empty sections meet used to bounce between two
+        // sections forever (hanging the tracer thread).
+        double k = 1 / Math.sqrt(3);
+        GridWorld empty = new GridWorld();
+        org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(5), () -> {
+            VoxelRayOps ops = new VoxelRayOps(empty);
+            assertFalse(ops.firstHit(16.0, 70.3, 32.0, -k, k, -k, 64));
+            GridWorld ground = new GridWorld().fill(-40, 63, -40, 40, 63, 40, AcousticMaterial.STONE);
+            VoxelRayOps groundOps = new VoxelRayOps(ground);
+            assertEquals(0.0, groundOps.obstruction(8.5, 65.62, 8.5, -7.5, 64.5, -7.5, 3), 1e-9);
+            assertTrue(groundOps.clearPath(8.5, 65.62, 8.5, -7.5, 64.5, -7.5, 1.0));
+            // Every diagonal through section corners, in every direction.
+            for (int sx = -1; sx <= 1; sx += 2)
+                for (int sy = -1; sy <= 1; sy += 2)
+                    for (int sz = -1; sz <= 1; sz += 2) {
+                        ops.firstHit(16.0, 16.0, 16.0, sx * k, sy * k, sz * k, 200);
+                        ops.firstHit(0.0, 70.3, 0.0, sx / Math.sqrt(2), 0, sz / Math.sqrt(2), 200);
+                    }
+        });
+    }
+
+    @Test
+    void waterloggedBlocksAreWaterAroundTheirShape() {
+        // A lake with a waterlogged bottom slab on its floor.
+        GridWorld lake = new GridWorld().fill(-20, -10, -20, 20, -1, 20, AcousticMaterial.WATER)
+                .fill(-20, -11, -20, 20, -11, 20, AcousticMaterial.STONE)
+                .setWaterlogged(0, -10, 0, AcousticMaterial.STONE, 0, 0, 0, 1, 0.5, 1);
+        VoxelRayOps ops = new VoxelRayOps(lake);
+        // Bouncing up off the slab, the ray is under water: the next surface is the lake's, 9.5 blocks up.
+        assertTrue(ops.firstHit(0.5, -9.49, 0.5, 0, 1, 0, 20));
+        assertEquals(9.49, ops.hitT(), 1e-6);
+        // Under water, from the slab to a sound in the same water: no surface on the way.
+        assertTrue(ops.obstruction(0.5, -9.49, 0.5, 5.5, -9.5, 0.5, 100) < 1.0);
+    }
 }

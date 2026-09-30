@@ -88,12 +88,14 @@ public abstract class SoundSystemMixin {
             if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance)
                     && sound.getAttenuation() != SoundInstance.Attenuation.NONE && !sound.isRelative()) {
                 Vec3 soundPos = new Vec3(sound.getX(), sound.getY(), sound.getZ());
+                // Where it really is (a sound on a Sable sub-level is positioned in the sub-level's plot).
+                Vec3 worldPos = RaycastingHelper.subLevelToWorld(client.level, soundPos);
                 // The listener's own sounds (steps, splashes, swimming, eating) come from their own body: nothing
                 // is in the way, so they play as in vanilla (still with reverb, and muffled with the head under water).
-                if (client.player.getBoundingBox().inflate(0.3).contains(soundPos)) {
+                if (client.player.getBoundingBox().inflate(0.3).contains(worldPos)) {
                     return;
                 }
-                if (Config.getInstance().procRange != -1 && soundPos.subtract(playerEyePos).length() > Config.getInstance().procRange) { // if sounds are too far, let it proc through vanilla means.
+                if (Config.getInstance().procRange != -1 && worldPos.subtract(playerEyePos).length() > Config.getInstance().procRange) { // if sounds are too far, let it proc through vanilla means.
                     return;
                 }
 
@@ -104,7 +106,7 @@ public abstract class SoundSystemMixin {
                 soundQueue.offer(new SoundData(new RedSoundInstance(sound), soundPos, sound.getLocation().toString()));
                 notProcd.add(sound);
 
-                /*? if >= 1.21.6 {*/ /*cir.cancel(); *//*?} else {*/ ci.cancel(); /*?}*/
+                /*? if >= 1.21.6 {*/ /*cir.setReturnValue(SoundEngine.PlayResult.STARTED); *//*?} else {*/ ci.cancel(); /*?}*/
             }
         } catch (Exception e) {
             // Log error but don't crash
@@ -165,11 +167,12 @@ public abstract class SoundSystemMixin {
             SoundInstance instance = entry.getKey();
             ChannelAccess.ChannelHandle handle = entry.getValue();
             if (instance == null || handle == null) continue;
-            Consumer<Channel> effects = SourceEffects.plan(instance, frame);
+            Consumer<Channel> effects = SourceEffects.plan(instance, frame, false);
             if (effects != null) {
                 handle.execute(effects); // on the sound thread, in order with the channel's own commands
             }
         }
+        SourceEffects.forgetAllBut(instanceToChannel.keySet());
 
         RaycastingHelper.pruneFinished(instanceToChannel::containsKey);
     }
@@ -239,7 +242,7 @@ public abstract class SoundSystemMixin {
 
     @Inject(method = "destroy()V", at = @At("HEAD"))
     private void onAudioEngineStop(CallbackInfo ci) {
-        fxHandler.cleanupEFXResources();
+        fxHandler.forgetResources(); // the context is destroyed right after, with everything in it
     }
 
     @Inject(method = "loadLibrary()V", at = @At("TAIL"))

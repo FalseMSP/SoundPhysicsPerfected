@@ -23,6 +23,11 @@ public interface VoxelWorld {
         return false;
     }
 
+    /** Whether the loaded SOLID cell is waterlogged: water fills it around its shape (slabs, stairs, fences...). */
+    default boolean loadedWaterlogged() {
+        return false;
+    }
+
     /** Whether the loaded cell's shape is the full unit cube (water cells count as full). */
     boolean loadedIsFullCube();
 

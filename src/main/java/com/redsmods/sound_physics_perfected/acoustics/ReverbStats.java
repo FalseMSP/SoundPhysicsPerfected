@@ -86,6 +86,12 @@ public final class ReverbStats {
         escape(bounce, true);
     }
 
+    /** A connecting segment that ran out of distance budget: an escape for the legacy modes only. */
+    public void legacyEscape() {
+        legacyEscapes++;
+        legacyLeakDenominator++;
+    }
+
     public void escape(int bounce, boolean legacy) {
         if (bounce == 0) {
             firstEscapes++;

@@ -55,7 +55,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
         super.updateWrapped();
         tickCount++;
         if (super.isStopped() || Config.getInstance().tickRate == 0) return; // DONE or ticking sounds is off
-        if (tickCount % Config.getInstance().tickRate == 0) { // only update once every .1 second
+        if (!isTickBlacklisted() && tickCount % Config.getInstance().tickRate == 0) { // only update once every .1 second
             if (!RaycastingHelper.permeatedTickQueue.contains(this))
                 RaycastingHelper.permeatedTickQueue.add(this);
         }

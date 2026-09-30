@@ -20,6 +20,8 @@ public final class TraceSettings {
      * figures (1 = as listed, 0 = treble like bass). Real walls pass the bass and stop the treble (mass law).
      */
     public final double muffle;
+    /** Whether this trace re-measures the room (records the echogram); the in-between traces keep the last one. */
+    public final boolean measureRoom;
 
     public TraceSettings(int bounces, double segmentLength, boolean permeation, boolean reverb,
                          double permeationAbsorption, double maxBlocksPermeated, double bounceAbsorption,
@@ -38,6 +40,14 @@ public final class TraceSettings {
     public TraceSettings(int bounces, int reverbBounces, double segmentLength, boolean permeation, boolean reverb,
                          double permeationAbsorption, double maxBlocksPermeated, double bounceAbsorption,
                          RedsAttenuationType attenuationType, double muffle) {
+        this(bounces, reverbBounces, segmentLength, permeation, reverb, permeationAbsorption, maxBlocksPermeated,
+                bounceAbsorption, attenuationType, muffle, reverbBounces > bounces);
+    }
+
+    public TraceSettings(int bounces, int reverbBounces, double segmentLength, boolean permeation, boolean reverb,
+                         double permeationAbsorption, double maxBlocksPermeated, double bounceAbsorption,
+                         RedsAttenuationType attenuationType, double muffle, boolean measureRoom) {
+        this.measureRoom = measureRoom;
         this.muffle = Math.max(muffle, 0.0);
         this.bounces = bounces;
         this.reverbBounces = Math.max(bounces, reverbBounces);
