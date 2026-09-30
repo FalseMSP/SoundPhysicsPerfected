@@ -206,6 +206,11 @@ public class Config {
     @SerialEntry public boolean directionalReverb = true;
 
     @AutoGen(category = "reverb_tuning", group = "main")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.reverbZones.description")
+    @SerialEntry public boolean reverbZones = true;
+
+    @AutoGen(category = "reverb_tuning", group = "main")
     @IntSlider(min = 0, max = 32, step = 1)
     @FormatTranslation("sound_physics_perfected.config.unit.rays")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.reverbBounces.description")

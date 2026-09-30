@@ -95,6 +95,8 @@
   "yacl3.config.${id}:config.experimentalReverb.description": "Enables an experimental reverb which allows reverb to be louder than ",
   "yacl3.config.${id}:config.directionalReverb": "Directional Reverb",
   "yacl3.config.${id}:config.directionalReverb.description": "Echoes come from where they really bounce: reflections lean towards a nearby wall, and at a cave mouth the cave's reverb comes from inside the cave.",
+  "yacl3.config.${id}:config.reverbZones": "Reverb Zones",
+  "yacl3.config.${id}:config.reverbZones.description": "Sounds in a different space from you ring like that space: a zombie deep in a cave echoes like the cave while you stand outside, heard from the cave's direction and only as loud as that echo reaches you.",
   "yacl3.config.${id}:config.reverbBounces": "Reverb Ray Bounces",
   "yacl3.config.${id}:config.reverbBounces.description": "How many times rays keep bouncing to measure the room (they stop connecting to sounds after Ray Bounced #). More = steadier reverb in complex caves and buildings.\\nPERFORMANCE IMPACT: LOW",
   "yacl3.config.${id}:config.globalReverbIntensity": "Global Reverb Intensity",

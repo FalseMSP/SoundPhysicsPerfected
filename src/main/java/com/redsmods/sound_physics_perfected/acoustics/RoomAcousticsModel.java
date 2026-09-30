@@ -190,7 +190,7 @@ public final class RoomAcousticsModel {
      * Turns a weighted sum of unit directions into an EAX pan vector: direction of the mean, and a focus that
      * blends from fully diffuse to fully directional as the mean gets longer (a closed room averages out to ~0).
      */
-    static float[] focus(double x, double y, double z, double weight) {
+    public static float[] focus(double x, double y, double z, double weight) {
         if (weight <= 0.0) return ZERO;
         x /= weight;
         y /= weight;

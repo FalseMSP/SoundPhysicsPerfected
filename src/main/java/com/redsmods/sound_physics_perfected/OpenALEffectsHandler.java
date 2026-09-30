@@ -1,6 +1,7 @@
 package com.redsmods.sound_physics_perfected;
 
 import com.redsmods.sound_physics_perfected.acoustics.ReverbParams;
+import com.redsmods.sound_physics_perfected.acoustics.ReverbZones;
 import com.redsmods.sound_physics_perfected.config.Config;
 import com.redsmods.sound_physics_perfected.config.DebugType;
 import org.lwjgl.openal.AL10;
@@ -23,14 +24,24 @@ public class OpenALEffectsHandler {
     private int directBlockFilter = 0;
     public boolean efxInitialized = false;
 
-    /** Parameters currently loaded into the effect slot (null = none / legacy). */
-    private ReverbParams loadedParams;
+    /** What is currently loaded into one effect slot, for change detection and rate limiting. */
+    private static final class SlotState {
+        ReverbParams loaded;
+        final float[] pans = new float[6];
+        long lastStructuralLoad;
+        float slotGain = -1.0f;
+    }
+
+    private final SlotState mainState = new SlotState();
     private boolean legacyParamsLoaded;
-    private long lastStructuralLoad;
-    /** Listener-space pan vectors currently loaded (reflections xyz, late reverb xyz). */
-    private final float[] loadedPans = new float[6];
     /** Minimum time between reverb network rebuilds (decay, density, diffusion... changes). */
     private static final long STRUCTURAL_INTERVAL_NANOS = 250_000_000L;
+
+    // Extra reverb slots for sounds in other spaces (see ReverbZones); used through each source's second send.
+    private final int[] zoneSlots = new int[ReverbZones.MAX_ZONES];
+    private final int[] zoneEffects = new int[ReverbZones.MAX_ZONES];
+    private final SlotState[] zoneStates = new SlotState[ReverbZones.MAX_ZONES];
+    private boolean zonesAvailable;
 
     public int getDirectBlockFilter() {
         return directBlockFilter;
@@ -47,55 +58,90 @@ public class OpenALEffectsHandler {
      */
     public void applyEnvironment(ReverbParams p) {
         if (!efxInitialized || p == null) return;
+        if (legacyParamsLoaded) mainState.loaded = null;
+        load(reverbEffect, auxFXSlot, mainState, p, 1.0f);
+        legacyParamsLoaded = false;
+    }
+
+    private void load(int effect, int slot, SlotState state, ReverbParams p, float slotGain) {
         float[] pans = listenerSpacePans(p, RaycastingHelper.getListenerBasis());
         long now = System.nanoTime();
-        if (loadedParams != null && !legacyParamsLoaded) {
-            boolean structural = p.differsStructurallyFrom(loadedParams);
-            if (structural && now - lastStructuralLoad < STRUCTURAL_INTERVAL_NANOS) {
+        if (state.loaded != null) {
+            boolean structural = p.differsStructurallyFrom(state.loaded);
+            if (structural && now - state.lastStructuralLoad < STRUCTURAL_INTERVAL_NANOS) {
                 // OpenAL Soft rebuilds (and cross-fades) its reverb network whenever decay, density etc. change.
                 // Doing that every tick of a transition splits tails between networks, so those parameters
                 // follow at a slower rate while levels keep updating every tick.
-                p = p.withStructureOf(loadedParams);
+                p = p.withStructureOf(state.loaded);
                 structural = false;
             }
             boolean turned = false;
-            for (int i = 0; i < 6; i++) turned |= Math.abs(pans[i] - loadedPans[i]) > 0.03f;
-            if (!structural && !turned && !p.differsInLevelsFrom(loadedParams)) return;
-            if (structural) lastStructuralLoad = now;
+            for (int i = 0; i < 6; i++) turned |= Math.abs(pans[i] - state.pans[i]) > 0.03f;
+            boolean gainChanged = Math.abs(slotGain - state.slotGain) > 0.01f;
+            if (!structural && !turned && !gainChanged && !p.differsInLevelsFrom(state.loaded)) return;
+            if (structural) state.lastStructuralLoad = now;
         } else {
-            lastStructuralLoad = now;
+            state.lastStructuralLoad = now;
         }
 
-        alEffectf(reverbEffect, AL_EAXREVERB_DENSITY, p.density);
-        alEffectf(reverbEffect, AL_EAXREVERB_DIFFUSION, p.diffusion);
-        alEffectf(reverbEffect, AL_EAXREVERB_GAIN, p.gain);
-        alEffectf(reverbEffect, AL_EAXREVERB_GAINHF, p.gainHF);
-        alEffectf(reverbEffect, AL_EAXREVERB_GAINLF, p.gainLF);
-        alEffectf(reverbEffect, AL_EAXREVERB_DECAY_TIME, p.decayTime);
-        alEffectf(reverbEffect, AL_EAXREVERB_DECAY_HFRATIO, p.decayHFRatio);
-        alEffectf(reverbEffect, AL_EAXREVERB_DECAY_LFRATIO, p.decayLFRatio);
-        alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_GAIN, p.reflectionsGain);
-        alEffectf(reverbEffect, AL_EAXREVERB_REFLECTIONS_DELAY, p.reflectionsDelay);
-        alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN, p.lateReverbGain);
-        alEffectf(reverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY, p.lateReverbDelay);
-        alEffectf(reverbEffect, AL_EAXREVERB_ECHO_TIME, p.echoTime);
-        alEffectf(reverbEffect, AL_EAXREVERB_ECHO_DEPTH, p.echoDepth);
-        alEffectf(reverbEffect, AL_EAXREVERB_MODULATION_TIME, p.modulationTime);
-        alEffectf(reverbEffect, AL_EAXREVERB_MODULATION_DEPTH, p.modulationDepth);
-        alEffectf(reverbEffect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, p.airAbsorptionGainHF);
-        alEffectf(reverbEffect, AL_EAXREVERB_HFREFERENCE, p.hfReference);
-        alEffectf(reverbEffect, AL_EAXREVERB_LFREFERENCE, p.lfReference);
-        alEffectf(reverbEffect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, p.roomRolloffFactor);
-        alEffectfv(reverbEffect, AL_EAXREVERB_REFLECTIONS_PAN, new float[]{pans[0], pans[1], pans[2]});
-        alEffectfv(reverbEffect, AL_EAXREVERB_LATE_REVERB_PAN, new float[]{pans[3], pans[4], pans[5]});
+        alEffectf(effect, AL_EAXREVERB_DENSITY, p.density);
+        alEffectf(effect, AL_EAXREVERB_DIFFUSION, p.diffusion);
+        alEffectf(effect, AL_EAXREVERB_GAIN, p.gain);
+        alEffectf(effect, AL_EAXREVERB_GAINHF, p.gainHF);
+        alEffectf(effect, AL_EAXREVERB_GAINLF, p.gainLF);
+        alEffectf(effect, AL_EAXREVERB_DECAY_TIME, p.decayTime);
+        alEffectf(effect, AL_EAXREVERB_DECAY_HFRATIO, p.decayHFRatio);
+        alEffectf(effect, AL_EAXREVERB_DECAY_LFRATIO, p.decayLFRatio);
+        alEffectf(effect, AL_EAXREVERB_REFLECTIONS_GAIN, p.reflectionsGain);
+        alEffectf(effect, AL_EAXREVERB_REFLECTIONS_DELAY, p.reflectionsDelay);
+        alEffectf(effect, AL_EAXREVERB_LATE_REVERB_GAIN, p.lateReverbGain);
+        alEffectf(effect, AL_EAXREVERB_LATE_REVERB_DELAY, p.lateReverbDelay);
+        alEffectf(effect, AL_EAXREVERB_ECHO_TIME, p.echoTime);
+        alEffectf(effect, AL_EAXREVERB_ECHO_DEPTH, p.echoDepth);
+        alEffectf(effect, AL_EAXREVERB_MODULATION_TIME, p.modulationTime);
+        alEffectf(effect, AL_EAXREVERB_MODULATION_DEPTH, p.modulationDepth);
+        alEffectf(effect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, p.airAbsorptionGainHF);
+        alEffectf(effect, AL_EAXREVERB_HFREFERENCE, p.hfReference);
+        alEffectf(effect, AL_EAXREVERB_LFREFERENCE, p.lfReference);
+        alEffectf(effect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, p.roomRolloffFactor);
+        alEffectfv(effect, AL_EAXREVERB_REFLECTIONS_PAN, new float[]{pans[0], pans[1], pans[2]});
+        alEffectfv(effect, AL_EAXREVERB_LATE_REVERB_PAN, new float[]{pans[3], pans[4], pans[5]});
         // Air absorption is already part of the modelled HF decay; do not let EFX limit it a second time.
-        alEffecti(reverbEffect, AL_EAXREVERB_DECAY_HFLIMIT, AL10.AL_FALSE);
-        alAuxiliaryEffectSloti(auxFXSlot, AL_EFFECTSLOT_EFFECT, reverbEffect);
+        alEffecti(effect, AL_EAXREVERB_DECAY_HFLIMIT, AL10.AL_FALSE);
+        alAuxiliaryEffectSloti(slot, AL_EFFECTSLOT_EFFECT, effect);
+        alAuxiliaryEffectSlotf(slot, AL_EFFECTSLOT_GAIN, clamp(slotGain, 0.0f, 1.0f));
         logALError("Failed to load reverb environment");
 
-        loadedParams = p;
-        legacyParamsLoaded = false;
-        System.arraycopy(pans, 0, loadedPans, 0, 6);
+        state.loaded = p;
+        state.slotGain = slotGain;
+        System.arraycopy(pans, 0, state.pans, 0, 6);
+    }
+
+    /** Whether this device gives sources a second send, which reverb zones need. */
+    public boolean zonesAvailable() {
+        return efxInitialized && zonesAvailable;
+    }
+
+    /** Loads one reverb zone (creating its slot on first use); gain 0 silences it. */
+    public void applyZone(int index, ReverbParams p, float gain) {
+        if (!zonesAvailable() || p == null) return;
+        if (zoneSlots[index] == 0) {
+            zoneEffects[index] = EXTEfx.alGenEffects();
+            EXTEfx.alEffecti(zoneEffects[index], EXTEfx.AL_EFFECT_TYPE, EXTEfx.AL_EFFECT_EAXREVERB);
+            zoneSlots[index] = EXTEfx.alGenAuxiliaryEffectSlots();
+            EXTEfx.alAuxiliaryEffectSloti(zoneSlots[index], EXTEfx.AL_EFFECTSLOT_AUXILIARY_SEND_AUTO, AL11.AL_TRUE);
+            zoneStates[index] = new SlotState();
+            logALError("Failed creating reverb zone");
+        }
+        load(zoneEffects[index], zoneSlots[index], zoneStates[index], p, gain);
+    }
+
+    /** Routes a source's second send to a reverb zone, or disconnects it (zone -1). Unfiltered: the zone's own
+     * gain already says how much of that space's reverb reaches the listener. */
+    public void attachZoneSend(int sourceId, int zone) {
+        if (!zonesAvailable()) return;
+        int slot = zone >= 0 && zoneSlots[zone] != 0 ? zoneSlots[zone] : AL_EFFECTSLOT_NULL;
+        AL11.alSource3i(sourceId, AL_AUXILIARY_SEND_FILTER, slot, 1, AL_FILTER_NULL);
     }
 
     /**
@@ -120,14 +166,15 @@ public class OpenALEffectsHandler {
     /** The legacy modes were always heard with the initial parameters; put those back when switching to them. */
     public void useLegacyParams() {
         if (!efxInitialized || legacyParamsLoaded) return;
+        mainState.loaded = null;
         // Recreate the effect so every parameter returns to the EAX default, exactly as at start-up.
         EXTEfx.alDeleteEffects(reverbEffect);
         reverbEffect = EXTEfx.alGenEffects();
         EXTEfx.alEffecti(reverbEffect, EXTEfx.AL_EFFECT_TYPE, EXTEfx.AL_EFFECT_EAXREVERB);
         setBasicReverbParams();
         alAuxiliaryEffectSloti(auxFXSlot, AL_EFFECTSLOT_EFFECT, reverbEffect);
+        alAuxiliaryEffectSlotf(auxFXSlot, AL_EFFECTSLOT_GAIN, 1.0f);
         legacyParamsLoaded = true;
-        loadedParams = null;
     }
 
     /**
@@ -343,8 +390,9 @@ public class OpenALEffectsHandler {
             EXTEfx.alAuxiliaryEffectSloti(auxFXSlot, EXTEfx.AL_EFFECTSLOT_EFFECT, reverbEffect);
             logALError("Failed attaching reverb to slot");
 
-            loadedParams = null;
+            mainState.loaded = null;
             legacyParamsLoaded = true;
+            zonesAvailable = ALC10.alcGetInteger(currentDevice, EXTEfx.ALC_MAX_AUXILIARY_SENDS) >= 2;
             efxInitialized = true;
             System.out.println("Reverb system initialized successfully");
 
@@ -403,8 +451,15 @@ public class OpenALEffectsHandler {
                 directBlockFilter = 0;
             }
 
+            for (int i = 0; i < ReverbZones.MAX_ZONES; i++) {
+                if (zoneSlots[i] != 0) EXTEfx.alDeleteAuxiliaryEffectSlots(zoneSlots[i]);
+                if (zoneEffects[i] != 0) EXTEfx.alDeleteEffects(zoneEffects[i]);
+                zoneSlots[i] = 0;
+                zoneEffects[i] = 0;
+            }
+
             efxInitialized = false;
-            loadedParams = null;
+            mainState.loaded = null;
             System.out.println("EFX resources cleaned up successfully");
 
         } catch (Exception e) {
@@ -416,7 +471,9 @@ public class OpenALEffectsHandler {
             sendFilter = 0;
             efxInitialized = false;
             directBlockFilter = 0;
-            loadedParams = null;
+            mainState.loaded = null;
+            java.util.Arrays.fill(zoneSlots, 0);
+            java.util.Arrays.fill(zoneEffects, 0);
         }
     }
 

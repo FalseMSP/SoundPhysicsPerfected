@@ -141,6 +141,8 @@ public abstract class SoundSystemMixin {
         }
 
         float airAbsorption = mode == LegacyReverb.MODERN ? config.airAbsorption : 0.0f;
+        RaycastingHelper.updateZones(instanceToChannel.keySet());
+        boolean zones = fxHandler.zonesAvailable();
         for (Map.Entry<SoundInstance, ChannelAccess.ChannelHandle> entry : instanceToChannel.entrySet()) {
             SoundInstance instance = entry.getKey();
             ChannelAccess.ChannelHandle handle = entry.getValue();
@@ -154,6 +156,7 @@ public abstract class SoundSystemMixin {
             float hfRatio = permeated ? ((RedPermeatedSoundInstance) instance).getHfRatio() : 1.0f;
             boolean send = reverb && inWorld;
             boolean air = inWorld && airAbsorption > 0.0f && !instance.isRelative();
+            int zone = send ? RaycastingHelper.zoneOf(instance) : -1;
             if (!permeated && !send && !air) continue;
 
             // Runs on the sound thread, in order with the channel's own play/stop commands.
@@ -171,6 +174,9 @@ public abstract class SoundSystemMixin {
                 }
                 if (air) {
                     AL10.alSourcef(source, EXTEfx.AL_AIR_ABSORPTION_FACTOR, Math.min(airAbsorption, 10.0f));
+                }
+                if (zones) {
+                    fxHandler.attachZoneSend(source, zone);
                 }
             });
         }
@@ -190,6 +196,7 @@ public abstract class SoundSystemMixin {
         Config config = Config.getInstance();
         if (config.reverb && config.directionalReverb && config.legacyReverb == LegacyReverb.MODERN && fxHandler.efxInitialized) {
             fxHandler.applyEnvironment(RaycastingHelper.getCurrentReverb());
+            RaycastingHelper.refreshZones();
         }
     }
 

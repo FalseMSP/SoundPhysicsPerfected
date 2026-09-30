@@ -189,6 +189,87 @@ public final class ListenerTrace {
         }
     }
 
+    /** What a sound's own surroundings sound like, and how much of that reverb reaches the listener. */
+    public static final class SourceEnvironment {
+        public final ReverbStats stats = new ReverbStats();
+        /** Energy of the sound's reflections that the listener can see, and in total. */
+        public double visibleEnergy, totalEnergy;
+        /** Energy-weighted horizontal direction from the listener to those visible reflections. */
+        public double dirX, dirZ;
+
+        /** Fraction of the sound's reverberant energy that happens where the listener can hear it directly. */
+        public double visibleFraction() {
+            return totalEnergy > 0.0 ? visibleEnergy / totalEnergy : 0.0;
+        }
+    }
+
+    /**
+     * Rays from a sound source, to estimate the reverb of the space the sound is in (which may not be the
+     * listener's) and how much of it reaches the listener. Like the listener's rays: scattered bounces,
+     * materials, escapes to open air.
+     */
+    public static void traceSource(RayOps ops, TraceSettings s, double sx, double sy, double sz,
+                                   double ex, double ey, double ez, double[] dirs, int bounces, SourceEnvironment env) {
+        ReverbStats stats = env.stats;
+        stats.segmentLength = s.segmentLength;
+        int rays = dirs.length / 3;
+        for (int ray = 0; ray < rays; ray++) {
+            stats.rays++;
+            double px = sx, py = sy, pz = sz;
+            double dx = dirs[ray * 3], dy = dirs[ray * 3 + 1], dz = dirs[ray * 3 + 2];
+            double energy = 1.0;
+            for (int bounce = 0; bounce <= bounces; bounce++) {
+                if (!ops.firstHit(px, py, pz, dx, dy, dz, s.segmentLength)) {
+                    stats.escape(bounce, false);
+                    break;
+                }
+                double t = ops.hitT();
+                double hx = px + dx * t, hy = py + dy * t, hz = pz + dz * t;
+                int nx = ops.hitNormalX(), ny = ops.hitNormalY(), nz = ops.hitNormalZ();
+                AcousticMaterial material = ops.hitMaterial();
+                stats.hit(bounce, t, material, Math.abs(dx * nx + dy * ny + dz * nz), false);
+                energy *= s.bounceAbsorption * s.bounceAbsorption * material.reflectivity();
+
+                // Does this reflection reach the listener directly?
+                double tx = ex - hx, ty = ey - hy, tz = ez - hz;
+                double toListener = Math.sqrt(tx * tx + ty * ty + tz * tz);
+                env.totalEnergy += energy;
+                if (toListener > 1.0E-6) {
+                    double inv = 1.0 / toListener;
+                    if (ops.clearPath(hx + tx * inv * 0.1, hy + ty * inv * 0.1, hz + tz * inv * 0.1, ex, ey, ez, 0.0)) {
+                        env.visibleEnergy += energy;
+                        env.dirX -= tx * inv * energy;
+                        env.dirZ -= tz * inv * energy;
+                    }
+                }
+
+                if (nx != 0) dx = -dx;
+                if (ny != 0) dy = -dy;
+                if (nz != 0) dz = -dz;
+                if (material.scattering > 0.0f) {
+                    long h = mix(((long) ray << 8) ^ bounce ^ 0x2545F4914F6CDD1DL);
+                    double u1 = (h >>> 11) * 0x1.0p-53, u2 = (mix(h) >>> 11) * 0x1.0p-53;
+                    double rz = 2.0 * u1 - 1.0, rr = Math.sqrt(Math.max(0.0, 1.0 - rz * rz)), phi = 2.0 * Math.PI * u2;
+                    double lx = nx + rr * Math.cos(phi), ly = ny + rr * Math.sin(phi), lz = nz + rz;
+                    double ll = Math.sqrt(lx * lx + ly * ly + lz * lz);
+                    if (ll > 1.0E-6) {
+                        double sc = material.scattering;
+                        double qx = dx * (1 - sc) + lx / ll * sc, qy = dy * (1 - sc) + ly / ll * sc, qz = dz * (1 - sc) + lz / ll * sc;
+                        double ql = Math.sqrt(qx * qx + qy * qy + qz * qz);
+                        if (ql > 1.0E-6 && (qx * nx + qy * ny + qz * nz) / ql > 1.0E-3) {
+                            dx = qx / ql;
+                            dy = qy / ql;
+                            dz = qz / ql;
+                        }
+                    }
+                }
+                px = hx + dx * 0.01;
+                py = hy + dy * 0.01;
+                pz = hz + dz * 0.01;
+            }
+        }
+    }
+
     /** SplitMix64 finaliser: deterministic per ray and bounce, so identical geometry gives identical results. */
     private static long mix(long z) {
         z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;

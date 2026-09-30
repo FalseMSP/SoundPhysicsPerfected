@@ -1,6 +1,7 @@
 package com.redsmods.sound_physics_perfected.wrappers;
 
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
+import com.redsmods.sound_physics_perfected.acoustics.ReverbZones;
 import com.redsmods.sound_physics_perfected.config.Config;
 import com.redsmods.sound_physics_perfected.config.RedsAttenuationType;
 import lombok.Getter;
@@ -35,6 +36,8 @@ public class RedTickableInstance implements TickableSoundInstance {
     private final boolean isBlacklisted;
     @Getter private float originalVolume;
     @Getter private Vec3 originalPosition;
+    /** Reverb of the space this sound is in, when that may differ from the listener's (see ReverbZones). */
+    @Setter private ReverbZones.SourceReverb sourceReverb;
 
     public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped, float attenuationMultiplier) {
         this.location = location;

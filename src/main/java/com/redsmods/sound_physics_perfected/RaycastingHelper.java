@@ -1,5 +1,6 @@
 package com.redsmods.sound_physics_perfected;
 
+import com.redsmods.sound_physics_perfected.ReverbHelpers.LegacyReverb;
 import com.redsmods.sound_physics_perfected.acoustics.AcousticMaterials;
 import com.redsmods.sound_physics_perfected.acoustics.ClipRayOps;
 import com.redsmods.sound_physics_perfected.acoustics.LevelVoxelWorld;
@@ -7,6 +8,7 @@ import com.redsmods.sound_physics_perfected.acoustics.ListenerTrace;
 import com.redsmods.sound_physics_perfected.acoustics.RayOps;
 import com.redsmods.sound_physics_perfected.acoustics.ReverbParams;
 import com.redsmods.sound_physics_perfected.acoustics.ReverbStats;
+import com.redsmods.sound_physics_perfected.acoustics.ReverbZones;
 import com.redsmods.sound_physics_perfected.acoustics.RoomAcousticsModel;
 import com.redsmods.sound_physics_perfected.acoustics.TraceSettings;
 import com.redsmods.sound_physics_perfected.acoustics.VoxelRayOps;
@@ -96,6 +98,9 @@ public final class RaycastingHelper {
     private static WeakReference<Level> lastLevel = new WeakReference<>(null);
     private static Vec3 lastTraceEye = Vec3.ZERO;
     private static int ticksSinceTrace;
+    /** Where / how long ago the room was last measured with the full reverb bounce count. */
+    private static Vec3 lastFullReverbEye = Vec3.ZERO;
+    private static int ticksSinceFullReverb = Integer.MAX_VALUE / 2;
     private static int tickCounter;
     private static long lastErrorLog;
     private static volatile boolean subLevelsNearby;
@@ -120,7 +125,8 @@ public final class RaycastingHelper {
     private record Job(Level level, Player player, Vec3 eye, TraceSettings settings, RoomAcousticsModel.Settings room,
                        double[] dirs, List<Target> targets, ListenerTrace.Targets arrays, boolean fast,
                        boolean barrierAsAir, boolean useExplosionResistance, double maxBlocksPermeated,
-                       double stepSize, int raysCast, int raysBounced, int generation, boolean hasNewSounds) {
+                       double stepSize, int raysCast, int raysBounced, int generation, boolean hasNewSounds,
+                       boolean sourceReverb, double listenerEnclosure, boolean fullReverb) {
         RayOps newOps() {
             if (fast) {
                 return new VoxelRayOps(new LevelVoxelWorld(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated));
@@ -130,8 +136,18 @@ public final class RaycastingHelper {
     }
 
     private record Result(Job job, ListenerTrace.Accumulator paths, double[] obstruction, ReverbParams environment,
-                          long nanos) {
+                          ReverbZones.SourceReverb[] sourceReverbs, long nanos) {
     }
+
+    // --- Per-sound reverb (sounds in other spaces) -----------------------------------------------------------------
+    private static final double[] SOURCE_DIRECTIONS = ListenerTrace.fibonacciSphere(32);
+    private static final int SOURCE_BOUNCES = 5;
+    private static final long SOURCE_CACHE_NANOS = 2_000_000_000L;
+    private record CachedSourceReverb(ReverbZones.SourceReverb reverb, long nanos) {
+    }
+    private static final Map<Long, CachedSourceReverb> SOURCE_CACHE = new ConcurrentHashMap<>();
+    private static final ReverbZones ZONES = new ReverbZones();
+    private static final Map<SoundInstance, Integer> zoneOfSound = new IdentityHashMap<>();
 
     // ================================================================================================================
     // Per tick entry point (client thread, after vanilla ticked its sounds)
@@ -140,6 +156,7 @@ public final class RaycastingHelper {
     public static void onSoundEngineTick(Level level, Player player) {
         try {
             tickCounter++;
+            ticksSinceFullReverb++;
             pump(level, player, false);
             updateReverbSmoothing();
         } catch (RuntimeException e) {
@@ -204,6 +221,7 @@ public final class RaycastingHelper {
         currentReverb = null;
         lastStats = new ReverbStats();
         AcousticMaterials.clearCache(); // block tags can differ per server
+        SOURCE_CACHE.clear();
     }
 
     // ================================================================================================================
@@ -256,7 +274,11 @@ public final class RaycastingHelper {
             directionsFor = config.raysCast;
         }
 
-        TraceSettings settings = new TraceSettings(config.raysBounced, config.reverbBounces, 16.0 * config.maxRayLength, config.permeation,
+        // The room only needs re-measuring (with the long reverb bounce chains) when the listener moved or every
+        // 10 ticks; traces in between, run for new sounds, keep the last estimate.
+        boolean fullReverb = eye.distanceToSqr(lastFullReverbEye) > 0.25 || ticksSinceFullReverb >= 10;
+        TraceSettings settings = new TraceSettings(config.raysBounced, fullReverb ? config.reverbBounces : config.raysBounced,
+                16.0 * config.maxRayLength, config.permeation,
                 config.reverb, config.permeationAbsorption, config.maxBlocksPermeated,
                 Math.max(config.bounceAbsorptionMultiplier, 0.001), config.attenuationType);
         subLevelsNearby = subLevelsNear(level, eye, Math.max(settings.maxTotalDistance, settings.segmentLength));
@@ -264,9 +286,16 @@ public final class RaycastingHelper {
 
         lastTraceEye = eye;
         ticksSinceTrace = 0;
+        if (fullReverb) {
+            lastFullReverbEye = eye;
+            ticksSinceFullReverb = 0;
+        }
+        boolean sourceReverb = config.reverb && config.reverbZones && config.legacyReverb == LegacyReverb.MODERN
+                && fxHandler.zonesAvailable();
         return new Job(level, player, eye, settings, roomSettings(config), directions, targets, arrays, fast,
                 config.barrierAsAir, config.useExplosionResistance, config.maxBlocksPermeated,
-                config.permeationStepSize, config.raysCast, config.raysBounced, generation, hasNewSounds);
+                config.permeationStepSize, config.raysCast, config.raysBounced, generation, hasNewSounds, sourceReverb,
+                currentReverb == null ? 0.0 : currentReverb.enclosure, fullReverb);
     }
 
     private static RoomAcousticsModel.Settings roomSettings(Config c) {
@@ -310,14 +339,107 @@ public final class RaycastingHelper {
             }, POOL));
         }
 
+        ReverbZones.SourceReverb[] sourceReverbs = new ReverbZones.SourceReverb[targetCount];
+        if (job.sourceReverb) {
+            for (int j = 0; j < targetCount; j++) {
+                int target = j;
+                parts.add(CompletableFuture.supplyAsync(() -> {
+                    sourceReverbs[target] = sourceReverb(job, target);
+                    return new ListenerTrace.Accumulator(targetCount);
+                }, POOL));
+            }
+        }
+
         return CompletableFuture.allOf(parts.toArray(new CompletableFuture[0])).thenApply(ignored -> {
             ListenerTrace.Accumulator total = new ListenerTrace.Accumulator(targetCount);
             for (CompletableFuture<ListenerTrace.Accumulator> part : parts) {
                 total.merge(part.join()); // merged in a fixed order, so results are deterministic
             }
             return new Result(job, total, obstruction, RoomAcousticsModel.estimate(total.stats, job.room),
-                    System.nanoTime() - start);
+                    sourceReverbs, System.nanoTime() - start);
         });
+    }
+
+    /**
+     * The reverb of the space a sound is in, and how much of it reaches the listener. Skipped for nearby sounds in
+     * plain view (they share the listener's space); cached per 2-block cell of sound and listener.
+     */
+    private static ReverbZones.SourceReverb sourceReverb(Job job, int j) {
+        double sx = job.arrays.x[j], sy = job.arrays.y[j], sz = job.arrays.z[j];
+        Vec3 eye = job.eye;
+        double distance = Math.sqrt(eye.distanceToSqr(sx, sy, sz));
+        RayOps ops = job.newOps();
+        // A sound in plain view shares the listener's space when it is close, or when the listener is enclosed
+        // (in the open, a visible sound can still be inside a cave or building).
+        if ((distance < 6.0 || job.listenerEnclosure > 0.9) && ops.clearPath(eye.x, eye.y, eye.z, sx, sy, sz, 1.0)) {
+            return null;
+        }
+        long key = cellKey(sx, sy, sz) * 31L + cellKey(eye.x, eye.y, eye.z);
+        long now = System.nanoTime();
+        CachedSourceReverb cached = SOURCE_CACHE.get(key);
+        if (cached != null && now - cached.nanos < SOURCE_CACHE_NANOS) {
+            return cached.reverb;
+        }
+        ListenerTrace.SourceEnvironment env = new ListenerTrace.SourceEnvironment();
+        ListenerTrace.traceSource(ops, job.settings, sx, sy, sz, eye.x, eye.y, eye.z, SOURCE_DIRECTIONS, SOURCE_BOUNCES, env);
+        ReverbParams params = RoomAcousticsModel.estimate(env.stats, job.room);
+        float[] pan = job.room.directional ? RoomAcousticsModel.focus(env.dirX, 0.0, env.dirZ, env.visibleEnergy) : new float[3];
+        // Standing where half of a space's reflections are in view already means hearing its full reverb.
+        float gain = (float) Math.min(1.0, env.visibleFraction() / 0.5);
+        ReverbZones.SourceReverb reverb = new ReverbZones.SourceReverb(params, gain, pan[0], pan[2]);
+        if (SOURCE_CACHE.size() > 1024) SOURCE_CACHE.clear();
+        SOURCE_CACHE.put(key, new CachedSourceReverb(reverb, now));
+        return reverb;
+    }
+
+    private static long cellKey(double x, double y, double z) {
+        long cx = (long) Math.floor(x) >> 1, cy = (long) Math.floor(y) >> 1, cz = (long) Math.floor(z) >> 1;
+        return (cx & 0x1FFFFF) << 42 | (cy & 0x1FFFFF) << 21 | (cz & 0x1FFFFF);
+    }
+
+    /**
+     * Once per tick, before sends are attached: offer every playing sound that carries its own reverb to the
+     * reverb zones (strongest first) and load the zones into their effect slots.
+     */
+    public static void updateZones(Iterable<SoundInstance> playing) {
+        zoneOfSound.clear();
+        ZONES.beginTick();
+        Config config = Config.getInstance();
+        boolean enabled = config.reverb && config.reverbZones && fxHandler.zonesAvailable()
+                && config.legacyReverb == LegacyReverb.MODERN;
+        if (enabled) {
+            List<RedTickableInstance> candidates = new ArrayList<>();
+            for (SoundInstance sound : playing) {
+                if (sound instanceof RedTickableInstance red && red.getSourceReverb() != null && !red.isStopped()) {
+                    candidates.add(red);
+                }
+            }
+            candidates.sort((a, b) -> Float.compare(b.getOriginalVolume() * b.getSourceReverb().gain,
+                    a.getOriginalVolume() * a.getSourceReverb().gain));
+            ReverbParams listener = currentReverb;
+            for (RedTickableInstance sound : candidates) {
+                int zone = ZONES.offer(sound.getSourceReverb(), sound.getOriginalVolume(), listener);
+                if (zone >= 0) zoneOfSound.put(sound, zone);
+            }
+        }
+        ZONES.endTick(0.05, Math.max(config.reverbSmoothing, 0.0f));
+        refreshZones();
+    }
+
+    /** Loads active zones into OpenAL (also called every frame, since their direction depends on the camera). */
+    public static void refreshZones() {
+        for (int i = 0; i < ReverbZones.MAX_ZONES; i++) {
+            ReverbZones.Zone zone = ZONES.zone(i);
+            if (zone.params() != null) {
+                fxHandler.applyZone(i, zone.withPan(), zone.active() ? zone.gain() : 0.0f);
+            }
+        }
+    }
+
+    /** Reverb zone the given playing sound should also send to, or -1. */
+    public static int zoneOf(SoundInstance sound) {
+        Integer zone = zoneOfSound.get(sound);
+        return zone == null ? -1 : zone;
     }
 
     // ================================================================================================================
@@ -353,7 +475,9 @@ public final class RaycastingHelper {
         Job job = result.job;
         ListenerTrace.Accumulator paths = result.paths;
         lastStats = paths.stats;
-        targetReverb = result.environment;
+        if (job.fullReverb || targetReverb == null) {
+            targetReverb = result.environment;
+        }
         lastTraceMillis = result.nanos / 1.0e6;
         lastTraceSounds = job.targets.size();
         int totalHits = paths.stats.totalHits();
@@ -370,10 +494,14 @@ public final class RaycastingHelper {
             }
             try {
                 Placement p = new Placement(job, target, paths, j, result.obstruction[j], totalHits);
+                RedTickableInstance placed;
                 if (job.settings.permeation) {
-                    placePermeated(p);
+                    placed = placePermeated(p);
                 } else {
-                    placeDirect(p);
+                    placed = placeDirect(p);
+                }
+                if (placed != null && job.sourceReverb) {
+                    placed.setSourceReverb(result.sourceReverbs[j]);
                 }
             } catch (RuntimeException e) {
                 logError("Error placing a traced sound", e);
@@ -449,13 +577,13 @@ public final class RaycastingHelper {
     }
 
     /** Line-of-sight (green ray) mode. */
-    private static void placeDirect(Placement p) {
+    private static RedTickableInstance placeDirect(Placement p) {
         if (p.totalWeight == 0.0 && p.target.tickable != null) {
             RedTickableInstance sound = p.target.tickable;
             sound.setTargetVolume(0);
             sound.setTargetPosition(sound.getOriginalPosition());
             sound.setAttenuationMultiplier(0);
-            return;
+            return sound;
         }
         Vec3 position = p.apparentPosition();
         float volume = p.baseVolume() * p.confidence * p.attenuation;
@@ -464,7 +592,7 @@ public final class RaycastingHelper {
             sound.setTargetPosition(position);
             sound.setTargetVolume(Math.max(0.01f, Math.min(1.0f, volume)));
             sound.setAttenuationMultiplier(p.attenuation);
-            return;
+            return sound;
         }
         RedSoundInstance wrapper = (RedSoundInstance) p.sound;
         RedTickableInstance replacement = new RedTickableInstance(wrapper.getLocation(), wrapper.getSound(),
@@ -473,10 +601,11 @@ public final class RaycastingHelper {
         soundInstanceMap.put(wrapper.getOriginal(), replacement);
         debugMessage(wrapper.getOriginal());
         soundsToPlay.add(replacement);
+        return replacement;
     }
 
     /** Permeation (red ray) mode. */
-    private static void placePermeated(Placement p) {
+    private static RedTickableInstance placePermeated(Placement p) {
         Vec3 position = p.apparentPosition();
         float confidence = p.confidence;
         float permeationIndex = (float) p.muffle;
@@ -496,17 +625,17 @@ public final class RaycastingHelper {
                 sound.setPermeationIndex(0);
                 sound.setPermeationIndexHf(0);
                 sound.setAttenuationMultiplier(0);
-                return;
+                return sound;
             }
             sound.setTargetPosition(position);
             sound.setTargetVolume(volume);
             sound.setPermeationIndex(permeationIndex);
             sound.setPermeationIndexHf(permeationIndexHf);
             sound.setAttenuationMultiplier(p.attenuation);
-            return;
+            return sound;
         }
         if (p.target.tickable != null) {
-            return; // a line-of-sight instance left over from before permeation was switched on
+            return null; // a line-of-sight instance left over from before permeation was switched on
         }
         RedSoundInstance wrapper = (RedSoundInstance) p.sound;
         RedPermeatedSoundInstance replacement = new RedPermeatedSoundInstance(wrapper.getLocation(),
@@ -515,6 +644,7 @@ public final class RaycastingHelper {
         soundPermInstanceMap.put(wrapper.getOriginal(), replacement);
         debugMessage(wrapper.getOriginal());
         soundsToPlay.add(replacement);
+        return replacement;
     }
 
     private static void debugMessage(SoundInstance original) {
