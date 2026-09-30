@@ -166,10 +166,11 @@ public final class RaycastingHelper {
                        double stepSize, int raysCast, int raysBounced, int generation, boolean hasNewSounds,
                        boolean sourceReverb, double listenerEnclosure, boolean fullReverb, boolean water,
                        double energyFullShare, CachedTrail trail, TargetKey[] keys, double[][] cachedResults,
-                       long worldVersion, long nanos, boolean cacheable, long quality) {
+                       long worldVersion, long nanos, boolean cacheable, long quality, LevelVoxelWorld.CellMemo memo) {
         RayOps newOps() {
             if (fast) {
-                return new VoxelRayOps(new LevelVoxelWorld(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated, water));
+                return new VoxelRayOps(new LevelVoxelWorld(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated,
+                        water, memo));
             }
             return new ClipRayOps(level, player, barrierAsAir, useExplosionResistance, maxBlocksPermeated, stepSize);
         }
@@ -205,11 +206,14 @@ public final class RaycastingHelper {
         final ReverbStats stats;
         /** Ray count and reverb bounces it was traced with (see {@link #quality}). */
         final long quality;
+        /** The cells the paths' trace found empty: valid as long as the paths are (same world, same settings). */
+        final LevelVoxelWorld.CellMemo memo;
         final Map<TargetKey, double[]> results = new HashMap<>();
 
         CachedTrail(Level level, Vec3 eye, TraceSettings settings, long worldVersion, long nanos,
-                    ListenerTrace.Trail[] chunks, ReverbStats stats, long quality) {
+                    ListenerTrace.Trail[] chunks, ReverbStats stats, long quality, LevelVoxelWorld.CellMemo memo) {
             this.quality = quality;
+            this.memo = memo;
             this.level = level;
             this.eye = eye;
             this.settings = settings;
@@ -465,7 +469,7 @@ public final class RaycastingHelper {
                 config.permeationStepSize, config.raysCast, config.raysBounced, generation, hasNewSounds, sourceReverb,
                 currentReverb == null ? 0.0 : currentReverb.enclosure, fullReverb, config.waterAcoustics,
                 config.energyFullShare / 100.0, reuse ? cached : null, keys, cachedResults, worldVersion, now,
-                cacheable, quality);
+                cacheable, quality, reuse ? cached.memo : new LevelVoxelWorld.CellMemo());
     }
 
     /**
@@ -764,7 +768,7 @@ public final class RaycastingHelper {
         if (trail == null) {
             if (result.trails == null) return;
             trail = new CachedTrail(job.level, job.eye, job.settings, job.worldVersion, job.nanos, result.trails,
-                    result.paths.stats, job.quality);
+                    result.paths.stats, job.quality, job.memo);
             trailCache = trail;
         } else if (trail != trailCache) {
             return;

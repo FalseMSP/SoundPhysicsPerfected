@@ -31,6 +31,9 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
     /** The section the last lookup was in (rays stay in one for ~16 steps), or null when it holds only air. */
     private int sectionX = Integer.MIN_VALUE, sectionY = Integer.MIN_VALUE, sectionZ = Integer.MIN_VALUE;
     private LevelChunkSection section;
+    /** The current section's known-empty cells (see {@link CellMemo}), or null. */
+    private long[] sectionMemo;
+    private final CellMemo memo;
 
     private BlockState loadedState;
     private VoxelShape loadedShape;
@@ -53,6 +56,32 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
     private boolean loadedWaterlogged;
     private int knownNext;
 
+    /**
+     * Which cells of the sections a trace passes through are known to be empty, filled in as the trace's workers first
+     * look at them and shared between them: rays cross the same few thousand cells millions of times, and a known
+     * empty cell then costs one bit test instead of a palette lookup. One bit per cell (512 bytes per section); only
+     * emptiness is kept, since anything else needs its block state anyway. Lives for one trace (or one recorded
+     * trail), since the world can change in between.
+     * <p>
+     * Workers set bits without locking. A lost update only forgets that a cell is empty (it is looked up again), and
+     * bits are only ever set for empty cells, so no worker can see a cell as empty that is not.
+     */
+    public static final class CellMemo {
+        private final java.util.concurrent.ConcurrentHashMap<Long, long[]> sections =
+                new java.util.concurrent.ConcurrentHashMap<>();
+
+        long[] section(int sx, int sy, int sz) {
+            long key = ((long) sx & 0x3FFFFF) << 42 | ((long) sy & 0xFFFFF) << 22 | ((long) sz & 0x3FFFFF);
+            long[] cells = sections.get(key);
+            if (cells == null) {
+                long[] fresh = new long[64];
+                cells = sections.putIfAbsent(key, fresh);
+                if (cells == null) cells = fresh;
+            }
+            return cells;
+        }
+    }
+
     public LevelVoxelWorld(Level level, boolean barrierAsAir, boolean useExplosionResistance, double maxBlocksPermeated) {
         this(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated, true);
     }
@@ -60,6 +89,13 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
     /** @param water whether water is its own medium (reflective surface, costly to cross) rather than air */
     public LevelVoxelWorld(Level level, boolean barrierAsAir, boolean useExplosionResistance, double maxBlocksPermeated,
                            boolean water) {
+        this(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated, water, null);
+    }
+
+    /** @param memo cells already classified by this trace's other workers (null: none) */
+    public LevelVoxelWorld(Level level, boolean barrierAsAir, boolean useExplosionResistance, double maxBlocksPermeated,
+                           boolean water, CellMemo memo) {
+        this.memo = memo;
         this.level = level;
         this.water = water;
         this.chunks = level.getChunkSource();
@@ -89,11 +125,15 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
             sectionY = sy;
             sectionZ = sz;
             section = null;
+            sectionMemo = null;
             LevelChunkSection[] sections = sectionsOf(x, z); // unloaded: behaves like air, as Level#clip does
             int index = sy - minSection;
             if (sections != null && index >= 0 && index < sections.length) {
                 LevelChunkSection candidate = sections[index];
-                if (candidate != null && !candidate.hasOnlyAir()) section = candidate;
+                if (candidate != null && !candidate.hasOnlyAir()) {
+                    section = candidate;
+                    if (memo != null) sectionMemo = memo.section(sx, sy, sz);
+                }
             }
         }
         return section;
@@ -103,7 +143,16 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
     public int load(int x, int y, int z) {
         LevelChunkSection section = sectionAt(x, y, z);
         if (section == null) return EMPTY;
+        long[] empty = sectionMemo;
+        if (empty == null) return classify(section, x, y, z);
+        int i = (y & 15) << 8 | (z & 15) << 4 | (x & 15);
+        if ((empty[i >>> 6] & (1L << i)) != 0) return EMPTY;
+        int kind = classify(section, x, y, z);
+        if (kind == EMPTY) empty[i >>> 6] |= 1L << i;
+        return kind;
+    }
 
+    private int classify(LevelChunkSection section, int x, int y, int z) {
         BlockState state = section.getBlockState(x & 15, y & 15, z & 15);
         if (state.isAir()) return EMPTY;
         for (int i = 0; i < KNOWN; i++) {
