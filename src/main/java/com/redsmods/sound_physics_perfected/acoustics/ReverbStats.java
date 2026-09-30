@@ -47,6 +47,14 @@ public final class ReverbStats {
     public int legacyEscapes;
     public int legacyLeakDenominator;
 
+    /** Echogram bins: 1 block of travel each. */
+    public static final int ECHO_BINS = 256;
+    /**
+     * Echogram: per band, the energy left in the rays after each block of travel, summed over the rays whose
+     * energy is known there ({@link #echoRays}). Allocated on first use.
+     */
+    double[] echoLow, echoMid, echoHigh, echoRays;
+
     public void hit(int bounce, double distance, AcousticMaterial material, double cosIncidence) {
         hit(bounce, distance, material, cosIncidence, true);
     }
@@ -115,6 +123,95 @@ public final class ReverbStats {
         }
     }
 
+    /**
+     * Adds one ray to the echogram.
+     *
+     * @param hits     reflections the ray made
+     * @param hitL     distance travelled at each reflection
+     * @param low      energy left after each reflection (surfaces only), per band
+     * @param escaped  whether the ray then left into open air: its energy is gone from {@code escapeL} on, for
+     *                 good; otherwise it was stopped by the bounce limit and is unknown after its last reflection
+     */
+    public void echogramRay(int hits, double[] hitL, double[] low, double[] mid, double[] high, boolean escaped,
+                            double escapeL) {
+        if (echoRays == null) {
+            echoLow = new double[ECHO_BINS];
+            echoMid = new double[ECHO_BINS];
+            echoHigh = new double[ECHO_BINS];
+            echoRays = new double[ECHO_BINS];
+        }
+        int end = escaped ? ECHO_BINS : Math.min(ECHO_BINS, hits > 0 ? (int) Math.ceil(hitL[hits - 1]) : 0);
+        int i = 0;
+        for (int b = 0; b < end; b++) {
+            double l = b + 0.5;
+            echoRays[b] += 1.0;
+            if (escaped && l >= escapeL) continue; // left: no energy, but known
+            while (i < hits && hitL[i] <= l) i++;
+            if (i == 0) {
+                echoLow[b] += 1.0;
+                echoMid[b] += 1.0;
+                echoHigh[b] += 1.0;
+            } else {
+                echoLow[b] += low[i - 1];
+                echoMid[b] += mid[i - 1];
+                echoHigh[b] += high[i - 1];
+            }
+        }
+    }
+
+    /**
+     * Energy decay rate (nepers per block of travel) from the echogram's slope, for band 0/1/2 (low/mid/high), or
+     * NaN when there is too little of it to fit. Unlike Eyring's average absorption this sees that energy
+     * lingers where rays keep missing the soft or open parts of a space, and leaves fast where they escape.
+     * All bands are fitted over the same stretch, chosen on the mid band, so they stay comparable.
+     */
+    public double echogramDecayRate(int band) {
+        int[] window = echogramWindow();
+        if (window == null) return Double.NaN;
+        double[] e = band == 0 ? echoLow : (band == 1 ? echoMid : echoHigh);
+
+        // Least squares of ln(energy) against distance, weighted by how many rays each bin knows about.
+        double sw = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+        for (int b = window[0]; b < window[1]; b++) {
+            if (e[b] <= 0.0) return Double.NaN;
+            double w = echoRays[b], x = b + 0.5, y = Math.log(e[b] / echoRays[b]);
+            sw += w;
+            sx += w * x;
+            sy += w * y;
+            sxx += w * x * x;
+            sxy += w * x * y;
+        }
+        double denominator = sw * sxx - sx * sx;
+        if (denominator <= 1.0E-9) return Double.NaN;
+        double slope = (sw * sxy - sx * sy) / denominator;
+        return slope < 0.0 ? -slope : Double.NaN;
+    }
+
+    /** Bins [start, end) of the echogram to fit, or null. */
+    private int[] echogramWindow() {
+        if (echoRays == null || echoRays[0] < 8.0) return null;
+        double n0 = echoRays[0];
+        double e0 = echoMid[0] / n0;
+        if (e0 <= 0.0) return null;
+
+        // Skip the direct part (before most rays have reflected). Stop before the bounce limit starts cutting rays
+        // off: only rays still going get cut, so past that point the escaped (silent) ones would be over-represented.
+        int start = firstHits > 0 ? (int) Math.ceil(1.5 * firstDistanceSum / firstHits) : 0;
+        int end = start;
+        while (end < ECHO_BINS && echoRays[end] >= 0.9 * n0 && echoMid[end] > 0.0
+                && echoMid[end] / echoRays[end] >= e0 * 3.2e-4) { // down to -35 dB
+            end++;
+        }
+        // Skip the first 5 dB too when the fall is that deep (as T20/T30 do).
+        for (int b = start; b < end - 4; b++) {
+            if (echoMid[b] / echoRays[b] <= e0 * 0.316) {
+                start = b;
+                break;
+            }
+        }
+        return end - start < 4 ? null : new int[]{start, end};
+    }
+
     public int totalHits() {
         return firstHits + laterHits;
     }
@@ -151,5 +248,20 @@ public final class ReverbStats {
         legacyBlueRays += o.legacyBlueRays;
         legacyEscapes += o.legacyEscapes;
         legacyLeakDenominator += o.legacyLeakDenominator;
+        if (o.echoRays != null) {
+            if (echoRays == null) {
+                echoLow = o.echoLow.clone();
+                echoMid = o.echoMid.clone();
+                echoHigh = o.echoHigh.clone();
+                echoRays = o.echoRays.clone();
+            } else {
+                for (int b = 0; b < ECHO_BINS; b++) {
+                    echoLow[b] += o.echoLow[b];
+                    echoMid[b] += o.echoMid[b];
+                    echoHigh[b] += o.echoHigh[b];
+                    echoRays[b] += o.echoRays[b];
+                }
+            }
+        }
     }
 }

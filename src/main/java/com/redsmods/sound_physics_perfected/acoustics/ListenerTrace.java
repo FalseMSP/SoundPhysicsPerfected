@@ -88,9 +88,11 @@ public final class ListenerTrace {
         ReverbStats stats = acc.stats;
         stats.segmentLength = s.segmentLength;
         boolean[] found = new boolean[targets.count]; // sounds this ray has already seen from a bounce
+        Echo echo = s.reverb ? new Echo(s.reverbBounces + 1) : null;
         for (int ray = from; ray < to; ray++) {
             stats.rays++;
             java.util.Arrays.fill(found, false);
+            if (echo != null) echo.start();
             double px = ex, py = ey, pz = ez;
             double dx = dirs[ray * 3], dy = dirs[ray * 3 + 1], dz = dirs[ray * 3 + 2];
             // Direction the sound finally arrives from, and the length/energy of the path to the listener.
@@ -113,6 +115,7 @@ public final class ListenerTrace {
                 if (!ops.firstHit(px, py, pz, dx, dy, dz, segment)) {
                     // Escaped into open air: that energy never comes back.
                     stats.escape(bounce, connecting);
+                    if (echo != null) echo.escaped = true;
                     break;
                 }
                 double t = ops.hitT();
@@ -120,6 +123,7 @@ public final class ListenerTrace {
                 int nx = ops.hitNormalX(), ny = ops.hitNormalY(), nz = ops.hitNormalZ();
                 AcousticMaterial material = ops.hitMaterial();
                 double cosIncidence = Math.abs(dx * nx + dy * ny + dz * nz);
+                if (echo != null) echo.hit(t, material);
 
                 pathLength += t;
                 if (connecting) legacyDistance = (legacyDistance + t) / s.bounceAbsorption;
@@ -208,6 +212,48 @@ public final class ListenerTrace {
                 py = hy + dy * 0.01;
                 pz = hz + dz * 0.01;
             }
+            if (echo != null) echo.finish(stats);
+        }
+    }
+
+    /** One ray's reflections, for the echogram (see {@link ReverbStats#echogramRay}). Reused ray to ray. */
+    private static final class Echo {
+        final double[] hitL, low, mid, high;
+        int hits;
+        double travelled, eLow, eMid, eHigh;
+        boolean escaped;
+
+        Echo(int maxHits) {
+            hitL = new double[maxHits];
+            low = new double[maxHits];
+            mid = new double[maxHits];
+            high = new double[maxHits];
+        }
+
+        void start() {
+            hits = 0;
+            travelled = 0.0;
+            eLow = eMid = eHigh = 1.0;
+            escaped = false;
+        }
+
+        void hit(double t, AcousticMaterial material) {
+            travelled += t;
+            if (hits == hitL.length) return;
+            eLow *= 1.0 - material.absorptionLow;
+            eMid *= 1.0 - material.absorptionMid;
+            eHigh *= 1.0 - material.absorptionHigh;
+            hitL[hits] = travelled;
+            low[hits] = eLow;
+            mid[hits] = eMid;
+            high[hits] = eHigh;
+            hits++;
+        }
+
+        void finish(ReverbStats stats) {
+            // An escaping ray leaves about one of its own average segments after its last reflection.
+            double escapeL = travelled + (hits > 0 ? travelled / hits : 0.0);
+            stats.echogramRay(hits, hitL, low, mid, high, escaped, escapeL);
         }
     }
 
@@ -235,14 +281,17 @@ public final class ListenerTrace {
         ReverbStats stats = env.stats;
         stats.segmentLength = s.segmentLength;
         int rays = dirs.length / 3;
+        Echo echo = new Echo(bounces + 1);
         for (int ray = 0; ray < rays; ray++) {
             stats.rays++;
+            echo.start();
             double px = sx, py = sy, pz = sz;
             double dx = dirs[ray * 3], dy = dirs[ray * 3 + 1], dz = dirs[ray * 3 + 2];
             double energy = 1.0;
             for (int bounce = 0; bounce <= bounces; bounce++) {
                 if (!ops.firstHit(px, py, pz, dx, dy, dz, s.segmentLength)) {
                     stats.escape(bounce, false);
+                    echo.escaped = true;
                     break;
                 }
                 double t = ops.hitT();
@@ -250,6 +299,7 @@ public final class ListenerTrace {
                 int nx = ops.hitNormalX(), ny = ops.hitNormalY(), nz = ops.hitNormalZ();
                 AcousticMaterial material = ops.hitMaterial();
                 stats.hit(bounce, t, material, Math.abs(dx * nx + dy * ny + dz * nz), false);
+                echo.hit(t, material);
                 energy *= s.bounceAbsorption * s.bounceAbsorption * material.reflectivity();
 
                 // Does this reflection reach the listener directly?
@@ -289,6 +339,7 @@ public final class ListenerTrace {
                 py = hy + dy * 0.01;
                 pz = hz + dz * 0.01;
             }
+            echo.finish(stats);
         }
     }
 

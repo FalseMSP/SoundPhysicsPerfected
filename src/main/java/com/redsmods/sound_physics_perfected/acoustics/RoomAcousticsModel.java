@@ -104,11 +104,17 @@ public final class RoomAcousticsModel {
         double absMid = effectiveAbsorption(s.absorptionMidSum / hits, escapeProbability);
         double absHigh = effectiveAbsorption(s.absorptionHighSum / hits, escapeProbability);
 
-        // --- Decay (Eyring + air absorption), then scaled and softly limited -----------------------
+        // --- Decay: the echogram's slope where it can be fitted, else Eyring; plus air, scaled, softly limited --
+        // The echogram is energy still in flight: right for enclosed spaces, but out in the open rays skimming the
+        // ground are "in flight" for long without ever coming back, so it gives way to Eyring as a space opens up.
         double eyring = 24.0 * Math.log(10.0) / c / 4.0 * meanFreePath;
-        double tLow = shapeDecay(eyring / (-Math.log(1.0 - absLow) + AIR_LOW * meanFreePath), cfg);
-        double tMid = shapeDecay(eyring / (-Math.log(1.0 - absMid) + AIR_MID * meanFreePath), cfg);
-        double tHigh = shapeDecay(eyring / (-Math.log(1.0 - absHigh) + AIR_HIGH * meanFreePath), cfg);
+        double echoWeight = clamp((enclosure - 0.6) / 0.3, 0.0, 1.0);
+        double tLow = shapeDecay(decay(s.echogramDecayRate(0), AIR_LOW, c, echoWeight,
+                eyring / (-Math.log(1.0 - absLow) + AIR_LOW * meanFreePath)), cfg);
+        double tMid = shapeDecay(decay(s.echogramDecayRate(1), AIR_MID, c, echoWeight,
+                eyring / (-Math.log(1.0 - absMid) + AIR_MID * meanFreePath)), cfg);
+        double tHigh = shapeDecay(decay(s.echogramDecayRate(2), AIR_HIGH, c, echoWeight,
+                eyring / (-Math.log(1.0 - absHigh) + AIR_HIGH * meanFreePath)), cfg);
 
         // --- Levels ---------------------------------------------------------------------------------
         double inverseRoomLow = (1.0 - absLow) / (absLow * visibleArea);
@@ -199,6 +205,17 @@ public final class RoomAcousticsModel {
         if (length < 1.0E-6) return ZERO;
         double f = clamp((length - PAN_INNER) / (PAN_OUTER - PAN_INNER), 0.0, 1.0) * PAN_MAX_FOCUS;
         return new float[]{(float) (x / length * f), (float) (y / length * f), (float) (z / length * f)};
+    }
+
+    /**
+     * RT60 from an echogram decay rate (nepers of energy per block of travel, surfaces only; 60 dB is 6·ln(10)
+     * nepers), blended (log scale) with {@code eyring} by {@code weight}. Eyring alone when the echogram could
+     * not be fitted.
+     */
+    static double decay(double rate, double air, double speedOfSound, double weight, double eyring) {
+        if (Double.isNaN(rate) || weight <= 0.0) return eyring;
+        double echo = 6.0 * Math.log(10.0) / ((rate + air) * speedOfSound);
+        return Math.exp(weight * Math.log(echo) + (1.0 - weight) * Math.log(eyring));
     }
 
     private static double effectiveAbsorption(double surfaceAbsorption, double escapeProbability) {
