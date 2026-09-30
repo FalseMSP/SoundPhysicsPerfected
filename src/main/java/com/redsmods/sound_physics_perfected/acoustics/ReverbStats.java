@@ -52,8 +52,15 @@ public final class ReverbStats {
     /**
      * Echogram: per band, the energy left in the rays after each block of travel, summed over the rays whose
      * energy is known there ({@link #echoRays}). Allocated on first use.
+     * <p>
+     * Stored as differences from the previous bin: a ray's energy is a step function (it only changes where the
+     * ray reflects), so adding a ray costs O(its reflections) instead of O(bins). Summed up lazily (see
+     * {@link #integrate}) when the decay is fitted. Null when there is no echogram.
      */
     double[] echoLow, echoMid, echoHigh, echoRays;
+    /** The echogram itself: the difference arrays summed up. Valid while {@link #echoDirty} is false. */
+    private double[] sumLow, sumMid, sumHigh, sumRays;
+    private boolean echoDirty;
 
     public void hit(int bounce, double distance, AcousticMaterial material, double cosIncidence) {
         hit(bounce, distance, material, cosIncidence, true);
@@ -147,22 +154,70 @@ public final class ReverbStats {
             echoRays = new double[ECHO_BINS];
         }
         int end = escaped ? ECHO_BINS : Math.min(ECHO_BINS, hits > 0 ? (int) Math.ceil(hitL[hits - 1]) : 0);
-        int i = 0;
-        for (int b = 0; b < end; b++) {
-            double l = b + 0.5;
-            echoRays[b] += 1.0;
-            if (escaped && l >= escapeL) continue; // left: no energy, but known
-            while (i < hits && hitL[i] <= l) i++;
-            if (i == 0) {
-                echoLow[b] += 1.0;
-                echoMid[b] += 1.0;
-                echoHigh[b] += 1.0;
-            } else {
-                echoLow[b] += low[i - 1];
-                echoMid[b] += mid[i - 1];
-                echoHigh[b] += high[i - 1];
-            }
+        if (end <= 0) return;
+        echoDirty = true;
+        // Known in bins [0, end).
+        echoRays[0] += 1.0;
+        if (end < ECHO_BINS) echoRays[end] -= 1.0;
+        // Energy: 1 until the first reflection (a bin counts the reflections up to its centre), then the level after
+        // each reflection; from the escape on it is known to be zero, and past end it is unknown.
+        int stop = escaped ? Math.min(end, firstBin(escapeL)) : end;
+        if (stop <= 0) return;
+        double l = 1.0, m = 1.0, h = 1.0;
+        echoLow[0] += 1.0;
+        echoMid[0] += 1.0;
+        echoHigh[0] += 1.0;
+        for (int i = 0; i < hits; i++) {
+            int b = firstBin(hitL[i]);
+            if (b >= stop) break;
+            echoLow[b] += low[i] - l;
+            echoMid[b] += mid[i] - m;
+            echoHigh[b] += high[i] - h;
+            l = low[i];
+            m = mid[i];
+            h = high[i];
         }
+        if (stop < ECHO_BINS) {
+            echoLow[stop] -= l;
+            echoMid[stop] -= m;
+            echoHigh[stop] -= h;
+        }
+    }
+
+    /** The first bin whose centre (b + 0.5) is at or past distance d, clamped to [0, ECHO_BINS]. */
+    static int firstBin(double d) {
+        if (!(d > 0.5)) return 0;
+        if (d >= ECHO_BINS) return ECHO_BINS;
+        int b = (int) Math.ceil(d - 0.5);
+        while (b > 0 && b - 0.5 >= d) b--; // (guards: d - 0.5 is exact here anyway)
+        while (b + 0.5 < d) b++;
+        return b;
+    }
+
+    /** The echogram at one bin: band 0/1/2 (low/mid/high) energy, or 3 for the ray count (0 when there is none). */
+    double echogram(int band, int bin) {
+        if (echoRays == null) return 0.0;
+        integrate();
+        return (band == 0 ? sumLow : band == 1 ? sumMid : band == 2 ? sumHigh : sumRays)[bin];
+    }
+
+    /** Sums the difference arrays up into the echogram (once per change). */
+    private void integrate() {
+        if (!echoDirty && sumRays != null) return;
+        if (sumRays == null) {
+            sumLow = new double[ECHO_BINS];
+            sumMid = new double[ECHO_BINS];
+            sumHigh = new double[ECHO_BINS];
+            sumRays = new double[ECHO_BINS];
+        }
+        double l = 0.0, m = 0.0, h = 0.0, n = 0.0;
+        for (int b = 0; b < ECHO_BINS; b++) {
+            sumLow[b] = l += echoLow[b];
+            sumMid[b] = m += echoMid[b];
+            sumHigh[b] = h += echoHigh[b];
+            sumRays[b] = n += echoRays[b];
+        }
+        echoDirty = false;
     }
 
     /**
@@ -174,13 +229,13 @@ public final class ReverbStats {
     public double echogramDecayRate(int band) {
         int[] window = echogramWindow();
         if (window == null) return Double.NaN;
-        double[] e = band == 0 ? echoLow : (band == 1 ? echoMid : echoHigh);
+        double[] e = band == 0 ? sumLow : (band == 1 ? sumMid : sumHigh);
 
         // Least squares of ln(energy) against distance, weighted by how many rays each bin knows about.
         double sw = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
         for (int b = window[0]; b < window[1]; b++) {
             if (e[b] <= 0.0) return Double.NaN;
-            double w = echoRays[b], x = b + 0.5, y = Math.log(e[b] / echoRays[b]);
+            double w = sumRays[b], x = b + 0.5, y = Math.log(e[b] / sumRays[b]);
             sw += w;
             sx += w * x;
             sy += w * y;
@@ -195,22 +250,24 @@ public final class ReverbStats {
 
     /** Bins [start, end) of the echogram to fit, or null. */
     private int[] echogramWindow() {
-        if (echoRays == null || echoRays[0] < 8.0) return null;
-        double n0 = echoRays[0];
-        double e0 = echoMid[0] / n0;
+        if (echoRays == null) return null;
+        integrate();
+        if (sumRays[0] < 8.0) return null;
+        double n0 = sumRays[0];
+        double e0 = sumMid[0] / n0;
         if (e0 <= 0.0) return null;
 
         // Skip the direct part (before most rays have reflected). Stop before the bounce limit starts cutting rays
         // off: only rays still going get cut, so past that point the escaped (silent) ones would be over-represented.
         int start = firstHits > 0 ? (int) Math.ceil(1.5 * firstDistanceSum / firstHits) : 0;
         int end = start;
-        while (end < ECHO_BINS && echoRays[end] >= 0.9 * n0 && echoMid[end] > 0.0
-                && echoMid[end] / echoRays[end] >= e0 * 3.2e-4) { // down to -35 dB
+        while (end < ECHO_BINS && sumRays[end] >= 0.9 * n0 && sumMid[end] > 0.0
+                && sumMid[end] / sumRays[end] >= e0 * 3.2e-4) { // down to -35 dB
             end++;
         }
         // Skip the first 5 dB too when the fall is that deep (as T20/T30 do).
         for (int b = start; b < end - 4; b++) {
-            if (echoMid[b] / echoRays[b] <= e0 * 0.316) {
+            if (sumMid[b] / sumRays[b] <= e0 * 0.316) {
                 start = b;
                 break;
             }
@@ -268,6 +325,7 @@ public final class ReverbStats {
                     echoRays[b] += o.echoRays[b];
                 }
             }
+            echoDirty = true;
         }
     }
 }

@@ -54,6 +54,55 @@ class EchogramTest {
         assertEquals(t[1], t[0], 1e-6);
     }
 
+    /** The echogram as it used to be built: every ray painted bin by bin. */
+    private static void paint(double[][] e, int hits, double[] hitL, double[] low, double[] mid, double[] high,
+                              boolean escaped, double escapeL) {
+        int end = escaped ? ReverbStats.ECHO_BINS : Math.min(ReverbStats.ECHO_BINS, hits > 0 ? (int) Math.ceil(hitL[hits - 1]) : 0);
+        int i = 0;
+        for (int b = 0; b < end; b++) {
+            double l = b + 0.5;
+            e[3][b] += 1.0;
+            if (escaped && l >= escapeL) continue;
+            while (i < hits && hitL[i] <= l) i++;
+            e[0][b] += i == 0 ? 1.0 : low[i - 1];
+            e[1][b] += i == 0 ? 1.0 : mid[i - 1];
+            e[2][b] += i == 0 ? 1.0 : high[i - 1];
+        }
+    }
+
+    @Test
+    void differencesMatchPaintingEveryBin() {
+        java.util.Random random = new java.util.Random(1);
+        ReverbStats s = new ReverbStats();
+        double[][] expected = new double[4][ReverbStats.ECHO_BINS];
+        for (int ray = 0; ray < 3000; ray++) {
+            int hits = random.nextInt(26);
+            double[] hitL = new double[hits], low = new double[hits], mid = new double[hits], high = new double[hits];
+            double travelled = 0.0, l = 1.0, m = 1.0, h = 1.0;
+            for (int k = 0; k < hits; k++) {
+                // Some reflections land exactly on bin centres and edges, some several in one bin, some past the end.
+                int kind = random.nextInt(4);
+                travelled += kind == 0 ? 0.0 : kind == 1 ? 0.5 : random.nextDouble() * (ray % 3 == 0 ? 30.0 : 6.0);
+                if (kind == 1) travelled = Math.floor(travelled) + 0.5;
+                hitL[k] = travelled;
+                low[k] = l *= 0.5 + 0.5 * random.nextDouble();
+                mid[k] = m *= 0.5 + 0.5 * random.nextDouble();
+                high[k] = h *= 0.5 + 0.5 * random.nextDouble();
+            }
+            boolean escaped = random.nextBoolean();
+            double escapeL = random.nextInt(8) == 0 ? Math.floor(travelled) + 0.5
+                    : travelled + (hits > 0 ? travelled / hits : 0.0);
+            s.echogramRay(hits, hitL, low, mid, high, escaped, escapeL);
+            paint(expected, hits, hitL, low, mid, high, escaped, escapeL);
+        }
+        for (int band = 0; band < 4; band++) {
+            for (int b = 0; b < ReverbStats.ECHO_BINS; b++) {
+                assertEquals(expected[band][b], s.echogram(band, b), band == 3 ? 0.0 : 1e-9 * Math.max(1.0, expected[band][b]),
+                        "band " + band + " bin " + b);
+            }
+        }
+    }
+
     @Test
     void tooFewRaysFallBackToEyring() {
         ReverbStats s = new ReverbStats();
