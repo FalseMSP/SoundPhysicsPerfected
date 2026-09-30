@@ -100,8 +100,8 @@ class EnergyLoudnessTest {
             ListenerTrace.Accumulator traced = new ListenerTrace.Accumulator(3);
             ListenerTrace.Trail[] trails = {new ListenerTrace.Trail(), new ListenerTrace.Trail()};
             VoxelRayOps ops = new VoxelRayOps(world);
-            ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], dirs, 0, 90, targets, traced, trails[0]);
-            ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], dirs, 90, RAYS, targets, traced, trails[1]);
+            ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], dirs, 0, 90, targets, traced, trails[0], null);
+            ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], dirs, 90, RAYS, targets, traced, trails[1], null);
 
             ListenerTrace.Accumulator replayed = new ListenerTrace.Accumulator(3);
             for (ListenerTrace.Trail trail : trails) ListenerTrace.connectTrail(ops, s, trail, targets, replayed);

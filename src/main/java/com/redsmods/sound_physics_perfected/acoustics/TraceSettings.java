@@ -22,6 +22,8 @@ public final class TraceSettings {
     public final double muffle;
     /** Whether this trace re-measures the room (records the echogram); the in-between traces keep the last one. */
     public final boolean measureRoom;
+    /** Whether the reverb is directional (the late reverb's direction is measured); true unless switched off. */
+    public boolean lateDirections = true;
 
     public TraceSettings(int bounces, double segmentLength, boolean permeation, boolean reverb,
                          double permeationAbsorption, double maxBlocksPermeated, double bounceAbsorption,

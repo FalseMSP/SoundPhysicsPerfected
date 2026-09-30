@@ -157,8 +157,8 @@ public abstract class SoundSystemMixin {
         }
 
         RaycastingHelper.updateZones(instanceToChannel.keySet());
-        Doppler.tick(client.player.getEyePosition(), instanceToChannel.keySet(), config.dopplerStrength / 100.0f,
-                config.soundSpeed);
+        Doppler.tick(client.player.getEyePosition(), instanceToChannel.keySet(),
+                config.dopplerStrength / 100.0f * Doppler.DEFAULT_SHARE, config.soundSpeed);
         boolean underwater = RaycastingHelper.isUnderwater();
         // Clear the underwater filter once from sounds that only had it because the listener was under water.
         SourceEffects.Frame frame = SourceEffects.Frame.now(spp$wasUnderwater && !underwater);

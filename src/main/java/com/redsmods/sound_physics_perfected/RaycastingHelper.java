@@ -429,6 +429,7 @@ public final class RaycastingHelper {
                 config.reverb, config.permeationAbsorption, config.maxBlocksPermeated,
                 Math.max(config.bounceAbsorptionMultiplier, 0.001), config.attenuationType,
                 MUFFLE_AT_100_PERCENT * config.muffleStrength / 100.0, fullReverb);
+        settings.lateDirections = config.directionalReverb;
         subLevelsNearby = subLevelsNear(level, eye, Math.max(settings.maxTotalDistance, settings.segmentLength));
         boolean fast = config.fastRaytracing && !subLevelsNearby;
 
@@ -551,6 +552,7 @@ public final class RaycastingHelper {
             }
         } else {
             int chunks = Math.max(1, Math.min((rays + RAYS_PER_TASK - 1) / RAYS_PER_TASK, THREADS * 4));
+            ListenerTrace.Visibility visibility = job.settings.measureRoom ? new ListenerTrace.Visibility() : null;
             trails = rays > 0 && job.cacheable ? new ListenerTrace.Trail[chunks] : null;
             for (int c = 0; c < chunks && rays > 0; c++) {
                 int from = (int) ((long) rays * c / chunks);
@@ -560,7 +562,7 @@ public final class RaycastingHelper {
                     ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(targetCount);
                     ListenerTrace.Trail trail = trails == null ? null : new ListenerTrace.Trail();
                     ListenerTrace.traceRays(job.newOps(), job.settings, job.eye.x, job.eye.y, job.eye.z, job.dirs,
-                            from, to, job.arrays, acc, trail);
+                            from, to, job.arrays, acc, trail, visibility);
                     if (trails != null) trails[chunk] = trail;
                     return acc;
                 }, POOL));

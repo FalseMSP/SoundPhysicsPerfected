@@ -134,15 +134,52 @@ public final class ListenerTrace {
         }
     }
 
+    /**
+     * Whether the listener can see a surface, shared by every thread of one trace, per block face. Used for the
+     * bounces that only measure the room (where it only steers the late reverb's direction); bounces that connect
+     * to sounds are always checked exactly.
+     */
+    public static final class Visibility {
+        private final java.util.concurrent.ConcurrentHashMap<Long, Boolean> faces =
+                new java.util.concurrent.ConcurrentHashMap<>();
+
+        boolean visible(RayOps ops, double hx, double hy, double hz, int nx, int ny, int nz,
+                        double ex, double ey, double ez) {
+            // The face is identified by the (air) cell just off it and which way it faces.
+            long cx = (long) Math.floor(hx + nx * 1.0E-3), cy = (long) Math.floor(hy + ny * 1.0E-3),
+                    cz = (long) Math.floor(hz + nz * 1.0E-3);
+            int face = nx != 0 ? (nx > 0 ? 0 : 1) : ny != 0 ? (ny > 0 ? 2 : 3) : (nz > 0 ? 4 : 5);
+            long key = ((cx & 0xFFFFF) << 43) | ((cy & 0xFFFFF) << 23) | ((cz & 0xFFFFF) << 3) | face;
+            Boolean known = faces.get(key);
+            if (known != null) return known;
+            boolean seen = clear(ops, hx, hy, hz, ex, ey, ez);
+            faces.put(key, seen);
+            return seen;
+        }
+    }
+
+    /** Line of sight from a surface point to the listener. */
+    private static boolean clear(RayOps ops, double hx, double hy, double hz, double ex, double ey, double ez) {
+        double tx = ex - hx, ty = ey - hy, tz = ez - hz;
+        double toListener = Math.sqrt(tx * tx + ty * ty + tz * tz);
+        if (toListener <= 1.0E-6) return true;
+        double inv = 1.0 / toListener;
+        return ops.clearPath(hx + tx * inv * 0.1, hy + ty * inv * 0.1, hz + tz * inv * 0.1, ex, ey, ez, 0.0);
+    }
+
+    /** Below this energy a room-measuring bounce no longer moves the late reverb's direction noticeably. */
+    static final double LATE_MIN_ENERGY = 0.01;
+
     /** Traces rays [from, to) of the direction table (xyz triples) into the accumulator. */
     public static void traceRays(RayOps ops, TraceSettings s, double ex, double ey, double ez,
                                  double[] dirs, int from, int to, Targets targets, Accumulator acc) {
-        traceRays(ops, s, ex, ey, ez, dirs, from, to, targets, acc, null);
+        traceRays(ops, s, ex, ey, ez, dirs, from, to, targets, acc, null, null);
     }
 
     /** As above, also recording the rays' connecting bounces into {@code trail} when given. */
     public static void traceRays(RayOps ops, TraceSettings s, double ex, double ey, double ez,
-                                 double[] dirs, int from, int to, Targets targets, Accumulator acc, Trail trail) {
+                                 double[] dirs, int from, int to, Targets targets, Accumulator acc, Trail trail,
+                                 Visibility visibility) {
         ReverbStats stats = acc.stats;
         stats.segmentLength = s.segmentLength;
         boolean[] found = new boolean[targets.count]; // sounds this ray has already seen from a bounce
@@ -211,15 +248,15 @@ public final class ListenerTrace {
                 chainEnergy *= reflection;
 
                 boolean shortcut = false;
-                if (s.reverb) {
+                // Room-measuring bounces only need visibility for the late reverb's direction: not at all when that
+                // is off or the ray has next to no energy left, and shared per block face within this trace.
+                boolean lateOnly = !connecting;
+                if (s.reverb && (!lateOnly || (bounce >= 1 && s.lateDirections && chainEnergy > LATE_MIN_ENERGY))) {
                     double tx = ex - hx, ty = ey - hy, tz = ez - hz;
                     double toListener = Math.sqrt(tx * tx + ty * ty + tz * tz);
-                    boolean visible = true;
-                    if (toListener > 1.0E-6) {
-                        double inv = 1.0 / toListener;
-                        visible = ops.clearPath(hx + tx * inv * 0.1, hy + ty * inv * 0.1, hz + tz * inv * 0.1,
-                                ex, ey, ez, 0.0);
-                    }
+                    boolean visible = lateOnly && visibility != null
+                            ? visibility.visible(ops, hx, hy, hz, nx, ny, nz, ex, ey, ez)
+                            : clear(ops, hx, hy, hz, ex, ey, ez);
                     if (connecting) stats.blueRay(visible, legacyDistance);
                     if (visible && toListener > 1.0E-6) {
                         double inv = 1.0 / toListener;

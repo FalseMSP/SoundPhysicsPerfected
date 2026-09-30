@@ -93,7 +93,7 @@ public final class SoundPhysicsSection {
                 c -> c.muffleStrength, (c, v) -> c.muffleStrength = v,
                 v -> Component.translatable("sound_physics_perfected.config.unit.percent", v),
                 () -> unsaved = true);
-        ConfigSlider doppler = slider("doppler", 0, 300, 10,
+        ConfigSlider doppler = slider("doppler", 0, 500, 10,
                 c -> c.dopplerStrength, (c, v) -> c.dopplerStrength = v,
                 v -> v == 0 ? Component.translatable("options.off")
                         : Component.translatable("sound_physics_perfected.config.unit.percent", v),

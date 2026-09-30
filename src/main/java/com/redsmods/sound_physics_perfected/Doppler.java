@@ -20,6 +20,12 @@ import java.util.Map;
  * Client thread only (OpenAL listener state is set there by vanilla too).
  */
 public final class Doppler {
+    /**
+     * Share of the physical shift at 100% (the default). The full effect sounded too strong in game (every step
+     * away from a sound, every mob walking past), so 100% is a fifth of it; 500% is physical.
+     */
+    public static final float DEFAULT_SHARE = 0.2f;
+
     private static final Map<SoundInstance, VelocityTracker> SOUNDS = new IdentityHashMap<>();
     private static final VelocityTracker LISTENER = new VelocityTracker();
     private static float appliedFactor = -1.0f, appliedSpeed = -1.0f;
@@ -31,7 +37,7 @@ public final class Doppler {
     /**
      * Once per tick: measures movement and updates OpenAL's listener velocity, Doppler factor and speed of sound.
      *
-     * @param strength 0 = off, 1 = physical
+     * @param strength OpenAL's Doppler factor: 0 = off, 1 = physical
      */
     public static void tick(Vec3 eye, Iterable<SoundInstance> playing, float strength, float speedOfSound) {
         float factor = Math.max(strength, 0.0f);

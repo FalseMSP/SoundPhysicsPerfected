@@ -193,4 +193,26 @@ class RoomAcousticsTest {
         assertFalse(mixed.differsStructurallyFrom(a));
         assertFalse(mixed.differsInLevelsFrom(b));
     }
+
+    @Test
+    void sharingVisibilityPerFaceKeepsTheReverbDirection() {
+        // The shared per-face visibility of room-measuring bounces must not move the late reverb's direction.
+        GridWorld world = new GridWorld().room(0, 0, 0, 29, 9, 29, AcousticMaterial.STONE)
+                .fill(-20, -1, -20, 50, -1, -1, AcousticMaterial.SOIL);
+        for (int x = 13; x <= 16; x++) for (int y = 0; y <= 4; y++) world.clear(x, y, -1);
+        double[] eyes = {14.5, EYE, -4.5, 14.5, EYE, 14.5, 4.5, EYE, 25.5};
+        for (int e = 0; e < eyes.length; e += 3) {
+            ListenerTrace.Accumulator exact = new ListenerTrace.Accumulator(0), shared = new ListenerTrace.Accumulator(0);
+            double[] dirs = ListenerTrace.fibonacciSphere(RAYS);
+            ListenerTrace.traceRays(new VoxelRayOps(world), reverbSettings(), eyes[e], eyes[e + 1], eyes[e + 2], dirs, 0,
+                    RAYS, new ListenerTrace.Targets(0), exact, null, null);
+            ListenerTrace.traceRays(new VoxelRayOps(world), reverbSettings(), eyes[e], eyes[e + 1], eyes[e + 2], dirs, 0,
+                    RAYS, new ListenerTrace.Targets(0), shared, null, new ListenerTrace.Visibility());
+            ReverbParams a = RoomAcousticsModel.estimate(exact.stats, RoomAcousticsModel.Settings.defaults());
+            ReverbParams b = RoomAcousticsModel.estimate(shared.stats, RoomAcousticsModel.Settings.defaults());
+            assertEquals(a.lateReverbPanX, b.lateReverbPanX, 0.03, "pan x at eye " + e / 3);
+            assertEquals(a.lateReverbPanZ, b.lateReverbPanZ, 0.03, "pan z at eye " + e / 3);
+            assertEquals(a.decayTime, b.decayTime, 1e-6, "decay does not depend on visibility");
+        }
+    }
 }
