@@ -49,6 +49,8 @@ public abstract class SoundSystemMixin {
     private int spp$debugTicks;
     @Unique
     private double spp$tickMillis;
+    @Unique
+    private boolean spp$wasUnderwater;
 
     //? if <1.21.6 {
     @Inject(method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)V", at = @At("HEAD"), cancellable = true)
@@ -143,6 +145,10 @@ public abstract class SoundSystemMixin {
         float airAbsorption = mode == LegacyReverb.MODERN ? config.airAbsorption : 0.0f;
         RaycastingHelper.updateZones(instanceToChannel.keySet());
         boolean zones = fxHandler.zonesAvailable();
+        boolean underwater = RaycastingHelper.isUnderwater();
+        // Clear the underwater filter once from sounds that only had it because the listener was under water.
+        boolean leftWater = spp$wasUnderwater && !underwater;
+        spp$wasUnderwater = underwater;
         for (Map.Entry<SoundInstance, ChannelAccess.ChannelHandle> entry : instanceToChannel.entrySet()) {
             SoundInstance instance = entry.getKey();
             ChannelAccess.ChannelHandle handle = entry.getValue();
@@ -154,16 +160,21 @@ public abstract class SoundSystemMixin {
             boolean permeated = instance instanceof RedPermeatedSoundInstance;
             float muffle = permeated ? 1.0f - ((RedPermeatedSoundInstance) instance).getPermeationIndex() : 0.0f;
             float hfRatio = permeated ? ((RedPermeatedSoundInstance) instance).getHfRatio() : 1.0f;
+            boolean muffleForWater = underwater && inWorld;
+            float directHf = muffleForWater ? hfRatio * RaycastingHelper.UNDERWATER_HF : hfRatio;
+            boolean clearWaterFilter = leftWater && inWorld && !permeated;
             boolean send = reverb && inWorld;
             boolean air = inWorld && airAbsorption > 0.0f && !instance.isRelative();
             int zone = send ? RaycastingHelper.zoneOf(instance) : -1;
-            if (!permeated && !send && !air) continue;
+            if (!permeated && !send && !air && !muffleForWater && !clearWaterFilter) continue;
 
             // Runs on the sound thread, in order with the channel's own play/stop commands.
             handle.execute(channel -> {
                 int source = ((SourceAccessor) channel).getSource();
-                if (permeated) {
-                    fxHandler.applyMuffleToSource(source, muffle, hfRatio);
+                if (permeated || muffleForWater) {
+                    fxHandler.applyMuffleToSource(source, muffle, directHf);
+                } else if (clearWaterFilter) {
+                    AL10.alSourcei(source, EXTEfx.AL_DIRECT_FILTER, EXTEfx.AL_FILTER_NULL);
                 }
                 if (send) {
                     switch (mode) {

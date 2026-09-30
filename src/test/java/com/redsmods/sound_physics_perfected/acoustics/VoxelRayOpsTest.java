@@ -81,6 +81,54 @@ class VoxelRayOpsTest {
     }
 
     @Test
+    void skippingEmptySectionsChangesNothing() {
+        Random random = new Random(7);
+        GridWorld skipping = new GridWorld(), plain = new GridWorld();
+        plain.reportSections = false;
+        for (int i = 0; i < 300; i++) { // sparse blocks spread over many sections, some sections left empty
+            int x = random.nextInt(120) - 60, y = random.nextInt(60) - 30, z = random.nextInt(120) - 60;
+            skipping.set(x, y, z, M);
+            plain.set(x, y, z, M);
+        }
+        VoxelRayOps a = new VoxelRayOps(skipping), b = new VoxelRayOps(plain);
+        for (int n = 0; n < 3000; n++) {
+            double ox = random.nextDouble() * 80 - 40, oy = random.nextDouble() * 40 - 20, oz = random.nextDouble() * 80 - 40;
+            double dx = random.nextGaussian(), dy = random.nextGaussian(), dz = random.nextGaussian();
+            double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            dx /= len; dy /= len; dz /= len;
+            boolean ha = a.firstHit(ox, oy, oz, dx, dy, dz, 90), hb = b.firstHit(ox, oy, oz, dx, dy, dz, 90);
+            assertEquals(hb, ha, "hit mismatch at ray " + n);
+            if (ha) {
+                assertEquals(b.hitT(), a.hitT(), 1e-9);
+                assertEquals(b.hitNormalX() + 2 * b.hitNormalY() + 4 * b.hitNormalZ(), a.hitNormalX() + 2 * a.hitNormalY() + 4 * a.hitNormalZ());
+            }
+            double tx = ox + dx * 70, ty = oy + dy * 70, tz = oz + dz * 70;
+            assertEquals(b.obstruction(ox, oy, oz, tx, ty, tz, 50), a.obstruction(ox, oy, oz, tx, ty, tz, 50), 1e-9);
+        }
+    }
+
+    @Test
+    void waterSurfaceReflectsAndIsCostlyToCross() {
+        GridWorld lake = new GridWorld().fill(-20, -10, -20, 20, -1, 20, AcousticMaterial.WATER);
+        VoxelRayOps ops = new VoxelRayOps(lake);
+        // From the air, a ray going down hits the surface like a wall.
+        assertTrue(ops.firstHit(0.5, 3.5, 0.5, 0, -1, 0, 20));
+        assertEquals(3.5, ops.hitT(), 1e-9);
+        assertSame(AcousticMaterial.WATER, ops.hitMaterial());
+        assertEquals(1, ops.hitNormalY());
+        // From underwater, the surface reflects back down.
+        assertTrue(ops.firstHit(0.5, -5.5, 0.5, 0, 1, 0, 20));
+        assertEquals(5.5, ops.hitT(), 1e-9); // the top water cell is y = -1, so the surface is at y = 0
+        assertEquals(-1, ops.hitNormalY());
+        // Underwater, sound travels freely; across the surface it loses a lot.
+        double through = ops.obstruction(0.5, 3.5, 0.5, 0.5, -5.5, 0.5, 100);
+        double within = ops.obstruction(0.5, -2.5, 0.5, 6.5, -2.5, 0.5, 100);
+        assertTrue(through >= VoxelRayOps.WATER_SURFACE_WEIGHT, "surface crossing: " + through);
+        assertTrue(within < 1.0, "within water: " + within);
+        assertFalse(ops.clearPath(0.5, 3.5, 0.5, 0.5, -5.5, 0.5, 1.0), "no line of sight through the surface");
+    }
+
+    @Test
     void clearPathToleratesTheLastBlock() {
         VoxelRayOps ops = new VoxelRayOps(new GridWorld().set(5, 0, 0, M));
         assertFalse(ops.clearPath(0.5, 0.5, 0.5, 9.5, 0.5, 0.5, 0));

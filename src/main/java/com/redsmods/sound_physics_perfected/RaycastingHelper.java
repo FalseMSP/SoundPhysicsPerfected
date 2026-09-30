@@ -21,6 +21,7 @@ import com.redsmods.sound_physics_perfected.wrappers.RedTickableInstance;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -111,6 +112,14 @@ public final class RaycastingHelper {
     private static volatile ReverbStats lastStats = new ReverbStats();
     private static volatile ReverbParams targetReverb;
     private static volatile ReverbParams currentReverb;
+    /** Whether the listener's ears are under water (muffled hearing, underwater reverb). */
+    private static volatile boolean underwater;
+    /** EFX "underwater" preset: dark, dense and wet. */
+    private static final ReverbParams UNDERWATER = new ReverbParams(0.3645f, 1.0f, 0.3162f, 0.01f, 1.0f, 1.49f, 0.10f, 1.0f,
+            0.5963f, 0.007f, 7.0795f, 0.011f, 0.25f, 0.0f, 1.18f, 0.348f, 0.9943f, 5000f, 250f, 0f, 1.0f, 3.0f, 0.3f);
+    /** Treble that reaches ears under water, relative to bass. */
+    public static final float UNDERWATER_HF = 0.25f;
+
     /** Listener axes (right xyz, up xyz, forward xyz), for turning world-space reverb pans into listener space. */
     private static volatile float[] listenerBasis = {1, 0, 0, 0, 1, 0, 0, 0, -1};
 
@@ -126,10 +135,10 @@ public final class RaycastingHelper {
                        double[] dirs, List<Target> targets, ListenerTrace.Targets arrays, boolean fast,
                        boolean barrierAsAir, boolean useExplosionResistance, double maxBlocksPermeated,
                        double stepSize, int raysCast, int raysBounced, int generation, boolean hasNewSounds,
-                       boolean sourceReverb, double listenerEnclosure, boolean fullReverb) {
+                       boolean sourceReverb, double listenerEnclosure, boolean fullReverb, boolean water) {
         RayOps newOps() {
             if (fast) {
-                return new VoxelRayOps(new LevelVoxelWorld(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated));
+                return new VoxelRayOps(new LevelVoxelWorld(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated, water));
             }
             return new ClipRayOps(level, player, barrierAsAir, useExplosionResistance, maxBlocksPermeated, stepSize);
         }
@@ -182,6 +191,7 @@ public final class RaycastingHelper {
             resetForLevel(level);
         }
         playerEyePos = player.getEyePosition();
+        underwater = Config.getInstance().waterAcoustics && player.isEyeInFluid(FluidTags.WATER);
 
         if (inFlight != null && inFlight.isDone()) {
             collect(inFlight);
@@ -295,7 +305,7 @@ public final class RaycastingHelper {
         return new Job(level, player, eye, settings, roomSettings(config), directions, targets, arrays, fast,
                 config.barrierAsAir, config.useExplosionResistance, config.maxBlocksPermeated,
                 config.permeationStepSize, config.raysCast, config.raysBounced, generation, hasNewSounds, sourceReverb,
-                currentReverb == null ? 0.0 : currentReverb.enclosure, fullReverb);
+                currentReverb == null ? 0.0 : currentReverb.enclosure, fullReverb, config.waterAcoustics);
     }
 
     private static RoomAcousticsModel.Settings roomSettings(Config c) {
@@ -705,6 +715,10 @@ public final class RaycastingHelper {
     private static void updateReverbSmoothing() {
         ReverbParams target = targetReverb;
         if (target == null) return;
+        if (underwater) {
+            // Keep the room's size and direction, but mostly sound like being under water.
+            target = target.approach(UNDERWATER.withGainOf(target), 0.8f);
+        }
         ReverbParams current = currentReverb;
         float smoothing = Math.max(Config.getInstance().reverbSmoothing, 0.0f);
         if (current == null || smoothing == 0.0f) {
@@ -719,6 +733,10 @@ public final class RaycastingHelper {
     public static String lastTraceSummary() {
         return String.format(java.util.Locale.ROOT, "trace %.1f ms, %d sounds, %s", lastTraceMillis, lastTraceSounds,
                 subLevelsNearby || !Config.getInstance().fastRaytracing ? "clip" : "voxel");
+    }
+
+    public static boolean isUnderwater() {
+        return underwater;
     }
 
     /** Called every frame with the camera's axes (right = -left). */

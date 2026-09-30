@@ -91,6 +91,15 @@ public final class ReverbParams {
         this.absorption = absorption;
     }
 
+    /** This preset with another set's master gain (so presets follow the user's reverb intensity). */
+    public ReverbParams withGainOf(ReverbParams o) {
+        return new ReverbParams(density, diffusion, o.gain, gainHF, gainLF, decayTime, decayHFRatio, decayLFRatio,
+                reflectionsGain, reflectionsDelay, lateReverbGain, lateReverbDelay, echoTime, echoDepth, modulationTime,
+                modulationDepth, airAbsorptionGainHF, hfReference, lfReference, roomRolloffFactor,
+                reflectionsPanX, reflectionsPanY, reflectionsPanZ, lateReverbPanX, lateReverbPanY, lateReverbPanZ,
+                enclosure, meanFreePath, absorption);
+    }
+
     /** Exponential smoothing step from this towards target by fraction t (0..1). */
     public ReverbParams approach(ReverbParams target, float t) {
         return new ReverbParams(

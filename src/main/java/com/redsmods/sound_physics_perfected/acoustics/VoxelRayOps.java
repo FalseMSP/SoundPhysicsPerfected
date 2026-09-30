@@ -7,6 +7,13 @@ package com.redsmods.sound_physics_perfected.acoustics;
  */
 public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
     private static final double EPSILON = 1.0E-9;
+    /**
+     * Crossing the air/water surface, in "blocks of stone" of permeation: almost all sound energy is reflected
+     * at the surface (the real loss is around 30 dB); treble loses more.
+     */
+    static final double WATER_SURFACE_WEIGHT = 2.5, WATER_SURFACE_HF = 1.5;
+    /** Travelling through water itself barely attenuates. */
+    static final double WATER_VOLUME_WEIGHT = 0.1;
 
     private final VoxelWorld world;
     private final VoxelTraversal dda = new VoxelTraversal();
@@ -31,11 +38,56 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
         this.world = world;
     }
 
+    // Section-emptiness cache for the current walk.
+    private int sectionX, sectionY, sectionZ;
+    private boolean sectionEmpty;
+
+    private void resetSection() {
+        sectionX = Integer.MIN_VALUE;
+    }
+
+    /** Whether the current cell lies in a completely empty 16x16x16 section (checked once per section). */
+    private boolean inEmptySection() {
+        int sx = dda.x >> 4, sy = dda.y >> 4, sz = dda.z >> 4;
+        if (sx != sectionX || sy != sectionY || sz != sectionZ) {
+            sectionX = sx;
+            sectionY = sy;
+            sectionZ = sz;
+            sectionEmpty = world.sectionEmpty(dda.x, dda.y, dda.z);
+        }
+        return sectionEmpty;
+    }
+
+    /** The medium (air or water) a ray starting at o in direction d travels through first. */
+    private int originMedium(double ox, double oy, double oz, double dx, double dy, double dz) {
+        int kind = world.load(VoxelTraversal.floor(ox + dx * 1.0E-4), VoxelTraversal.floor(oy + dy * 1.0E-4),
+                VoxelTraversal.floor(oz + dz * 1.0E-4));
+        return kind == VoxelWorld.WATER ? VoxelWorld.WATER : VoxelWorld.EMPTY;
+    }
+
     @Override
     public boolean firstHit(double ox, double oy, double oz, double dx, double dy, double dz, double maxDistance) {
+        int medium = originMedium(ox, oy, oz, dx, dy, dz);
         dda.init(ox, oy, oz, dx, dy, dz, maxDistance);
-        do {
-            if (world.load(dda.x, dda.y, dda.z)) {
+        resetSection();
+        while (true) {
+            int kind = world.load(dda.x, dda.y, dda.z);
+            if (kind == VoxelWorld.EMPTY && medium == VoxelWorld.EMPTY) {
+                // Nothing in this whole section: jump straight across it.
+                if (inEmptySection()) {
+                    if (!dda.skipBox(sectionX << 4, sectionY << 4, sectionZ << 4, 16)) return false;
+                    continue;
+                }
+            } else if (kind != VoxelWorld.SOLID) {
+                // Air <-> water: the surface reflects like a very hard wall.
+                if (kind != medium && dda.tExit - dda.tEnter > EPSILON) {
+                    if (dda.tEnter > maxDistance) return false;
+                    hitT = dda.tEnter;
+                    setNormal(dda.enterAxis, dx, dy, dz);
+                    hitMaterial = AcousticMaterial.WATER;
+                    return true;
+                }
+            } else {
                 if (world.loadedIsFullCube()) {
                     // A zero-length visit is a ray grazing an edge/corner, or leaving the face it starts on.
                     if (dda.tExit - dda.tEnter > EPSILON) {
@@ -58,8 +110,8 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                     }
                 }
             }
-        } while (dda.advance());
-        return false;
+            if (!dda.advance()) return false;
+        }
     }
 
     /** axis < 0 means the origin was inside the shape; like vanilla, report the face opposing the ray. */
@@ -128,17 +180,34 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
         dz *= inv;
         int endX = VoxelTraversal.floor(bx), endY = VoxelTraversal.floor(by), endZ = VoxelTraversal.floor(bz);
 
+        int medium = originMedium(ax, ay, az, dx, dy, dz);
         double total = 0.0, totalHf = 0.0;
         dda.init(ax, ay, az, dx, dy, dz, distance);
-        do {
-            if (dda.x == endX && dda.y == endY && dda.z == endZ) {
+        resetSection();
+        while (true) {
+            boolean end = dda.x == endX && dda.y == endY && dda.z == endZ;
+            int kind = world.load(dda.x, dda.y, dda.z);
+            // Solid blocks keep whatever medium surrounds them.
+            int cellMedium = kind == VoxelWorld.SOLID ? medium : kind;
+            if (cellMedium != medium && dda.tExit - dda.tEnter > EPSILON) {
+                total += WATER_SURFACE_WEIGHT;
+                totalHf += WATER_SURFACE_WEIGHT * WATER_SURFACE_HF;
+                medium = cellMedium;
+                if (total >= maxWeighted) break;
+            }
+            if (end) {
                 break; // the sound's own block (note block, jukebox, bell...) never muffles it
             }
-            if (world.load(dda.x, dda.y, dda.z)) {
+            if (kind == VoxelWorld.EMPTY) {
+                if (medium == VoxelWorld.EMPTY && inEmptySection()) {
+                    if (!dda.skipBox(sectionX << 4, sectionY << 4, sectionZ << 4, 16)) break;
+                    continue;
+                }
+            } else {
                 double from = Math.max(dda.tEnter, 0.0);
                 double to = Math.min(dda.tExit, distance);
                 double length;
-                if (world.loadedIsFullCube()) {
+                if (kind == VoxelWorld.WATER || world.loadedIsFullCube()) {
                     length = to - from;
                 } else {
                     beginBoxes(MODE_LENGTH, ax, ay, az, dx, dy, dz, from, to);
@@ -146,7 +215,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                     length = boxLength;
                 }
                 if (length > 0.0) {
-                    double weighted = length * world.loadedTransmissionWeight();
+                    double weighted = length * (kind == VoxelWorld.WATER ? WATER_VOLUME_WEIGHT : world.loadedTransmissionWeight());
                     total += weighted;
                     totalHf += weighted * world.loadedMaterial().transmissionHf;
                     if (total >= maxWeighted) {
@@ -154,7 +223,8 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                     }
                 }
             }
-        } while (dda.advance());
+            if (!dda.advance()) break;
+        }
         obstructionHf = totalHf;
         return total;
     }

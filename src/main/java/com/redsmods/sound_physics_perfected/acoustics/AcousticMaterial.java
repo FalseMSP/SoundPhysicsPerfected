@@ -22,6 +22,7 @@ public final class AcousticMaterial {
     public static final AcousticMaterial FOLIAGE = new AcousticMaterial("foliage", 0.1f, 0.25f, 0.4f, 0.8f, 1.5f);
     public static final AcousticMaterial ORGANIC = new AcousticMaterial("organic", 0.1f, 0.3f, 0.45f, 0.5f, 2.0f);
     public static final AcousticMaterial GOO = new AcousticMaterial("goo", 0.05f, 0.15f, 0.3f, 0.3f, 2.0f);
+    public static final AcousticMaterial WATER = new AcousticMaterial("water", 0.01f, 0.01f, 0.02f, 0.05f, 2.0f);
     public static final AcousticMaterial DEFAULT = new AcousticMaterial("default", 0.05f, 0.1f, 0.12f, 0.3f, 2.0f);
 
     public final String name;

@@ -69,6 +69,8 @@
   "yacl3.config.${id}:config.maxBlocksPermeated.description": "Max blocks permeated in the calculation",
   "yacl3.config.${id}:config.permeationAbsorption": "Absorption Multiplier",
   "yacl3.config.${id}:config.permeationAbsorption.description": "Volume is multiplied by x^blocksTraveled where x is the value set here for muffle",
+  "yacl3.config.${id}:config.waterAcoustics": "Water Acoustics",
+  "yacl3.config.${id}:config.waterAcoustics.description": "Water surfaces reflect sound (lakes in caves ring), sound barely crosses between air and water, and with your head under water everything is muffled and sounds like being under water.",
   "yacl3.config.${id}:config.barrierAsAir": "Treat Barriers As Air",
   "yacl3.config.${id}:config.barrierAsAir.description": "Make it so barriers do NOT absorb sound",
   "yacl3.config.${id}:config.shortcutDirectionality": "Shortcut Directionality",

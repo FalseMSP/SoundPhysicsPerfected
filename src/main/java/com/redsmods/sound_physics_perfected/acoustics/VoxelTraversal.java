@@ -21,9 +21,16 @@ public final class VoxelTraversal {
     private double tMaxX, tMaxY, tMaxZ;
     private double tDeltaX, tDeltaY, tDeltaZ;
     private double maxT;
+    private double ox, oy, oz, dx, dy, dz;
 
     public void init(double ox, double oy, double oz, double dx, double dy, double dz, double maxT) {
         this.maxT = maxT;
+        this.ox = ox;
+        this.oy = oy;
+        this.oz = oz;
+        this.dx = dx;
+        this.dy = dy;
+        this.dz = dz;
         this.x = floor(ox - dx * 1.0E-7);
         this.y = floor(oy - dy * 1.0E-7);
         this.z = floor(oz - dz * 1.0E-7);
@@ -65,6 +72,36 @@ public final class VoxelTraversal {
         }
         tExit = Math.min(tMaxX, Math.min(tMaxY, tMaxZ));
         return tEnter <= maxT;
+    }
+
+    /**
+     * Jumps past the axis-aligned box [bx, bx+size) x [by, by+size) x [bz, bz+size) that contains the current cell
+     * (e.g. a chunk section with nothing in it), landing in the first cell after it. Returns false once that cell
+     * would start beyond maxT.
+     */
+    public boolean skipBox(int bx, int by, int bz, int size) {
+        double exitX = stepX == 0 ? Double.POSITIVE_INFINITY : ((stepX > 0 ? bx + size : bx) - ox) / dx;
+        double exitY = stepY == 0 ? Double.POSITIVE_INFINITY : ((stepY > 0 ? by + size : by) - oy) / dy;
+        double exitZ = stepZ == 0 ? Double.POSITIVE_INFINITY : ((stepZ > 0 ? bz + size : bz) - oz) / dz;
+        int axis = exitX <= exitY && exitX <= exitZ ? 0 : (exitY <= exitZ ? 1 : 2);
+        double t = axis == 0 ? exitX : (axis == 1 ? exitY : exitZ);
+        if (t > maxT) return false;
+        if (t < tEnter) return advance(); // numerically at the edge already
+
+        // Land in the neighbouring cell across the exited face; the other axes follow the ray.
+        int nx = axis == 0 ? (stepX > 0 ? bx + size : bx - 1) : floor(ox + dx * t);
+        int ny = axis == 1 ? (stepY > 0 ? by + size : by - 1) : floor(oy + dy * t);
+        int nz = axis == 2 ? (stepZ > 0 ? bz + size : bz - 1) : floor(oz + dz * t);
+        x = nx;
+        y = ny;
+        z = nz;
+        tMaxX = stepX == 0 ? Double.POSITIVE_INFINITY : Math.max(t, ((stepX > 0 ? x + 1 : x) - ox) / dx);
+        tMaxY = stepY == 0 ? Double.POSITIVE_INFINITY : Math.max(t, ((stepY > 0 ? y + 1 : y) - oy) / dy);
+        tMaxZ = stepZ == 0 ? Double.POSITIVE_INFINITY : Math.max(t, ((stepZ > 0 ? z + 1 : z) - oz) / dz);
+        tEnter = t;
+        enterAxis = axis;
+        tExit = Math.min(tMaxX, Math.min(tMaxY, tMaxZ));
+        return true;
     }
 
     /** Sign of the step along the given axis (the ray's direction sign). */

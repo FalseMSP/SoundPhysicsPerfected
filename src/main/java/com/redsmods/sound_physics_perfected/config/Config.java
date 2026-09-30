@@ -109,6 +109,11 @@ public class Config {
 
     @AutoGen(category = "general", group = "permeation")
     @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.waterAcoustics.description")
+    @SerialEntry public boolean waterAcoustics = true;
+
+    @AutoGen(category = "general", group = "permeation")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF, colored = true)
     @CustomDescription("yacl3.config.sound_physics_perfected:config.barrierAsAir.description")
     @SerialEntry public boolean barrierAsAir = true;
 

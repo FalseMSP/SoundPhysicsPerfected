@@ -1,6 +1,7 @@
 package com.redsmods.sound_physics_perfected.acoustics;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -21,6 +22,7 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
     private final boolean barrierAsAir;
     private final boolean useExplosionResistance;
     private final double maxBlocksPermeated;
+    private final boolean water;
     private final int minSection;
     private final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
@@ -30,12 +32,20 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
     private BlockState loadedState;
     private VoxelShape loadedShape;
     private boolean loadedFull;
+    private boolean loadedWater;
     private BlockState entryState;
     private AcousticMaterials.Entry entry;
     private BoxConsumer boxTarget;
 
     public LevelVoxelWorld(Level level, boolean barrierAsAir, boolean useExplosionResistance, double maxBlocksPermeated) {
+        this(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated, true);
+    }
+
+    /** @param water whether water is its own medium (reflective surface, costly to cross) rather than air */
+    public LevelVoxelWorld(Level level, boolean barrierAsAir, boolean useExplosionResistance, double maxBlocksPermeated,
+                           boolean water) {
         this.level = level;
+        this.water = water;
         this.chunks = level.getChunkSource();
         this.barrierAsAir = barrierAsAir;
         this.useExplosionResistance = useExplosionResistance;
@@ -44,8 +54,7 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
         this.minSection = -level.getSectionIndex(0);
     }
 
-    @Override
-    public boolean load(int x, int y, int z) {
+    private LevelChunkSection[] sectionsOf(int x, int z) {
         int cx = x >> 4, cz = z >> 4;
         if (cx != cachedChunkX || cz != cachedChunkZ) {
             LevelChunk chunk = chunks.getChunk(cx, cz, false);
@@ -53,24 +62,50 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
             cachedChunkX = cx;
             cachedChunkZ = cz;
         }
-        LevelChunkSection[] sections = cachedSections;
-        if (sections == null) return false; // unloaded: behaves like air, as Level#clip does
+        return cachedSections;
+    }
+
+    @Override
+    public int load(int x, int y, int z) {
+        LevelChunkSection[] sections = sectionsOf(x, z);
+        if (sections == null) return EMPTY; // unloaded: behaves like air, as Level#clip does
         int index = (y >> 4) - minSection;
-        if (index < 0 || index >= sections.length) return false;
+        if (index < 0 || index >= sections.length) return EMPTY;
         LevelChunkSection section = sections[index];
-        if (section == null || section.hasOnlyAir()) return false;
+        if (section == null || section.hasOnlyAir()) return EMPTY;
 
         BlockState state = section.getBlockState(x & 15, y & 15, z & 15);
-        if (state.isAir()) return false;
-        if (barrierAsAir && state.is(Blocks.BARRIER)) return false;
+        if (state.isAir()) return EMPTY;
+        if (barrierAsAir && state.is(Blocks.BARRIER)) return EMPTY;
 
         pos.set(x, y, z);
         VoxelShape shape = state.getCollisionShape(level, pos);
-        if (shape.isEmpty()) return false;
+        if (shape.isEmpty()) {
+            // Water (source, flowing, or filling a block without collision like seagrass) is its own medium.
+            if (water && !state.getFluidState().isEmpty() && state.getFluidState().is(FluidTags.WATER)) {
+                loadedState = state;
+                loadedShape = Shapes.block();
+                loadedFull = true;
+                loadedWater = true;
+                return WATER;
+            }
+            return EMPTY;
+        }
         loadedState = state;
         loadedShape = shape;
         loadedFull = shape == Shapes.block() || state.isCollisionShapeFullBlock(level, pos);
-        return true;
+        loadedWater = false;
+        return SOLID;
+    }
+
+    @Override
+    public boolean sectionEmpty(int x, int y, int z) {
+        LevelChunkSection[] sections = sectionsOf(x, z);
+        if (sections == null) return true;
+        int index = (y >> 4) - minSection;
+        if (index < 0 || index >= sections.length) return true;
+        LevelChunkSection section = sections[index];
+        return section == null || section.hasOnlyAir();
     }
 
     @Override
@@ -99,7 +134,7 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
 
     @Override
     public AcousticMaterial loadedMaterial() {
-        return entry().material;
+        return loadedWater ? AcousticMaterial.WATER : entry().material;
     }
 
     @Override

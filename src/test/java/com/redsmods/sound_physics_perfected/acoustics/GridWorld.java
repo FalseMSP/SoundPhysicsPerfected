@@ -7,6 +7,9 @@ import java.util.Map;
 final class GridWorld implements VoxelWorld {
     private final Map<Long, AcousticMaterial> cells = new HashMap<>();
     private final Map<Long, double[]> boxes = new HashMap<>();
+    /** Number of occupied cells per 16^3 section, for {@link #sectionEmpty}. */
+    private final Map<Long, Integer> sectionCounts = new HashMap<>();
+    boolean reportSections = true;
     private AcousticMaterial loaded;
     private double[] loadedBox;
 
@@ -15,19 +18,19 @@ final class GridWorld implements VoxelWorld {
     }
 
     GridWorld set(int x, int y, int z, AcousticMaterial material) {
-        cells.put(key(x, y, z), material);
+        if (cells.put(key(x, y, z), material) == null) sectionCounts.merge(key(x >> 4, y >> 4, z >> 4), 1, Integer::sum);
         boxes.remove(key(x, y, z));
         return this;
     }
 
     GridWorld setPartial(int x, int y, int z, AcousticMaterial material, double... box) {
-        cells.put(key(x, y, z), material);
+        if (cells.put(key(x, y, z), material) == null) sectionCounts.merge(key(x >> 4, y >> 4, z >> 4), 1, Integer::sum);
         boxes.put(key(x, y, z), box);
         return this;
     }
 
     GridWorld clear(int x, int y, int z) {
-        cells.remove(key(x, y, z));
+        if (cells.remove(key(x, y, z)) != null) sectionCounts.merge(key(x >> 4, y >> 4, z >> 4), -1, Integer::sum);
         boxes.remove(key(x, y, z));
         return this;
     }
@@ -56,11 +59,17 @@ final class GridWorld implements VoxelWorld {
     }
 
     @Override
-    public boolean load(int x, int y, int z) {
+    public int load(int x, int y, int z) {
         long k = key(x, y, z);
         loaded = cells.get(k);
         loadedBox = loaded == null ? null : boxes.get(k);
-        return loaded != null;
+        if (loaded == null) return EMPTY;
+        return loaded == AcousticMaterial.WATER ? WATER : SOLID;
+    }
+
+    @Override
+    public boolean sectionEmpty(int x, int y, int z) {
+        return reportSections && sectionCounts.getOrDefault(key(x >> 4, y >> 4, z >> 4), 0) <= 0;
     }
 
     @Override
