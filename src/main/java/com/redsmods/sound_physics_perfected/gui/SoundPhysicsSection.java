@@ -80,7 +80,7 @@ public final class SoundPhysicsSection {
                 .create(0, 0, FULL_WIDTH, 20, Component.translatable(KEY + "quality"),
                         (button, preset) -> applyPreset(preset));
 
-        ConfigSlider rays = qualitySlider("rays", 0, 2000, 8,
+        ConfigSlider rays = qualitySlider("rays", 0, 4096, 8,
                 c -> c.raysCast, (c, v) -> c.raysCast = v, SoundPhysicsSection::number);
         ConfigSlider bounces = qualitySlider("bounces", 0, 16, 1,
                 c -> c.raysBounced, (c, v) -> c.raysBounced = v, SoundPhysicsSection::number);

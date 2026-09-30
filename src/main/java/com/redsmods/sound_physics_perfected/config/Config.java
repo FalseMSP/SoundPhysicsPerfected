@@ -39,22 +39,22 @@ public class Config {
 
     // Original settings
     @AutoGen(category = "general", group = "main")
-    @IntField(min = 0, max = 2000)
+    @IntField(min = 0, max = 4096)
     @FormatTranslation("sound_physics_perfected.config.unit.rays")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.raysCast.description")
-    @SerialEntry public int raysCast = 200;
+    @SerialEntry public int raysCast = QualityPreset.MEDIUM.rays;
 
     @AutoGen(category = "general", group = "main")
     @IntSlider(min = 0, max = 16, step = 1)
     @FormatTranslation("sound_physics_perfected.config.unit.rays")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.raysBounced.description")
-    @SerialEntry public int raysBounced = 3;
+    @SerialEntry public int raysBounced = QualityPreset.MEDIUM.bounces;
 
     @AutoGen(category = "general", group = "main")
     @IntSlider(min = 2, max = 16, step = 1)
     @FormatTranslation("sound_physics_perfected.config.unit.chunks")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.maxRayLength.description")
-    @SerialEntry public int maxRayLength = 4; // chunks
+    @SerialEntry public int maxRayLength = QualityPreset.MEDIUM.rayLength; // chunks
 
     @AutoGen(category = "general", group = "main")
     @IntSlider(min = -1, max = 1000, step = 10)
@@ -231,7 +231,7 @@ public class Config {
     @IntSlider(min = 0, max = 32, step = 1)
     @FormatTranslation("sound_physics_perfected.config.unit.rays")
     @CustomDescription("yacl3.config.sound_physics_perfected:config.reverbBounces.description")
-    @SerialEntry public int reverbBounces = 8;
+    @SerialEntry public int reverbBounces = QualityPreset.MEDIUM.reverbBounces;
 
     @AutoGen(category = "reverb_tuning", group = "global")
     @FloatField(min = 0, max = 10000)

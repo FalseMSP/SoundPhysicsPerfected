@@ -44,7 +44,17 @@
 
 ## Config
 
-- **Sound Physics section in Music & Sounds.** A Ray Tracing Quality preset (Low, Medium, High, Ultra) and sliders for Rays, Bounces, Reverb Bounces, Ray Length and Muffling, so you can trade CPU for accuracy without leaving the game. Changes are heard straight away; More Settings... opens the full config.
+- **Sound Physics section in Music & Sounds.** A Ray Tracing Quality preset and sliders for Rays, Bounces, Reverb Bounces, Ray Length and Muffling, so you can trade CPU for accuracy without leaving the game. Changes are heard straight away; More Settings... opens the full config.
+
+  | Preset | Rays | Bounces | Reverb bounces | Ray length | Stress-test CPU |
+  |---|---|---|---|---|---|
+  | Low | 128 | 2 | 4 | 4 chunks | |
+  | Medium (default) | 256 | 3 | 8 | 4 chunks | 0.3 s |
+  | High | 512 | 4 | 12 | 6 chunks | 0.7 s |
+  | Ultra | 2048 | 6 | 24 | 8 chunks | 2.8 s |
+
+  Stress-test CPU is ray tracing time for 400 sounds in 23 seconds in a cave. Traced sounds start with no measurable delay on every preset.
+- New configs default to the Medium preset: 256 rays, up from 200. The ray limit is raised to 4096.
 - New: Fast Raytracing, Low Latency Budget, Air Absorption, Directional Reverb, Reverb Zones, Reverb Ray Bounces, Reverb Smoothing, Decay Time Multiplier, Max Decay Time, Early Reflections, Late Reverb, Distant Echoes, Muffling, Water Acoustics, Energy: Full Volume Share.
 - The Attenuation Mode now defaults to Energy for new configs. Existing configs keep their mode; switch to Energy to try it.
 - Removed the reverb tuning options of the old model (indoor/outdoor bias, room emphasis, density/diffusion/echo/modulation factors and so on). They only affected settings that were never applied. Global Reverb Intensity, Max Overall Gain, Sound Speed and the HF/LF references still work.

@@ -5,13 +5,13 @@ import java.util.Locale;
 
 /**
  * Ray tracing quality presets, offered on the Music &amp; Sounds screen. Each sets how many rays are traced, how often
- * they bounce and how far they go; {@link #HIGH} is the mod's defaults.
+ * they bounce and how far they go; {@link #MEDIUM} is the mod's defaults (Config's defaults are these values).
  */
 public enum QualityPreset {
-    LOW(64, 2, 4, 3),
-    MEDIUM(128, 3, 6, 4),
-    HIGH(200, 3, 8, 4),
-    ULTRA(512, 4, 12, 6),
+    LOW(128, 2, 4, 4),
+    MEDIUM(256, 3, 8, 4),
+    HIGH(512, 4, 12, 6),
+    ULTRA(2048, 6, 24, 8),
     /** Settings that match no preset. */
     CUSTOM(-1, -1, -1, -1);
 
