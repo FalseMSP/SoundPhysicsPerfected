@@ -33,6 +33,8 @@
 
 - New **Fast Raytracing** (on by default): rays walk the block grid directly instead of using Minecraft's generic ray casting. It switches itself off near Sable sub-levels.
 - **Trail caching** (after Vercidium). While you stand still and no block that matters to sound changes, the rays' paths are reused. New sounds are only connected to them, and a sound at a spot already traced needs no tracing at all. The room is not re-measured either. Paths are re-traced at least every 2 seconds.
+- **The tracer uses the CPU as needed.** It runs as many threads as the machine can spare (all cores but two, up to 16). Threads start when there is work and stop when idle, and a trace is split by its size, so a big trace spreads over every free core. On Ultra while walking past buzzing bees, traces take 3 ms instead of 5 ms (worst 5 ms instead of 9 ms), so new sounds still start at once.
+- While walking, the room is re-measured about 4 times a second instead of every half block (it is smoothed over 0.25 s anyway), and the in-between traces skip the echogram. That's about 17% less CPU on Ultra.
 - Each tracer thread remembers the block states it has already classified. Looking a block's shape up used to be the single biggest cost of tracing.
 - Measured in game with every feature on: 400 sounds in 23 s in a cave used 2220 ms of ray tracing CPU in 1.17.5, and now use about 200 ms (11x less). Standing still costs almost nothing.
 - **Sounds start sooner.** Traced sounds used to start 60 to 140 ms after they were triggered; they now start with no measurable delay (new **Low Latency Budget** option, default 3 ms).

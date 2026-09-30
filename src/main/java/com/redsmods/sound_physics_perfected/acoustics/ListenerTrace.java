@@ -146,7 +146,9 @@ public final class ListenerTrace {
         ReverbStats stats = acc.stats;
         stats.segmentLength = s.segmentLength;
         boolean[] found = new boolean[targets.count]; // sounds this ray has already seen from a bounce
-        Echo echo = s.reverb ? new Echo(s.reverbBounces + 1) : null;
+        // The echogram only matters when rays keep going to measure the room (the in-between traces for new sounds
+        // keep the last room estimate).
+        Echo echo = s.reverb && s.reverbBounces > s.bounces ? new Echo(s.reverbBounces + 1) : null;
         for (int ray = from; ray < to; ray++) {
             stats.rays++;
             java.util.Arrays.fill(found, false);

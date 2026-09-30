@@ -50,8 +50,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -86,14 +86,26 @@ public final class RaycastingHelper {
     public static volatile Vec3 playerEyePos = Vec3.ZERO;
 
     // --- Trace pipeline ------------------------------------------------------------------------------------------
-    private static final int THREADS = Math.max(2, Math.min(Runtime.getRuntime().availableProcessors() - 1, 8));
+    /**
+     * Tracer threads: as many as the machine can spare (two cores are left to the game's render and server
+     * threads), started when there is work and stopped after 30 s idle. A big trace spreads over every free core
+     * and finishes sooner; an idle game costs nothing.
+     */
+    private static final int THREADS = Math.max(2, Math.min(Runtime.getRuntime().availableProcessors() - 2, 16));
+    /** Rays per task: small enough to spread a big trace over all threads, big enough to keep overhead low. */
+    private static final int RAYS_PER_TASK = 32;
     private static final AtomicInteger THREAD_ID = new AtomicInteger();
-    private static final ExecutorService POOL = Executors.newFixedThreadPool(THREADS, runnable -> {
+    private static final ThreadPoolExecutor POOL = new ThreadPoolExecutor(THREADS, THREADS, 30, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(), runnable -> {
         Thread thread = new Thread(runnable, "SPP Ray Tracer #" + THREAD_ID.incrementAndGet());
         thread.setDaemon(true);
         thread.setPriority(Thread.NORM_PRIORITY - 1);
         return thread;
     });
+
+    static {
+        POOL.allowCoreThreadTimeOut(true);
+    }
 
     private static CompletableFuture<Result> inFlight;
     /** Originals carried by the in-flight trace. */
@@ -114,6 +126,11 @@ public final class RaycastingHelper {
     private static volatile boolean subLevelsNearby;
     private static double lastTraceMillis;
     private static int lastTraceSounds;
+    /** Trace statistics over the current and the last completed second, for the debug readout. */
+    private static long statsWindowStart;
+    private static int windowTraces, windowReused;
+    private static double windowSumMs, windowMaxMs;
+    private static String lastWindowSummary = "";
 
     // --- Published results ------------------------------------------------------------------------------------------
     private static volatile ReverbStats lastStats = new ReverbStats();
@@ -380,7 +397,10 @@ public final class RaycastingHelper {
 
         // The room only needs re-measuring (with the long reverb bounce chains) when the listener moved or every
         // 10 ticks; traces in between, run for new sounds, keep the last estimate.
-        boolean fullReverb = eye.distanceToSqr(lastFullReverbEye) > 0.25 || ticksSinceFullReverb >= 10
+        // While walking the room is re-measured about 4 times a second (it is smoothed over 0.25 s anyway), right
+        // away after a jump of more than 4 blocks (teleport, portal), and every 10 ticks when standing still.
+        double moved = eye.distanceToSqr(lastFullReverbEye);
+        boolean fullReverb = (moved > 0.25 && ticksSinceFullReverb >= 5) || moved > 16.0 || ticksSinceFullReverb >= 10
                 || qualityChanged;
         TraceSettings settings = new TraceSettings(config.raysBounced, fullReverb ? config.reverbBounces : config.raysBounced,
                 16.0 * config.maxRayLength, config.permeation,
@@ -508,7 +528,7 @@ public final class RaycastingHelper {
                 }, POOL));
             }
         } else {
-            int chunks = Math.max(1, Math.min(rays, THREADS * 3));
+            int chunks = Math.max(1, Math.min((rays + RAYS_PER_TASK - 1) / RAYS_PER_TASK, THREADS * 4));
             trails = rays > 0 && job.cacheable ? new ListenerTrace.Trail[chunks] : null;
             for (int c = 0; c < chunks && rays > 0; c++) {
                 int from = (int) ((long) rays * c / chunks);
@@ -676,6 +696,7 @@ public final class RaycastingHelper {
         }
         lastTraceMillis = result.nanos / 1.0e6;
         lastTraceSounds = job.targets.size();
+        recordTraceStats(lastTraceMillis, job.trail != null);
         int totalHits = paths.stats.totalHits();
 
         for (int j = 0; j < job.targets.size(); j++) {
@@ -1034,8 +1055,28 @@ public final class RaycastingHelper {
 
     /** Wall time of the last trace and how many sounds it placed, for the reverb debug line. */
     public static String lastTraceSummary() {
-        return String.format(java.util.Locale.ROOT, "trace %.1f ms, %d sounds, %s", lastTraceMillis, lastTraceSounds,
-                subLevelsNearby || !Config.getInstance().fastRaytracing ? "clip" : "voxel");
+        return String.format(java.util.Locale.ROOT, "trace %.1f ms, %d sounds, %s%s", lastTraceMillis, lastTraceSounds,
+                subLevelsNearby || !Config.getInstance().fastRaytracing ? "clip" : "voxel", lastWindowSummary);
+    }
+
+    private static void recordTraceStats(double millis, boolean reused) {
+        long now = System.nanoTime();
+        if (now - statsWindowStart >= 1_000_000_000L) {
+            lastWindowSummary = windowTraces == 0 ? "" : String.format(java.util.Locale.ROOT,
+                    " | %d traces/s (%d reused paths), avg %.1f ms, max %.1f ms, %d threads", windowTraces,
+                    windowReused, windowSumMs / windowTraces, windowMaxMs, threads());
+            statsWindowStart = now;
+            windowTraces = windowReused = 0;
+            windowSumMs = windowMaxMs = 0.0;
+        }
+        windowTraces++;
+        if (reused) windowReused++;
+        windowSumMs += millis;
+        windowMaxMs = Math.max(windowMaxMs, millis);
+    }
+
+    private static int threads() {
+        return POOL.getPoolSize();
     }
 
     public static boolean isUnderwater() {
