@@ -23,6 +23,8 @@ public class OpenALEffectsHandler {
     private int sendFilter = 0;
     private int directBlockFilter = 0;
     public boolean efxInitialized = false;
+    /** The current device has no EFX: don't try again on every sound (reset when the sound engine restarts). */
+    public boolean efxUnsupported = false;
 
     /** What is currently loaded into one effect slot, for change detection and rate limiting. */
     private static final class SlotState {
@@ -212,6 +214,7 @@ public class OpenALEffectsHandler {
 
     /** Re-creates the EFX objects if the context lost them (e.g. device reset). Returns whether EFX is usable. */
     public boolean ensureValid() {
+        if (efxUnsupported) return false;
         if (!efxInitialized) {
             initializeReverb();
             return efxInitialized;
@@ -358,7 +361,8 @@ public class OpenALEffectsHandler {
         try {
             // Check if EFX is available
             if (!ALC10.alcIsExtensionPresent(currentDevice, "ALC_EXT_EFX")) {
-                System.out.println("EFX Extension not available - reverb disabled");
+                if (!efxUnsupported) System.out.println("EFX Extension not available - reverb disabled");
+                efxUnsupported = true;
                 return;
             }
 

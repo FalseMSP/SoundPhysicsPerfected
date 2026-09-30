@@ -690,6 +690,12 @@ public final class RaycastingHelper {
                 }
             } catch (RuntimeException e) {
                 logError("Error placing a traced sound", e);
+                if (target.kind == Kind.ONE_SHOT) {
+                    // Never lose a sound: play the original as vanilla would.
+                    SoundInstance original = ((RedSoundInstance) target.data.sound).getOriginal();
+                    bypass.add(original);
+                    soundsToPlay.add(original);
+                }
             }
         }
     }
@@ -970,6 +976,11 @@ public final class RaycastingHelper {
 
     public static void onStopAll() {
         generation++;
+        // Also runs when leaving a world: hold on to nothing of it (a running trace finishes and is dropped).
+        inFlight = null;
+        inFlightOriginals = Collections.newSetFromMap(new IdentityHashMap<>());
+        trailCache = null;
+        worldVersion++;
         soundQueue.clear();
         tickQueue.clear();
         permeatedTickQueue.clear();
@@ -1098,7 +1109,8 @@ public final class RaycastingHelper {
         *///?}
     }
 
-    private static void logError(String message, Throwable error) {
+    /** Logs at most one error every 10 s (errors in per-tick code would otherwise flood the log). */
+    public static void logError(String message, Throwable error) {
         long now = System.currentTimeMillis();
         if (now - lastErrorLog > 10_000) {
             lastErrorLog = now;

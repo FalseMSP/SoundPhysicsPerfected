@@ -58,10 +58,15 @@ public abstract class ShadowInstanceToChannelMixin {
                 // SoundEngine#play registers the channel before queueing "attach buffer and play": set the
                 // filters and sends now, so a short sound's attack is muffled too, not only from the next tick.
                 if (key != null && value != null && fxHandler.efxInitialized) {
-                    java.util.function.Consumer<com.mojang.blaze3d.audio.Channel> effects =
-                            com.redsmods.sound_physics_perfected.SourceEffects.plan(key,
-                                    com.redsmods.sound_physics_perfected.SourceEffects.Frame.now(false));
-                    if (effects != null) value.execute(effects);
+                    try {
+                        java.util.function.Consumer<com.mojang.blaze3d.audio.Channel> effects =
+                                com.redsmods.sound_physics_perfected.SourceEffects.plan(key,
+                                        com.redsmods.sound_physics_perfected.SourceEffects.Frame.now(false));
+                        if (effects != null) value.execute(effects);
+                    } catch (RuntimeException e) {
+                        // Never break SoundEngine#play: the sound plays, and the next tick sets its effects.
+                        logError("Error setting up a sound's effects", e);
+                    }
                 }
                 return original.put(key, value);
             }

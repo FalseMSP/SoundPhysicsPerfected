@@ -62,7 +62,7 @@ public abstract class SoundSystemMixin {
     private void onSoundPlay(SoundInstance sound, CallbackInfoReturnable<SoundEngine.PlayResult> cir) {
      *///?}
         if (sound == null) return;
-        if (!fxHandler.efxInitialized) {
+        if (!fxHandler.efxInitialized && !fxHandler.efxUnsupported) {
             fxHandler.initializeReverb();
         }
 
@@ -122,7 +122,11 @@ public abstract class SoundSystemMixin {
     )
     private void onSoundTick(boolean paused, CallbackInfo ci) {
         long start = System.nanoTime();
-        spp$tick();
+        try {
+            spp$tick();
+        } catch (RuntimeException e) {
+            RaycastingHelper.logError("Error in the sound physics tick", e); // never break vanilla's sound tick
+        }
         spp$tickMillis += ((System.nanoTime() - start) / 1.0e6 - spp$tickMillis) * 0.05; // ~1 s average
     }
 
@@ -171,6 +175,15 @@ public abstract class SoundSystemMixin {
     private void onFrame(Camera camera, CallbackInfo ci) {
         Minecraft client = Minecraft.getInstance();
         if (client.level == null || client.player == null) return;
+        try {
+            spp$frame(client, camera);
+        } catch (RuntimeException e) {
+            RaycastingHelper.logError("Error in the sound physics frame update", e);
+        }
+    }
+
+    @Unique
+    private void spp$frame(Minecraft client, Camera camera) {
         Vector3f left = camera.getLeftVector(), up = camera.getUpVector(), look = camera.getLookVector();
         RaycastingHelper.setListenerBasis(left.x(), left.y(), left.z(), up.x(), up.y(), up.z(), look.x(), look.y(), look.z());
         RaycastingHelper.onFrame(client.level, client.player);
@@ -229,6 +242,7 @@ public abstract class SoundSystemMixin {
     @Inject(method = "loadLibrary()V", at = @At("TAIL"))
     private void onAudioEngineStart(CallbackInfo ci) {
         fxHandler.efxInitialized = false;
+        fxHandler.efxUnsupported = false;
         fxHandler.initializeReverb();
     }
 

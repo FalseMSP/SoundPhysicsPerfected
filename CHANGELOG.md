@@ -38,7 +38,9 @@
 - **Sounds start sooner.** Traced sounds used to start 60 to 140 ms after they were triggered; they now start with no measurable delay (new **Low Latency Budget** option, default 3 ms).
 - No more blocking of the game thread while sounds are placed, and no more per-sound reverb recomputation every tick.
 - Fixed a memory leak where every sound ever played stayed referenced for the whole session.
-- Stopping a sound that is still being traced now works, and a failed trace plays its sounds unprocessed instead of losing them.
+- Leaving a world no longer keeps it in memory while in the menus.
+- Stopping a sound that is still being traced now works, and a failed trace or placement plays its sounds unprocessed instead of losing them. An error in the mod's per-tick code is logged instead of breaking the game's sound tick.
+- On devices without EFX, the mod no longer retries (and logs) setting up effects on every sound.
 
 ## Config
 
