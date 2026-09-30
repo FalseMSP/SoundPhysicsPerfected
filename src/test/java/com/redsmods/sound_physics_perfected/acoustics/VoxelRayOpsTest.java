@@ -23,8 +23,8 @@ class VoxelRayOpsTest {
             // Every point sampled along the ray must lie in a cell the walk visited during that stretch of t.
             double t = 0;
             do {
-                while (t < Math.min(dda.tExit, max)) {
-                    if (t > dda.tEnter + 1e-6 && t < dda.tExit - 1e-6) {
+                while (t < Math.min(dda.tExit(), max)) {
+                    if (t > dda.tEnter + 1e-6 && t < dda.tExit() - 1e-6) {
                         assertEquals(VoxelTraversal.floor(ox + dx * t), dda.x);
                         assertEquals(VoxelTraversal.floor(oy + dy * t), dda.y);
                         assertEquals(VoxelTraversal.floor(oz + dz * t), dda.z);

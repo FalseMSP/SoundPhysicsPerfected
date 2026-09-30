@@ -12,8 +12,11 @@ public final class VoxelTraversal {
     public int x, y, z;
     /** Ray distance at which the current cell was entered (0 for the first cell). */
     public double tEnter;
-    /** Ray distance at which the current cell is left. */
-    public double tExit;
+    /** Ray distance at which the current cell is left (worked out on demand: most cells are just stepped through). */
+    public double tExit() {
+        double m = tMaxX < tMaxY ? tMaxX : tMaxY;
+        return m < tMaxZ ? m : tMaxZ;
+    }
     /** Axis the current cell was entered through (0 = x, 1 = y, 2 = z), or -1 for the starting cell. */
     public int enterAxis;
 
@@ -49,7 +52,6 @@ public final class VoxelTraversal {
 
         this.tEnter = 0.0;
         this.enterAxis = -1;
-        this.tExit = Math.min(tMaxX, Math.min(tMaxY, tMaxZ));
     }
 
     /** Steps into the next cell. Returns false once the next cell would start beyond maxT. */
@@ -70,7 +72,6 @@ public final class VoxelTraversal {
             tMaxZ += tDeltaZ;
             enterAxis = 2;
         }
-        tExit = Math.min(tMaxX, Math.min(tMaxY, tMaxZ));
         return tEnter <= maxT;
     }
 
@@ -103,7 +104,6 @@ public final class VoxelTraversal {
         tMaxZ = stepZ == 0 ? Double.POSITIVE_INFINITY : Math.max(t, ((stepZ > 0 ? z + 1 : z) - oz) / dz);
         tEnter = t;
         enterAxis = axis;
-        tExit = Math.min(tMaxX, Math.min(tMaxY, tMaxZ));
         return true;
     }
 

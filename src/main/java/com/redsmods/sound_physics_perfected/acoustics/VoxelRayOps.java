@@ -81,7 +81,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                 }
             } else if (kind != VoxelWorld.SOLID) {
                 // Air <-> water: the surface reflects like a very hard wall.
-                if (kind != medium && dda.tExit - dda.tEnter > EPSILON) {
+                if (kind != medium && dda.tExit() - dda.tEnter > EPSILON) {
                     if (dda.tEnter > maxDistance) return false;
                     hitT = dda.tEnter;
                     setNormal(dda.enterAxis, dx, dy, dz);
@@ -89,7 +89,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                     return true;
                 }
             } else {
-                if (world.loadedWaterlogged() && medium != VoxelWorld.WATER && dda.tExit - dda.tEnter > EPSILON) {
+                if (world.loadedWaterlogged() && medium != VoxelWorld.WATER && dda.tExit() - dda.tEnter > EPSILON) {
                     // Water fills a waterlogged block around its shape: coming from the air, that is a surface.
                     if (dda.tEnter > maxDistance) return false;
                     hitT = dda.tEnter;
@@ -99,7 +99,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                 }
                 if (world.loadedIsFullCube()) {
                     // A zero-length visit is a ray grazing an edge/corner, or leaving the face it starts on.
-                    if (dda.tExit - dda.tEnter > EPSILON) {
+                    if (dda.tExit() - dda.tEnter > EPSILON) {
                         if (dda.tEnter > maxDistance) {
                             return false;
                         }
@@ -200,7 +200,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
             int cellMedium = kind == VoxelWorld.SOLID ? (world.loadedWaterlogged() ? VoxelWorld.WATER : medium) : kind;
             // Crossing into the sound's own block is free, as for solids: something splashing, paddling or
             // bobbing at the surface is heard from both sides of it.
-            if (cellMedium != medium && dda.tExit - dda.tEnter > EPSILON) {
+            if (cellMedium != medium && dda.tExit() - dda.tEnter > EPSILON) {
                 if (!end) {
                     total += WATER_SURFACE_WEIGHT;
                     totalHf += WATER_SURFACE_WEIGHT * WATER_SURFACE_HF;
@@ -218,7 +218,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                 }
             } else {
                 double from = Math.max(dda.tEnter, 0.0);
-                double to = Math.min(dda.tExit, distance);
+                double to = Math.min(dda.tExit(), distance);
                 double length;
                 if (kind == VoxelWorld.WATER || world.loadedIsFullCube()) {
                     length = to - from;
