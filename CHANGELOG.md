@@ -7,6 +7,10 @@
   - reverb level from the room's absorption, early reflections from the nearest walls
   - distinct echoes off far cliffs and canyon walls when you are outside
 - **Real block materials.** Stone, deepslate, metal, glass, wood, wool, carpet, snow, dirt, sand, gravel, leaves and more each absorb sound differently, per frequency: wool rooms are dead and dull, stone rooms ring. (Previously stone was treated as the most absorbent surface in the game.)
+- **Directional reverb.** Echoes come from where they really bounce: reflections lean towards a nearby wall, and standing at a cave mouth the cave's reverb comes from inside the cave. It follows the camera as you turn.
+- **Reverb zones.** Sounds in a different space from you ring like that space: a zombie deep in a cave echoes like the cave while you stand outside, heard from the cave's direction and only as loud as that echo reaches you.
+- **Walls filter by material.** Walls stop treble far more than bass, differently per material: through stone you hear a dull thump, through glass nearly everything, through wool almost nothing.
+- **Rough surfaces scatter reflections** (cobblestone, leaves, wool), while glass and polished stone reflect like mirrors, for more natural reverb in irregular caves and buildings.
 - **Smooth transitions** when walking between spaces, and muffled sounds now produce muffled reverb.
 - **Better localisation.** Sounds heard through walls outdoors no longer come from a random direction, reflections lose energy according to the surface they bounce off, and blocks muffle correctly from every direction (rays travelling in negative directions used to read the wrong block).
 - Dense blocks that explode easily (dirt, sand, gravel, glass, snow) now muffle sound properly with Material Based Absorption.
@@ -14,7 +18,7 @@
 
 ## Performance and latency
 
-- New **Fast Raytracing** (on by default): rays walk the block grid directly instead of using Minecraft's generic ray casting. Measured in game, the ray tracing threads use about 7x less CPU when idle and about 4x less under heavy sound load. It switches itself off near Sable sub-levels.
+- New **Fast Raytracing** (on by default): rays walk the block grid directly instead of using Minecraft's generic ray casting. Measured in game with every new feature on, the ray tracing threads use about 6x less CPU when idle and about 3x less under heavy sound load. It switches itself off near Sable sub-levels.
 - **Sounds start sooner.** Traced sounds used to start 60 to 140 ms after they were triggered; they now start with no measurable delay (new **Low Latency Budget** option, default 3 ms).
 - No more blocking of the game thread while sounds are placed, and no more per-sound reverb recomputation every tick.
 - Fixed a memory leak where every sound ever played stayed referenced for the whole session.
@@ -22,7 +26,7 @@
 
 ## Config
 
-- New: Fast Raytracing, Low Latency Budget, Air Absorption, Reverb Smoothing, Decay Time Multiplier, Max Decay Time, Early Reflections, Late Reverb, Distant Echoes.
+- New: Fast Raytracing, Low Latency Budget, Air Absorption, Directional Reverb, Reverb Zones, Reverb Ray Bounces, Reverb Smoothing, Decay Time Multiplier, Max Decay Time, Early Reflections, Late Reverb, Distant Echoes.
 - Removed the reverb tuning options of the old model (indoor/outdoor bias, room emphasis, density/diffusion/echo/modulation factors and so on). They only affected settings that were never applied. Global Reverb Intensity, Max Overall Gain, Sound Speed and the HF/LF references still work.
 - The 1.0.0 and 1.4.0 legacy reverb modes sound as they always did.
 - The Reverb Debug readout now also shows the trace time and ray tracer in use.
@@ -30,4 +34,4 @@
 ## Development
 
 - The build no longer needs the fletching-table plugin; translations are plain flat JSON.
-- `./gradlew test` runs offline tests of the ray tracer and reverb model.
+- `./gradlew test` runs offline tests of the ray tracer, reverb model and reverb zones.
