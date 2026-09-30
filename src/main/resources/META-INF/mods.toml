@@ -21,7 +21,7 @@ side="BOTH"
 [[dependencies.sound_physics_perfected]]
 modId="minecraft"
 mandatory=true
-versionRange="{mcdep}"
+versionRange="${mcdep}"
 ordering="NONE"
 side="BOTH"
 

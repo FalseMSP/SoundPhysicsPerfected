@@ -46,6 +46,18 @@ class LoaderData {
 class McData {
     val version = property("mod.mc_version")
     val dep = property("mod.mc_dep").toString()
+
+    /** The Fabric-style range (">=1.21 <=1.21.1") as a Maven range ("[1.21,1.21.1]") for (Neo)Forge. */
+    val mavenDep: String get() {
+        var min = ""
+        var max = ""
+        for (part in dep.trim().split(Regex("\\s+"))) when {
+            part.startsWith(">=") -> min = part.substring(2)
+            part.startsWith("<=") -> max = part.substring(2)
+            else -> return "[$part]"
+        }
+        return "[$min,$max${if (max.isEmpty()) ")" else "]"}"
+    }
 }
 
 val mc = McData()
@@ -304,10 +316,12 @@ tasks.processResources {
 
         if (loader.isNeoforge) {
             put("forge_version", deps.neoforgeVersion)
+            put("mcdep", mc.mavenDep)
         }
 
         if (loader.isForge) {
             put("forge_version", deps.forgeVersion)
+            put("mcdep", mc.mavenDep)
 //            put("kotlin_forge_version", deps.kotlinForgeVersion)
         }
     }
