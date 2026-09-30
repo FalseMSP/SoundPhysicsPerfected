@@ -38,6 +38,12 @@ public class RedTickableInstance implements TickableSoundInstance {
     @Getter private Vec3 originalPosition;
     /** Reverb of the space this sound is in, when that may differ from the listener's (see ReverbZones). */
     @Setter private ReverbZones.SourceReverb sourceReverb;
+    /**
+     * Energy loudness (see ListenerTrace#energyGain): how much of the sound gets past what is in the way, per band.
+     * Applied as an OpenAL filter, so the sound keeps its vanilla volume and range.
+     */
+    private boolean energyGain;
+    private float energyLf = 1.0f, energyHf = 1.0f, targetEnergyLf = 1.0f, targetEnergyHf = 1.0f;
 
     public RedTickableInstance(ResourceLocation location, Sound sound, SoundSource source, Vec3 position, float volume, float pitch, SoundInstance wrapped, float attenuationMultiplier) {
         this.location = location;
@@ -82,6 +88,7 @@ public class RedTickableInstance implements TickableSoundInstance {
         updatePos();
         updateVolume();
         updatePitch();
+        updateEnergyGain();
     }
     public void updateWrapped() {
         if (wrapped instanceof TickableSoundInstance) {
@@ -106,12 +113,37 @@ public class RedTickableInstance implements TickableSoundInstance {
 
     @Override
     public Attenuation getAttenuation() {
+        if (energyGain) return wrapped.getAttenuation(); // loudness is in the filter: distance falls off as in vanilla
         if (Config.getInstance().experimentalReverb) return Attenuation.LINEAR;
         else return Attenuation.NONE;
     }
 
     public void stop() {
         this.stopped = true;
+    }
+
+    /** Switches this sound to energy loudness; {@code immediately} for a sound that has not started yet. */
+    public void setEnergyGain(float low, float high, boolean immediately) {
+        energyGain = true;
+        targetEnergyLf = Math.max(0.0f, Math.min(1.0f, low));
+        targetEnergyHf = Math.max(0.0f, Math.min(1.0f, high));
+        if (immediately) {
+            energyLf = targetEnergyLf;
+            energyHf = targetEnergyHf;
+        }
+    }
+
+    /** Treble that gets through relative to bass, for the energy loudness filter. */
+    public float getEnergyHfRatio() {
+        return energyLf > 1.0E-4f ? Math.min(1.0f, energyHf / energyLf) : 1.0f;
+    }
+
+    /** Eases the energy gain like the volume, so a sound walking behind a wall does not click. */
+    public void updateEnergyGain() {
+        if (!energyGain) return;
+        float step = 1.0f - (float) Math.pow(0.001, 1.0 / Math.max(Config.getInstance().tickRate, 1));
+        energyLf += (targetEnergyLf - energyLf) * step;
+        energyHf += (targetEnergyHf - energyHf) * step;
     }
 
     public void updatePos() {
@@ -195,6 +227,7 @@ public class RedTickableInstance implements TickableSoundInstance {
     }
 
     public float getVolume() {
+        if (energyGain) return originalVolume * Config.getInstance().volumeMultiplier; // follows the sound's own volume
         float vol = volume * Config.getInstance().volumeMultiplier;
         if (!Config.getInstance().experimentalReverb) return vol;
         if (attenuationMultiplier == 0) return vol; // if no rays make it, disable sound

@@ -63,6 +63,7 @@ public class RedPermeatedSoundInstance extends RedTickableInstance {
         super.updateVolume();
         super.updatePitch();
         updateMuffle();
+        super.updateEnergyGain();
     }
 
     public void updateMuffle() {

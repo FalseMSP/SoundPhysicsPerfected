@@ -44,7 +44,7 @@ public final class TraceSettings {
         double d = Math.max(distanceToSound + pathDistance, 0.1);
         return switch (attenuationType) {
             case LINEAR -> transmission / d;
-            case INVERSE_SQUARE, VERCIDIUM_INVERSE_SQUARE, VERCIDIUM_LINEAR -> transmission / (d * d);
+            case ENERGY, INVERSE_SQUARE, VERCIDIUM_INVERSE_SQUARE, VERCIDIUM_LINEAR -> transmission / (d * d);
         };
     }
 }

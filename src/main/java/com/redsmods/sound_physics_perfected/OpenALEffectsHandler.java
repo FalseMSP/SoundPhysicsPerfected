@@ -187,8 +187,12 @@ public class OpenALEffectsHandler {
 
     /** @param hfRatio how much of the treble gets through relative to the bass (1 = unfiltered) */
     public void attachReverbSend(int sourceId, float muffleStrength, float hfRatio) {
-        float m = clamp(muffleStrength, 0.0f, 1.0f);
-        EXTEfx.alFilterf(sendFilter, AL_LOWPASS_GAIN, lerp(1.0f, 0.2f, m));
+        setReverbSend(sourceId, lerp(1.0f, 0.2f, clamp(muffleStrength, 0.0f, 1.0f)), hfRatio);
+    }
+
+    /** Reverb send through a low-pass: {@code gain} overall, {@code hfRatio} of the treble on top of that. */
+    public void setReverbSend(int sourceId, float gain, float hfRatio) {
+        EXTEfx.alFilterf(sendFilter, AL_LOWPASS_GAIN, clamp(gain, 0.0f, 1.0f));
         EXTEfx.alFilterf(sendFilter, AL_LOWPASS_GAINHF, clamp(hfRatio, 0.01f, 1.0f));
         AL11.alSource3i(sourceId, AL_AUXILIARY_SEND_FILTER, auxFXSlot, 0, sendFilter);
     }
@@ -489,17 +493,16 @@ public class OpenALEffectsHandler {
      * @param hfRatio        treble that gets through relative to bass, from the materials in the way
      */
     public void applyMuffleToSource(int sourceId, float muffleStrength, float hfRatio) {
+        // muffle 0 = clear, 1 = the old maximum of -14 dB
+        setDirectFilter(sourceId, lerp(1.0f, 0.2f, clamp(muffleStrength, 0.0f, 1.0f)), hfRatio);
+    }
+
+    /** Direct-path low-pass: {@code gain} overall, {@code hfRatio} of the treble on top of that. */
+    public void setDirectFilter(int sourceId, float gain, float hfRatio) {
         if (!efxInitialized) return;
         try {
-            // Clamp muffle strength between 0.0 (no muffling) and 1.0 (maximum muffling)
-            muffleStrength = clamp(muffleStrength, 0.0f, 1.0f);
-
-            // Calculate filter parameters based on muffle strength
-            float lowpassGain = lerp(1.0f, 0.2f, muffleStrength);     // Overall volume reduction
-            float lowpassGainHF = clamp(hfRatio, 0.01f, 1.0f);        // High frequency attenuation
-
-            EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAIN, lowpassGain);
-            EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAINHF, lowpassGainHF);
+            EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAIN, clamp(gain, 0.0f, 1.0f));
+            EXTEfx.alFilterf(muffleFilter, EXTEfx.AL_LOWPASS_GAINHF, clamp(hfRatio, 0.01f, 1.0f));
             AL11.alSourcei(sourceId, EXTEfx.AL_DIRECT_FILTER, muffleFilter);
         } catch (Exception e) {
             // Handle errors silently like the original function

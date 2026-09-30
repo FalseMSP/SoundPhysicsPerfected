@@ -93,7 +93,13 @@ public class Config {
     @AutoGen(category = "general", group = "main")
     @EnumCycler
     @CustomDescription("yacl3.config.sound_physics_perfected:config.attenuationType.description")
-    @SerialEntry public RedsAttenuationType attenuationType = RedsAttenuationType.VERCIDIUM_LINEAR;
+    @SerialEntry public RedsAttenuationType attenuationType = RedsAttenuationType.ENERGY;
+
+    @AutoGen(category = "general", group = "main")
+    @IntSlider(min = 2, max = 50, step = 1)
+    @FormatTranslation("sound_physics_perfected.config.unit.percent_of_rays")
+    @CustomDescription("yacl3.config.sound_physics_perfected:config.energyFullShare.description")
+    @SerialEntry public int energyFullShare = 10;
 
     @AutoGen(category = "general", group = "permeation")
     @DoubleSlider(min = 1, max = 10, step = 0.1)

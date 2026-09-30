@@ -11,8 +11,15 @@ package com.redsmods.sound_physics_perfected.acoustics;
  * threads can each fill their own array and the results are merged afterwards without locking.
  */
 public final class ListenerTrace {
-    public static final int STRIDE = 7;
+    public static final int STRIDE = 14;
     public static final int WEIGHT = 0, DIR_X = 1, DIR_Y = 2, DIR_Z = 3, DISTANCE = 4, MUFFLE = 5, MUFFLE_HF = 6;
+    /**
+     * Energy loudness (after Vercidium): per band, the energy of rays that found the sound in plain view (counted
+     * once per ray, at the first bounce that sees it), the through-wall energy of every other bounce and how many
+     * bounces tried, and the direct path's own transmission.
+     */
+    public static final int OCC_LF = 7, OCC_HF = 8, PERM_LF = 9, PERM_HF = 10, PERM_COUNT = 11, DIRECT_LF = 12,
+            DIRECT_HF = 13;
 
     private ListenerTrace() {
     }
@@ -64,6 +71,10 @@ public final class ListenerTrace {
             counts[target] += count;
         }
 
+        void addEnergy(int target, int slot, double value) {
+            sums[target * STRIDE + slot] += value;
+        }
+
         public void merge(Accumulator o) {
             for (int i = 0; i < sums.length; i++) sums[i] += o.sums[i];
             for (int i = 0; i < counts.length; i++) counts[i] += o.counts[i];
@@ -76,14 +87,17 @@ public final class ListenerTrace {
                                  double[] dirs, int from, int to, Targets targets, Accumulator acc) {
         ReverbStats stats = acc.stats;
         stats.segmentLength = s.segmentLength;
+        boolean[] found = new boolean[targets.count]; // sounds this ray has already seen from a bounce
         for (int ray = from; ray < to; ray++) {
             stats.rays++;
+            java.util.Arrays.fill(found, false);
             double px = ex, py = ey, pz = ez;
             double dx = dirs[ray * 3], dy = dirs[ray * 3 + 1], dz = dirs[ray * 3 + 2];
             // Direction the sound finally arrives from, and the length/energy of the path to the listener.
             double ax = dx, ay = dy, az = dz;
             double pathLength = 0.0;
             double energy = 1.0;
+            double energyLf = 1.0, energyHf = 1.0; // the same, per band, for energy loudness
             double chainEnergy = 1.0; // energy left in the ray itself (no shortcuts), for the reverb direction
             double legacyDistance = 0.0;
             double remaining = s.maxTotalDistance;
@@ -119,7 +133,10 @@ public final class ListenerTrace {
 
                 // Energy kept by this reflection: the surface's own reflectivity times the user's bounce loss
                 // (bounceAbsorption is an amplitude factor, hence squared).
-                double reflection = s.bounceAbsorption * s.bounceAbsorption * material.reflectivity();
+                double loss = s.bounceAbsorption * s.bounceAbsorption;
+                double reflection = loss * material.reflectivity();
+                double reflectionLf = loss * (1.0 - material.absorptionLow);
+                double reflectionHf = loss * (1.0 - material.absorptionHigh);
                 chainEnergy *= reflection;
 
                 boolean shortcut = false;
@@ -143,6 +160,8 @@ public final class ListenerTrace {
                             az = -tz * inv;
                             pathLength = toListener;
                             energy = reflection;
+                            energyLf = reflectionLf;
+                            energyHf = reflectionHf;
                             legacyDistance = Math.max(toListener - 0.1, 0.0) / s.bounceAbsorption;
                             shortcut = true;
                         }
@@ -150,10 +169,13 @@ public final class ListenerTrace {
                 }
                 if (!shortcut) {
                     energy *= reflection;
+                    energyLf *= reflectionLf;
+                    energyHf *= reflectionHf;
                 }
 
                 if (connecting) {
-                    connectVertex(ops, s, hx, hy, hz, pathLength, energy, ax, ay, az, targets, acc);
+                    connectVertex(ops, s, hx, hy, hz, pathLength, energy, energyLf, energyHf, found, ax, ay, az,
+                            targets, acc);
                     remaining -= t;
                 } else {
                     reverbRemaining -= t;
@@ -278,8 +300,9 @@ public final class ListenerTrace {
     }
 
     private static void connectVertex(RayOps ops, TraceSettings s, double vx, double vy, double vz,
-                                      double pathLength, double energy, double ax, double ay, double az,
-                                      Targets targets, Accumulator acc) {
+                                      double pathLength, double energy, double energyLf, double energyHf,
+                                      boolean[] found, double ax, double ay, double az, Targets targets,
+                                      Accumulator acc) {
         for (int j = 0; j < targets.count; j++) {
             double dx = targets.x[j] - vx, dy = targets.y[j] - vy, dz = targets.z[j] - vz;
             double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -291,13 +314,50 @@ public final class ListenerTrace {
                 // weight() already includes one transmission factor: weight ~ energy, muffle ~ amplitude.
                 double weight = s.weight(pathLength, obstruction, distance) * transmission * energy;
                 acc.add(j, weight, ax, ay, az, distance, transmission, transmissionHf, 1);
+                acc.addEnergy(j, PERM_COUNT, 1.0);
+                if (obstruction <= 0.0) {
+                    seen(acc, found, j, energyLf, energyHf);
+                } else {
+                    acc.addEnergy(j, PERM_LF, energyLf * transmission);
+                    acc.addEnergy(j, PERM_HF, energyHf * transmissionHf);
+                }
             } else {
                 if (distance + pathLength > targets.greenRange[j]) continue;
                 if (!ops.clearPath(vx, vy, vz, targets.x[j], targets.y[j], targets.z[j], 1.0)) continue;
                 double weight = s.weight(pathLength, 0.0, distance) * energy;
                 acc.add(j, weight, ax, ay, az, distance, 0.0, 0.0, 1);
+                seen(acc, found, j, energyLf, energyHf);
             }
         }
+    }
+
+    /** A bounce that sees the sound: the ray's energy counts towards it, once per ray. */
+    private static void seen(Accumulator acc, boolean[] found, int j, double energyLf, double energyHf) {
+        if (found[j]) return;
+        found[j] = true;
+        acc.addEnergy(j, OCC_LF, energyLf);
+        acc.addEnergy(j, OCC_HF, energyHf);
+    }
+
+    /**
+     * Energy loudness of one sound in one band, 0..1 (Vercidium's formula, plus walls): the sound plays at full
+     * volume once {@code fullShare} of the listener's rays reach it in plain view; otherwise it also gets whatever
+     * leaks through walls, straight or via a reflection, whichever is louder. Distance is left to the normal
+     * falloff, so a visible sound is exactly as loud as without the mod.
+     *
+     * @param sums      merged accumulator sums
+     * @param high      high band instead of low
+     * @param rays      number of rays cast
+     * @param fullShare share of rays (0..1) whose energy makes a sound fully audible
+     */
+    public static double energyGain(double[] sums, int j, boolean high, int rays, double fullShare) {
+        int o = j * STRIDE;
+        double direct = sums[o + (high ? DIRECT_HF : DIRECT_LF)];
+        if (direct >= 1.0) return 1.0; // plain view
+        double occluded = rays > 0 ? sums[o + (high ? OCC_HF : OCC_LF)] / (Math.max(fullShare, 1.0E-3) * rays) : 0.0;
+        double count = sums[o + PERM_COUNT];
+        double reflectedThrough = count > 0.0 ? sums[o + (high ? PERM_HF : PERM_LF)] / count : 0.0;
+        return Math.min(1.0, occluded + Math.max(direct, reflectedThrough));
     }
 
     /**
@@ -321,6 +381,8 @@ public final class ListenerTrace {
         if (s.permeation) {
             double obstruction = ops.obstruction(ex, ey, ez, tx, ty, tz, s.maxBlocksPermeated);
             double obstructionHf = ops.lastObstructionHf();
+            acc.addEnergy(j, DIRECT_LF, obstruction <= 0.0 ? 1.0 : Math.pow(s.permeationAbsorption, obstruction));
+            acc.addEnergy(j, DIRECT_HF, obstruction <= 0.0 ? 1.0 : Math.pow(s.permeationAbsorption, obstructionHf));
             if (distance <= s.segmentLength) {
                 double transmission = Math.pow(s.permeationAbsorption, obstruction);
                 double transmissionHf = Math.pow(s.permeationAbsorption, obstructionHf);
@@ -330,6 +392,8 @@ public final class ListenerTrace {
             return obstruction;
         }
         boolean visible = ops.clearPath(ex, ey, ez, tx, ty, tz, 1.0);
+        acc.addEnergy(j, DIRECT_LF, visible ? 1.0 : 0.0);
+        acc.addEnergy(j, DIRECT_HF, visible ? 1.0 : 0.0);
         if (distance <= targets.greenRange[j] && visible) {
             double weight = s.weight(0.0, 0.0, distance);
             acc.add(j, weight * rayCount, ux, uy, uz, distance, 0.0, 0.0, rayCount);

@@ -157,22 +157,33 @@ public abstract class SoundSystemMixin {
             // Music (and optionally UI) is not "in the world": it gets neither reverb nor air absorption.
             SoundSource category = instance.getSource();
             boolean inWorld = category != SoundSource.MUSIC && !(config.disableFXOnUI && category == SoundSource.MASTER);
-            boolean permeated = instance instanceof RedPermeatedSoundInstance;
-            float muffle = permeated ? 1.0f - ((RedPermeatedSoundInstance) instance).getPermeationIndex() : 0.0f;
-            float hfRatio = permeated ? ((RedPermeatedSoundInstance) instance).getHfRatio() : 1.0f;
+            // What gets past walls: energy loudness, the older permeation muffle, or nothing.
+            float gain = 1.0f, hfRatio = 1.0f;
+            boolean filtered = false;
+            if (instance instanceof RedTickableInstance red && red.isEnergyGain()) {
+                gain = red.getEnergyLf();
+                hfRatio = red.getEnergyHfRatio();
+                filtered = true;
+            } else if (instance instanceof RedPermeatedSoundInstance permeated) {
+                gain = 1.0f - 0.8f * (1.0f - permeated.getPermeationIndex()); // at most -14 dB, as before
+                hfRatio = permeated.getHfRatio();
+                filtered = true;
+            }
             boolean muffleForWater = underwater && inWorld;
+            float directGain = gain, sendGain = gain, sendHf = hfRatio;
             float directHf = muffleForWater ? hfRatio * RaycastingHelper.UNDERWATER_HF : hfRatio;
-            boolean clearWaterFilter = leftWater && inWorld && !permeated;
+            boolean directFilter = filtered || muffleForWater;
+            boolean clearWaterFilter = leftWater && inWorld && !filtered;
             boolean send = reverb && inWorld;
             boolean air = inWorld && airAbsorption > 0.0f && !instance.isRelative();
             int zone = send ? RaycastingHelper.zoneOf(instance) : -1;
-            if (!permeated && !send && !air && !muffleForWater && !clearWaterFilter) continue;
+            if (!directFilter && !send && !air && !clearWaterFilter) continue;
 
             // Runs on the sound thread, in order with the channel's own play/stop commands.
             handle.execute(channel -> {
                 int source = ((SourceAccessor) channel).getSource();
-                if (permeated || muffleForWater) {
-                    fxHandler.applyMuffleToSource(source, muffle, directHf);
+                if (directFilter) {
+                    fxHandler.setDirectFilter(source, directGain, directHf);
                 } else if (clearWaterFilter) {
                     AL10.alSourcei(source, EXTEfx.AL_DIRECT_FILTER, EXTEfx.AL_FILTER_NULL);
                 }
@@ -180,7 +191,7 @@ public abstract class SoundSystemMixin {
                     switch (mode) {
                         case VERSION140 -> fxHandler.applyLegacyReverbToSource(source);
                         case VERSION100 -> fxHandler.applyInitalLegacyReverbToSource(source);
-                        default -> fxHandler.attachReverbSend(source, muffle, hfRatio);
+                        default -> fxHandler.setReverbSend(source, sendGain, sendHf);
                     }
                 }
                 if (air) {

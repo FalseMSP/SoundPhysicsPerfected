@@ -135,7 +135,8 @@ public final class RaycastingHelper {
                        double[] dirs, List<Target> targets, ListenerTrace.Targets arrays, boolean fast,
                        boolean barrierAsAir, boolean useExplosionResistance, double maxBlocksPermeated,
                        double stepSize, int raysCast, int raysBounced, int generation, boolean hasNewSounds,
-                       boolean sourceReverb, double listenerEnclosure, boolean fullReverb, boolean water) {
+                       boolean sourceReverb, double listenerEnclosure, boolean fullReverb, boolean water,
+                       double energyFullShare) {
         RayOps newOps() {
             if (fast) {
                 return new VoxelRayOps(new LevelVoxelWorld(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated, water));
@@ -305,7 +306,8 @@ public final class RaycastingHelper {
         return new Job(level, player, eye, settings, roomSettings(config), directions, targets, arrays, fast,
                 config.barrierAsAir, config.useExplosionResistance, config.maxBlocksPermeated,
                 config.permeationStepSize, config.raysCast, config.raysBounced, generation, hasNewSounds, sourceReverb,
-                currentReverb == null ? 0.0 : currentReverb.enclosure, fullReverb, config.waterAcoustics);
+                currentReverb == null ? 0.0 : currentReverb.enclosure, fullReverb, config.waterAcoustics,
+                config.energyFullShare / 100.0);
     }
 
     private static RoomAcousticsModel.Settings roomSettings(Config c) {
@@ -494,7 +496,8 @@ public final class RaycastingHelper {
 
         for (int j = 0; j < job.targets.size(); j++) {
             Target target = job.targets.get(j);
-            if (target.kind == Kind.PERMEATED && paths.counts[j] == 0) {
+            boolean energy = job.settings.attenuationType == RedsAttenuationType.ENERGY;
+            if (target.kind == Kind.PERMEATED && paths.counts[j] == 0 && !energy) {
                 continue; // nothing reached it this time: keep its previous state (as before)
             }
             if (target.kind == Kind.ONE_SHOT) {
@@ -533,6 +536,10 @@ public final class RaycastingHelper {
         final boolean lineOfSight;
         final float confidence;
         final float attenuation;
+        /** Energy loudness per band (ENERGY mode only), and the straight-line distance it keeps. */
+        final boolean energy;
+        final float energyLf, energyHf;
+        final double trueDistance;
 
         Placement(Job job, Target target, ListenerTrace.Accumulator paths, int j, double obstruction, int totalHits) {
             this.job = job;
@@ -560,7 +567,15 @@ public final class RaycastingHelper {
             }
 
             RedsAttenuationType type = job.settings.attenuationType;
-            if (type == RedsAttenuationType.VERCIDIUM_INVERSE_SQUARE) {
+            this.energy = type == RedsAttenuationType.ENERGY;
+            this.trueDistance = target.position.distanceTo(job.eye);
+            int rays = job.dirs.length / 3;
+            this.energyLf = energy ? (float) ListenerTrace.energyGain(paths.sums, j, false, rays, job.energyFullShare) : 1.0f;
+            this.energyHf = energy ? (float) ListenerTrace.energyGain(paths.sums, j, true, rays, job.energyFullShare) : 1.0f;
+            if (energy) {
+                confidence = 1.0f;
+                attenuation = 1.0f;
+            } else if (type == RedsAttenuationType.VERCIDIUM_INVERSE_SQUARE) {
                 confidence = (float) rayCount / Math.max(totalHits, 1);
                 attenuation = 1.0f / (float) Math.pow(Math.max(distance, 0.01), 2);
             } else if (type == RedsAttenuationType.VERCIDIUM_LINEAR) {
@@ -575,9 +590,24 @@ public final class RaycastingHelper {
         /** Where the sound should appear: along the averaged arrival direction, or where it is if nothing reached it. */
         Vec3 apparentPosition() {
             if (totalWeight == 0.0) {
-                return target.kind == Kind.ONE_SHOT ? target.data.position : target.tickable.getOriginalPosition();
+                return originalPosition();
             }
             return job.eye.add(direction.scale(distance));
+        }
+
+        Vec3 originalPosition() {
+            return target.kind == Kind.ONE_SHOT ? target.data.position : target.tickable.getOriginalPosition();
+        }
+
+        /**
+         * Energy mode: where the sound is when it is in plain view (or nothing reached it); otherwise at its true
+         * distance along the direction its energy arrives from, so the vanilla distance falloff stays right.
+         */
+        Vec3 energyPosition() {
+            if (totalWeight == 0.0 || (lineOfSight && Config.getInstance().shortcutDirectionality)) {
+                return originalPosition();
+            }
+            return job.eye.add(direction.scale(trueDistance));
         }
 
         float baseVolume() {
@@ -588,6 +618,9 @@ public final class RaycastingHelper {
 
     /** Line-of-sight (green ray) mode. */
     private static RedTickableInstance placeDirect(Placement p) {
+        if (p.energy) {
+            return placeEnergy(p, false);
+        }
         if (p.totalWeight == 0.0 && p.target.tickable != null) {
             RedTickableInstance sound = p.target.tickable;
             sound.setTargetVolume(0);
@@ -614,8 +647,51 @@ public final class RaycastingHelper {
         return replacement;
     }
 
+    /**
+     * Energy loudness: the sound keeps its own volume (and so its vanilla range and falloff); what is in the way only
+     * sets its filter gain, per band.
+     */
+    private static RedTickableInstance placeEnergy(Placement p, boolean permeated) {
+        Vec3 position = p.energyPosition();
+        if (p.target.tickable != null) {
+            RedTickableInstance sound = p.target.tickable;
+            if (permeated != (sound instanceof RedPermeatedSoundInstance)) {
+                return null; // left over from before permeation was switched
+            }
+            sound.setTargetPosition(position);
+            sound.setTargetVolume(sound.getOriginalVolume());
+            sound.setAttenuationMultiplier(1.0f);
+            if (sound instanceof RedPermeatedSoundInstance permeatedSound) {
+                permeatedSound.setPermeationIndex(1.0f);
+                permeatedSound.setPermeationIndexHf(1.0f);
+            }
+            sound.setEnergyGain(p.energyLf, p.energyHf, false);
+            return sound;
+        }
+        RedSoundInstance wrapper = (RedSoundInstance) p.sound;
+        float volume = Math.max(0.001f, p.baseVolume());
+        RedTickableInstance replacement;
+        if (permeated) {
+            RedPermeatedSoundInstance sound = new RedPermeatedSoundInstance(wrapper.getLocation(), wrapper.getSound(),
+                    wrapper.getSource(), position, volume, wrapper.getPitch(), wrapper.getOriginal(), 1.0f, 1.0f, 1.0f);
+            soundPermInstanceMap.put(wrapper.getOriginal(), sound);
+            replacement = sound;
+        } else {
+            replacement = new RedTickableInstance(wrapper.getLocation(), wrapper.getSound(), wrapper.getSource(),
+                    position, volume, Math.max(0.5f, Math.min(2.0f, wrapper.getPitch())), wrapper.getOriginal(), 1.0f);
+            soundInstanceMap.put(wrapper.getOriginal(), replacement);
+        }
+        replacement.setEnergyGain(p.energyLf, p.energyHf, true);
+        debugMessage(wrapper.getOriginal());
+        soundsToPlay.add(replacement);
+        return replacement;
+    }
+
     /** Permeation (red ray) mode. */
     private static RedTickableInstance placePermeated(Placement p) {
+        if (p.energy) {
+            return placeEnergy(p, true);
+        }
         Vec3 position = p.apparentPosition();
         float confidence = p.confidence;
         float permeationIndex = (float) p.muffle;
