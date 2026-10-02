@@ -91,14 +91,14 @@ public final class ListenerTrace {
      * need connecting to these bounces. Written by one worker, read-only afterwards.
      */
     public static final class Trail {
-        static final int V = 10; // hx, hy, hz, pathLength, energy, energyLf, energyHf, ax, ay, az
+        static final int V = 11; // hx, hy, hz, pathLength, energy, energyLf, energyHf, ax, ay, az, face
         int rays;
         int[] rayEnd = new int[64]; // vertex count after each ray
         double[] v = new double[64 * V];
         int vertices;
 
         void add(double hx, double hy, double hz, double pathLength, double energy, double energyLf,
-                 double energyHf, double ax, double ay, double az) {
+                 double energyHf, double ax, double ay, double az, int face) {
             if ((vertices + 1) * V > v.length) v = java.util.Arrays.copyOf(v, v.length * 2);
             int o = vertices++ * V;
             v[o] = hx;
@@ -111,6 +111,7 @@ public final class ListenerTrace {
             v[o + 7] = ax;
             v[o + 8] = ay;
             v[o + 9] = az;
+            v[o + 10] = face;
         }
 
         void endRay() {
@@ -120,7 +121,8 @@ public final class ListenerTrace {
     }
 
     /** Connects sounds to a recorded trail: the same result as {@link #traceRays}, without re-tracing the rays. */
-    public static void connectTrail(RayOps ops, TraceSettings s, Trail trail, Targets targets, Accumulator acc) {
+    public static void connectTrail(RayOps ops, TraceSettings s, Trail trail, Targets targets, Accumulator acc,
+                                    Connections connections) {
         boolean[] found = new boolean[targets.count];
         double[] d = trail.v;
         int vertex = 0;
@@ -129,7 +131,7 @@ public final class ListenerTrace {
             for (; vertex < trail.rayEnd[ray]; vertex++) {
                 int o = vertex * Trail.V;
                 connectVertex(ops, s, d[o], d[o + 1], d[o + 2], d[o + 3], d[o + 4], d[o + 5], d[o + 6], found,
-                        d[o + 7], d[o + 8], d[o + 9], targets, acc);
+                        d[o + 7], d[o + 8], d[o + 9], targets, acc, connections, (int) d[o + 10]);
             }
         }
     }
@@ -140,8 +142,26 @@ public final class ListenerTrace {
      * to sounds are always checked exactly.
      */
     public static final class Visibility {
-        private final java.util.concurrent.ConcurrentHashMap<Long, Boolean> faces =
-                new java.util.concurrent.ConcurrentHashMap<>();
+        /**
+         * Open addressing over plain longs, shared by a trace's threads without locks: each slot holds a face key,
+         * an "occupied" bit and the answer together, so a reader sees a whole entry or none. Racing writers can
+         * only overwrite each other's entries, which means looking one up again.
+         */
+        private final long[] slots;
+        private final int mask;
+        private static final int MAX_PROBES = 16;
+
+        /** @param bounces how many room-measuring bounces the trace will make (sizes the table) */
+        public Visibility(int bounces) {
+            int size = Integer.highestOneBit(Math.max(bounces, 512) * 2 - 1) << 1; // load factor <= 0.5
+            size = Math.min(size, 1 << 15);
+            slots = new long[size];
+            mask = size - 1;
+        }
+
+        public Visibility() {
+            this(1 << 14);
+        }
 
         boolean visible(RayOps ops, double hx, double hy, double hz, int nx, int ny, int nz,
                         double ex, double ey, double ez) {
@@ -149,13 +169,93 @@ public final class ListenerTrace {
             long cx = (long) Math.floor(hx + nx * 1.0E-3), cy = (long) Math.floor(hy + ny * 1.0E-3),
                     cz = (long) Math.floor(hz + nz * 1.0E-3);
             int face = nx != 0 ? (nx > 0 ? 0 : 1) : ny != 0 ? (ny > 0 ? 2 : 3) : (nz > 0 ? 4 : 5);
-            long key = ((cx & 0xFFFFF) << 43) | ((cy & 0xFFFFF) << 23) | ((cz & 0xFFFFF) << 3) | face;
-            Boolean known = faces.get(key);
-            if (known != null) return known;
-            boolean seen = clear(ops, hx, hy, hz, ex, ey, ez);
-            faces.put(key, seen);
-            return seen;
+            long key = (cx & 0xFFFFF) << 35 | (cz & 0xFFFFF) << 15 | (cy & 0xFFF) << 3 | face;
+            int slot = (int) mix(key) & mask;
+            for (int probe = 0; probe < MAX_PROBES; probe++, slot = (slot + 1) & mask) {
+                long entry = slots[slot];
+                if (entry == 0L) {
+                    boolean seen = clear(ops, hx, hy, hz, ex, ey, ez);
+                    slots[slot] = key << 2 | (seen ? 2L : 0L) | 1L;
+                    return seen;
+                }
+                if (entry >>> 2 == key) return (entry & 2L) != 0;
+            }
+            return clear(ops, hx, hy, hz, ex, ey, ez); // a crowded spot: just look
         }
+    }
+
+    /**
+     * What lies between a bounce and a sound, measured once per block cell and sound and shared by every thread of
+     * one trace: on Ultra a trace makes ~57,000 such walks from only ~17,000 different cells. Points in the same
+     * cell see the sound through nearly the same blocks.
+     */
+    public static final class Connections {
+        private static final java.lang.invoke.VarHandle KEYS = java.lang.invoke.MethodHandles.arrayElementVarHandle(long[].class);
+        private static final long PENDING = Long.MIN_VALUE | 1L, OCCUPIED = 1L << 62;
+        private static final int MAX_PROBES = 16;
+        private final long[] keys, values;
+        private final int mask;
+        /** The treble part of the last obstruction this thread got (see {@link #obstruction}). */
+        private final ThreadLocal<double[]> lastHf = ThreadLocal.withInitial(() -> new double[1]);
+
+        /** @param connections how many connections the trace may make (sizes the table) */
+        public Connections(int connections) {
+            int size = Integer.highestOneBit(Math.max(connections, 1024) - 1) << 1; // about one slot per connection
+            size = Math.min(size, 1 << 17);
+            keys = new long[size];
+            values = new long[size];
+            mask = size - 1;
+        }
+
+        private static long key(double vx, double vy, double vz, int face, int target) {
+            long cx = (long) Math.floor(vx), cy = (long) Math.floor(vy), cz = (long) Math.floor(vz);
+            return OCCUPIED | (cx & 0xFFFFF) << 41 | (cz & 0xFFFFF) << 21 | (cy & 0xFFF) << 9 | (long) face << 6 | target;
+        }
+
+        /** Obstruction from the bounce at (vx, vy, vz) to sound j; its treble part is in {@link #lastHf}. */
+        double obstruction(RayOps ops, int j, int face, double vx, double vy, double vz, double tx, double ty,
+                           double tz, double max) {
+            double[] hf = lastHf.get();
+            if (j >= 64) { // (only 6 bits for the sound in the key)
+                double o = ops.obstruction(vx, vy, vz, tx, ty, tz, max);
+                hf[0] = ops.lastObstructionHf();
+                return o;
+            }
+            long key = key(vx, vy, vz, face, j);
+            int slot = (int) mix(key) & mask;
+            for (int probe = 0; probe < MAX_PROBES; probe++, slot = (slot + 1) & mask) {
+                long k = (long) KEYS.getAcquire(keys, slot);
+                if (k == key) {
+                    long v = values[slot];
+                    hf[0] = Float.intBitsToFloat((int) v);
+                    return Float.intBitsToFloat((int) (v >>> 32));
+                }
+                if (k == 0L) {
+                    double o = ops.obstruction(vx, vy, vz, tx, ty, tz, max);
+                    hf[0] = ops.lastObstructionHf();
+                    // Only fully blocked walks are shared: points next to each other are both deep behind the same
+                    // walls, while a clear or partly blocked path (through a doorway, past an edge) is always walked.
+                    if (o >= max && KEYS.compareAndSet(keys, slot, 0L, PENDING)) {
+                        values[slot] = (long) Float.floatToRawIntBits((float) o) << 32
+                                | (Float.floatToRawIntBits((float) hf[0]) & 0xFFFFFFFFL);
+                        KEYS.setRelease(keys, slot, key); // published only once its value is in place
+                    }
+                    return o;
+                }
+            }
+            double o = ops.obstruction(vx, vy, vz, tx, ty, tz, max); // a crowded spot: just walk
+            hf[0] = ops.lastObstructionHf();
+            return o;
+        }
+
+        double lastHf() {
+            return lastHf.get()[0];
+        }
+    }
+
+    /** Which way a surface faces (0..5): with the cell in front of it, it identifies a block face. */
+    static int faceOf(int nx, int ny, int nz) {
+        return nx != 0 ? (nx > 0 ? 0 : 1) : ny != 0 ? (ny > 0 ? 2 : 3) : (nz > 0 ? 4 : 5);
     }
 
     /** Line of sight from a surface point to the listener. */
@@ -173,13 +273,13 @@ public final class ListenerTrace {
     /** Traces rays [from, to) of the direction table (xyz triples) into the accumulator. */
     public static void traceRays(RayOps ops, TraceSettings s, double ex, double ey, double ez,
                                  double[] dirs, int from, int to, Targets targets, Accumulator acc) {
-        traceRays(ops, s, ex, ey, ez, dirs, from, to, targets, acc, null, null);
+        traceRays(ops, s, ex, ey, ez, dirs, from, to, targets, acc, null, null, null);
     }
 
     /** As above, also recording the rays' connecting bounces into {@code trail} when given. */
     public static void traceRays(RayOps ops, TraceSettings s, double ex, double ey, double ez,
                                  double[] dirs, int from, int to, Targets targets, Accumulator acc, Trail trail,
-                                 Visibility visibility) {
+                                 Visibility visibility, Connections connections) {
         ReverbStats stats = acc.stats;
         stats.segmentLength = s.segmentLength;
         boolean[] found = new boolean[targets.count]; // sounds this ray has already seen from a bounce
@@ -285,9 +385,10 @@ public final class ListenerTrace {
                     // Connect from just off the surface, on the side the ray arrived from: a bounce off the water
                     // surface is in the air (or under water) and has to cross the surface to reach the other side.
                     double cx = hx + nx * 1.0E-3, cy = hy + ny * 1.0E-3, cz = hz + nz * 1.0E-3;
+                    int face = faceOf(nx, ny, nz);
                     connectVertex(ops, s, cx, cy, cz, pathLength, energy, energyLf, energyHf, found, ax, ay, az,
-                            targets, acc);
-                    if (trail != null) trail.add(cx, cy, cz, pathLength, energy, energyLf, energyHf, ax, ay, az);
+                            targets, acc, connections, face);
+                    if (trail != null) trail.add(cx, cy, cz, pathLength, energy, energyLf, energyHf, ax, ay, az, face);
                     remaining -= t;
                 } else {
                     reverbRemaining -= t;
@@ -483,16 +584,24 @@ public final class ListenerTrace {
     private static void connectVertex(RayOps ops, TraceSettings s, double vx, double vy, double vz,
                                       double pathLength, double energy, double energyLf, double energyHf,
                                       boolean[] found, double ax, double ay, double az, Targets targets,
-                                      Accumulator acc) {
+                                      Accumulator acc, Connections connections, int face) {
         for (int j = 0; j < targets.count; j++) {
             if (targets.skip[j]) continue;
             double dx = targets.x[j] - vx, dy = targets.y[j] - vy, dz = targets.z[j] - vz;
             double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
             if (s.permeation) {
                 if (distance + pathLength > s.segmentLength) continue;
-                double obstruction = ops.obstruction(vx, vy, vz, targets.x[j], targets.y[j], targets.z[j], s.maxBlocksPermeated);
+                double obstruction, obstructionHf;
+                if (connections != null) {
+                    obstruction = connections.obstruction(ops, j, face, vx, vy, vz, targets.x[j], targets.y[j],
+                            targets.z[j], s.maxBlocksPermeated);
+                    obstructionHf = connections.lastHf();
+                } else {
+                    obstruction = ops.obstruction(vx, vy, vz, targets.x[j], targets.y[j], targets.z[j], s.maxBlocksPermeated);
+                    obstructionHf = ops.lastObstructionHf();
+                }
                 double transmission = Math.pow(s.permeationAbsorption, obstruction);
-                double transmissionHf = s.transmissionHf(obstruction, ops.lastObstructionHf());
+                double transmissionHf = s.transmissionHf(obstruction, obstructionHf);
                 // weight() already includes one transmission factor: weight ~ energy, muffle ~ amplitude.
                 double weight = s.weight(pathLength, obstruction, distance) * transmission * energy;
                 acc.add(j, weight, ax, ay, az, distance, transmission, transmissionHf, 1);

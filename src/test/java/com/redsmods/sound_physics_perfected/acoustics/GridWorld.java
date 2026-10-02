@@ -73,6 +73,7 @@ final class GridWorld implements VoxelWorld {
         loaded = cells.get(k);
         loadedBox = loaded == null ? null : boxes.get(k);
         loadedWaterlogged = waterlogged.contains(k);
+        loadedSectionEmpty = sectionEmpty(x, y, z);
         if (loaded == null) return EMPTY;
         return loaded == AcousticMaterial.WATER ? WATER : SOLID;
     }
@@ -80,6 +81,13 @@ final class GridWorld implements VoxelWorld {
     @Override
     public boolean sectionEmpty(int x, int y, int z) {
         return reportSections && sectionCounts.getOrDefault(key(x >> 4, y >> 4, z >> 4), 0) <= 0;
+    }
+
+    private boolean loadedSectionEmpty;
+
+    @Override
+    public boolean loadedSectionEmpty() {
+        return loadedSectionEmpty;
     }
 
     @Override

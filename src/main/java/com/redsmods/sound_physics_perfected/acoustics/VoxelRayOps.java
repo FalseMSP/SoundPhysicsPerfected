@@ -39,23 +39,15 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
     }
 
     // Section-emptiness cache for the current walk.
-    private int sectionX, sectionY, sectionZ;
-    private boolean sectionEmpty;
 
-    private void resetSection() {
-        sectionX = Integer.MIN_VALUE;
+    /** Whether the cell just loaded lies in a completely empty section (the world knows it from that load). */
+    private boolean inEmptySection() {
+        return world.loadedSectionEmpty();
     }
 
-    /** Whether the current cell lies in a completely empty 16x16x16 section (checked once per section). */
-    private boolean inEmptySection() {
-        int sx = dda.x >> 4, sy = dda.y >> 4, sz = dda.z >> 4;
-        if (sx != sectionX || sy != sectionY || sz != sectionZ) {
-            sectionX = sx;
-            sectionY = sy;
-            sectionZ = sz;
-            sectionEmpty = world.sectionEmpty(dda.x, dda.y, dda.z);
-        }
-        return sectionEmpty;
+    /** Jumps across the empty section holding the current cell; false once past the walk's end. */
+    private boolean skipSection() {
+        return dda.skipBox(dda.x & ~15, dda.y & ~15, dda.z & ~15, 16);
     }
 
     /** The medium (air or water) a ray starting at o in direction d travels through first. */
@@ -70,13 +62,12 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
     public boolean firstHit(double ox, double oy, double oz, double dx, double dy, double dz, double maxDistance) {
         int medium = originMedium(ox, oy, oz, dx, dy, dz);
         dda.init(ox, oy, oz, dx, dy, dz, maxDistance);
-        resetSection();
         while (true) {
             int kind = world.load(dda.x, dda.y, dda.z);
             if (kind == VoxelWorld.EMPTY && medium == VoxelWorld.EMPTY) {
                 // Nothing in this whole section: jump straight across it.
                 if (inEmptySection()) {
-                    if (!dda.skipBox(sectionX << 4, sectionY << 4, sectionZ << 4, 16)) return false;
+                    if (!skipSection()) return false;
                     continue;
                 }
             } else if (kind != VoxelWorld.SOLID) {
@@ -192,10 +183,20 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
         int medium = originMedium(ax, ay, az, dx, dy, dz);
         double total = 0.0, totalHf = 0.0;
         dda.init(ax, ay, az, dx, dy, dz, distance);
-        resetSection();
         while (true) {
-            boolean end = dda.x == endX && dda.y == endY && dda.z == endZ;
             int kind = world.load(dda.x, dda.y, dda.z);
+            if (kind == VoxelWorld.EMPTY && medium == VoxelWorld.EMPTY) {
+                // Air in air, most of every walk: nothing to add and no surface to cross. (An empty end cell adds
+                // nothing either, and the walk stops at the sound's distance anyway.)
+                if (inEmptySection()) {
+                    if (!skipSection()) break;
+                    continue;
+                }
+                // Stop at the sound: a cell entered exactly at its distance is past it.
+                if (!dda.advance() || dda.tEnter >= distance) break;
+                continue;
+            }
+            boolean end = dda.x == endX && dda.y == endY && dda.z == endZ;
             // Solid blocks keep whatever medium surrounds them.
             int cellMedium = kind == VoxelWorld.SOLID ? (world.loadedWaterlogged() ? VoxelWorld.WATER : medium) : kind;
             // Crossing into the sound's own block is free, as for solids: something splashing, paddling or
@@ -213,7 +214,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
             }
             if (kind == VoxelWorld.EMPTY) {
                 if (medium == VoxelWorld.EMPTY && inEmptySection()) {
-                    if (!dda.skipBox(sectionX << 4, sectionY << 4, sectionZ << 4, 16)) break;
+                    if (!skipSection()) break;
                     continue;
                 }
             } else {

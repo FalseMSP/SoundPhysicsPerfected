@@ -225,6 +225,11 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
     }
 
     @Override
+    public boolean loadedSectionEmpty() {
+        return section == null; // the section of the last load(): empty, unloaded or outside the world
+    }
+
+    @Override
     public boolean sectionEmpty(int x, int y, int z) {
         return sectionAt(x, y, z) == null;
     }

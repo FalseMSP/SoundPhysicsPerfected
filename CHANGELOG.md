@@ -40,6 +40,12 @@
 - Each tracer thread remembers the block states it has already classified. Looking a block's shape up used to be the single biggest cost of tracing.
 - **A shared empty-cell memo.** Rays cross the same cells again and again: a cave trace on Ultra does about 4 million lookups in about 50 chunk sections. One bit per cell remembers "known empty", shared by every tracer thread and kept from trace to trace. Blocks that change and chunks that (re)load drop their part of it, and it resets itself every 20 seconds. Results are identical.
 - **Batched re-traces.** Playing sounds (bees, minecarts, machines) are re-traced together in one trace, where each used to cost a trace of all rays. Traces with nothing to place and no room to measure are skipped.
+- **Cheaper steps.**
+  - A ray walking through air no longer re-checks its whole chunk section at every cell, nor does the bookkeeping that only water and blocks need.
+  - The shared visibility answers sit in a lock-free table.
+  - A walk from a bounce to a sound that is fully blocked (three blocks of wall or more, 75% of them) is shared with the other bounces on the same block face.
+  - Results are the same (every difference is smaller than moving 5 cm), and clear and doorway paths are always walked exactly.
+  - Measured on real chunk data: 21–26% less CPU per trace in caves on Ultra, 7% on Medium, 5–6% on plains.
 - **Leaner echogram.** Its cost now grows with the number of bounces, not with 256 distance bins, which is 7x faster per ray outdoors. The voxel walk also works out a cell's exit distance only when it needs it.
 - Measured in game with every feature on:
 

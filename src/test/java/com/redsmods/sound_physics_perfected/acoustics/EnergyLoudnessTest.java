@@ -100,18 +100,18 @@ class EnergyLoudnessTest {
             ListenerTrace.Accumulator traced = new ListenerTrace.Accumulator(3);
             ListenerTrace.Trail[] trails = {new ListenerTrace.Trail(), new ListenerTrace.Trail()};
             VoxelRayOps ops = new VoxelRayOps(world);
-            ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], dirs, 0, 90, targets, traced, trails[0], null);
-            ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], dirs, 90, RAYS, targets, traced, trails[1], null);
+            ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], dirs, 0, 90, targets, traced, trails[0], null, null);
+            ListenerTrace.traceRays(ops, s, EYE[0], EYE[1], EYE[2], dirs, 90, RAYS, targets, traced, trails[1], null, null);
 
             ListenerTrace.Accumulator replayed = new ListenerTrace.Accumulator(3);
-            for (ListenerTrace.Trail trail : trails) ListenerTrace.connectTrail(ops, s, trail, targets, replayed);
+            for (ListenerTrace.Trail trail : trails) ListenerTrace.connectTrail(ops, s, trail, targets, replayed, null);
             assertArrayEquals(traced.sums, replayed.sums, 1e-9, "permeation " + permeation);
             assertArrayEquals(traced.counts, replayed.counts);
 
             // A sound marked as already known is left alone.
             targets.skip[1] = true;
             ListenerTrace.Accumulator partial = new ListenerTrace.Accumulator(3);
-            for (ListenerTrace.Trail trail : trails) ListenerTrace.connectTrail(ops, s, trail, targets, partial);
+            for (ListenerTrace.Trail trail : trails) ListenerTrace.connectTrail(ops, s, trail, targets, partial, null);
             assertEquals(0, partial.counts[1]);
             assertEquals(traced.sums[ListenerTrace.OCC_LF], partial.sums[ListenerTrace.OCC_LF], 1e-9);
         }
@@ -197,5 +197,31 @@ class EnergyLoudnessTest {
         assertEquals(0, acc.stats.firstEscapes + acc.stats.laterEscapes, "escapes from a sealed corridor");
         assertTrue(acc.stats.laterHits >= 2, "the ray went on bouncing: " + acc.stats.laterHits);
         assertEquals(1, acc.stats.legacyEscapes, "the legacy modes still count it as they always did");
+    }
+
+    @Test
+    void sharingConnectionsPerFaceKeepsTheLoudness() {
+        // One walk per block face and sound must sound the same as a walk from every bounce.
+        GridWorld[] worlds = {twoRooms(AcousticMaterial.STONE, false), twoRooms(AcousticMaterial.STONE, true),
+                new GridWorld().room(0, 0, 0, 12, 4, 12, AcousticMaterial.STONE).fill(6, 0, 5, 7, 4, 7, AcousticMaterial.STONE)};
+        double[][] eyes = {EYE, EYE, {3.5, 1.62, 6.5}};
+        double[][] sounds = {NEXT_ROOM, NEXT_ROOM, {10.5, 1.5, 6.5}};
+        for (int w = 0; w < worlds.length; w++) {
+            TraceSettings s = new TraceSettings(3, 3, 64.0, true, true, 0.4, 3.0, 0.9, RedsAttenuationType.ENERGY, 2.5);
+            double[] gains = new double[4];
+            for (int c = 0; c < 2; c++) {
+                ListenerTrace.Targets t = new ListenerTrace.Targets(1);
+                t.set(0, sounds[w][0], sounds[w][1], sounds[w][2], 16.0);
+                ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(1);
+                VoxelRayOps ops = new VoxelRayOps(worlds[w]);
+                ListenerTrace.traceDirect(ops, s, RAYS, eyes[w][0], eyes[w][1], eyes[w][2], t, 0, acc);
+                ListenerTrace.traceRays(ops, s, eyes[w][0], eyes[w][1], eyes[w][2], ListenerTrace.fibonacciSphere(RAYS),
+                        0, RAYS, t, acc, null, null, c == 0 ? null : new ListenerTrace.Connections(RAYS * 4));
+                gains[c * 2] = 20 * Math.log10(ListenerTrace.energyGain(acc.sums, 0, false, RAYS, SHARE));
+                gains[c * 2 + 1] = 20 * Math.log10(ListenerTrace.energyGain(acc.sums, 0, true, RAYS, SHARE));
+            }
+            assertEquals(gains[0], gains[2], 0.5, "bass dB, scene " + w);
+            assertEquals(gains[1], gains[3], 0.5, "treble dB, scene " + w);
+        }
     }
 }

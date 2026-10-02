@@ -205,9 +205,9 @@ class RoomAcousticsTest {
             ListenerTrace.Accumulator exact = new ListenerTrace.Accumulator(0), shared = new ListenerTrace.Accumulator(0);
             double[] dirs = ListenerTrace.fibonacciSphere(RAYS);
             ListenerTrace.traceRays(new VoxelRayOps(world), reverbSettings(), eyes[e], eyes[e + 1], eyes[e + 2], dirs, 0,
-                    RAYS, new ListenerTrace.Targets(0), exact, null, null);
+                    RAYS, new ListenerTrace.Targets(0), exact, null, null, null);
             ListenerTrace.traceRays(new VoxelRayOps(world), reverbSettings(), eyes[e], eyes[e + 1], eyes[e + 2], dirs, 0,
-                    RAYS, new ListenerTrace.Targets(0), shared, null, new ListenerTrace.Visibility());
+                    RAYS, new ListenerTrace.Targets(0), shared, null, new ListenerTrace.Visibility(), null);
             ReverbParams a = RoomAcousticsModel.estimate(exact.stats, RoomAcousticsModel.Settings.defaults());
             ReverbParams b = RoomAcousticsModel.estimate(shared.stats, RoomAcousticsModel.Settings.defaults());
             assertEquals(a.lateReverbPanX, b.lateReverbPanX, 0.03, "pan x at eye " + e / 3);

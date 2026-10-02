@@ -23,6 +23,14 @@ public interface VoxelWorld {
         return false;
     }
 
+    /**
+     * Whether the cell selected by the last {@link #load} lies in a completely empty (or unloaded) section, so a ray
+     * can jump across the whole section. Implementations without sections return false.
+     */
+    default boolean loadedSectionEmpty() {
+        return false;
+    }
+
     /** Whether the loaded SOLID cell is waterlogged: water fills it around its shape (slabs, stairs, fences...). */
     default boolean loadedWaterlogged() {
         return false;

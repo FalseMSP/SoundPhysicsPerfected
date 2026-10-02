@@ -583,6 +583,9 @@ public final class RaycastingHelper {
             }, POOL));
         }
 
+        // Bounces in the same block cell see a sound through nearly the same blocks: measure that once per cell.
+        ListenerTrace.Connections connections = job.settings.permeation && anyToTrace
+                ? new ListenerTrace.Connections(rays * (job.settings.bounces + 1) * targetCount) : null;
         ListenerTrace.Trail[] trails;
         if (job.trail != null) {
             // Same place, same world: connect the new sounds to the recorded paths.
@@ -590,13 +593,14 @@ public final class RaycastingHelper {
             for (ListenerTrace.Trail trail : anyToTrace ? job.trail.chunks : new ListenerTrace.Trail[0]) {
                 parts.add(CompletableFuture.supplyAsync(() -> {
                     ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(targetCount);
-                    ListenerTrace.connectTrail(job.newOps(), job.settings, trail, job.arrays, acc);
+                    ListenerTrace.connectTrail(job.newOps(), job.settings, trail, job.arrays, acc, connections);
                     return acc;
                 }, POOL));
             }
         } else {
             int chunks = Math.max(1, Math.min((rays + RAYS_PER_TASK - 1) / RAYS_PER_TASK, THREADS * 4));
-            ListenerTrace.Visibility visibility = job.settings.measureRoom ? new ListenerTrace.Visibility() : null;
+            ListenerTrace.Visibility visibility = job.settings.measureRoom ? new ListenerTrace.Visibility(
+                    rays * Math.max(job.settings.reverbBounces - job.settings.bounces, 0)) : null;
             trails = rays > 0 && job.cacheable ? new ListenerTrace.Trail[chunks] : null;
             for (int c = 0; c < chunks && rays > 0; c++) {
                 int from = (int) ((long) rays * c / chunks);
@@ -606,7 +610,7 @@ public final class RaycastingHelper {
                     ListenerTrace.Accumulator acc = new ListenerTrace.Accumulator(targetCount);
                     ListenerTrace.Trail trail = trails == null ? null : new ListenerTrace.Trail();
                     ListenerTrace.traceRays(job.newOps(), job.settings, job.eye.x, job.eye.y, job.eye.z, job.dirs,
-                            from, to, job.arrays, acc, trail, visibility);
+                            from, to, job.arrays, acc, trail, visibility, connections);
                     if (trails != null) trails[chunk] = trail;
                     return acc;
                 }, POOL));
