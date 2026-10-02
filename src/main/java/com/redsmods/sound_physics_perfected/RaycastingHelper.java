@@ -455,7 +455,7 @@ public final class RaycastingHelper {
             float volume = t.kind == Kind.ONE_SHOT ? t.data.sound.getVolume() : t.tickable.getOriginalVolume();
             Vec3 traced = t.position;
             if (config.waterAcoustics) {
-                ResourceLocation id = t.kind == Kind.ONE_SHOT ? t.data.sound.getLocation() : t.tickable.getLocation();
+                ResourceLocation id = t.kind == Kind.ONE_SHOT ? soundId(t.data.sound) : t.tickable.getLocation();
                 traced = atWaterSurface(level, t.position, isSurfaceSound(id) ? 6 : 1.5);
             }
             arrays.set(i, traced.x, traced.y, traced.z, 16.0 * volume);
@@ -531,6 +531,15 @@ public final class RaycastingHelper {
             return surface - position.y <= maxDepth ? new Vec3(position.x, surface + 0.05, position.z) : position;
         }
         return position;
+    }
+
+    /** A sound's id (getLocation() was renamed getIdentifier() in 1.21.11). */
+    public static ResourceLocation soundId(SoundInstance sound) {
+        //? if >=1.21.11 {
+        /*return sound.getIdentifier();
+        *///?} else {
+        return sound.getLocation();
+        //?}
     }
 
     /** Sounds that happen at the water surface whatever depth vanilla gives them (a fast fall lands deep). */
@@ -947,7 +956,7 @@ public final class RaycastingHelper {
             return sound;
         }
         RedSoundInstance wrapper = (RedSoundInstance) p.sound;
-        RedTickableInstance replacement = new RedTickableInstance(wrapper.getLocation(), wrapper.getSound(),
+        RedTickableInstance replacement = new RedTickableInstance(soundId(wrapper), wrapper.getSound(),
                 wrapper.getSource(), position, Math.max(0.001f, Math.min(1.0f, volume)),
                 Math.max(0.5f, Math.min(2.0f, wrapper.getPitch())), wrapper.getOriginal(), p.attenuation);
         soundInstanceMap.put(wrapper.getOriginal(), replacement);
@@ -981,12 +990,12 @@ public final class RaycastingHelper {
         float volume = Math.max(0.001f, p.baseVolume());
         RedTickableInstance replacement;
         if (permeated) {
-            RedPermeatedSoundInstance sound = new RedPermeatedSoundInstance(wrapper.getLocation(), wrapper.getSound(),
+            RedPermeatedSoundInstance sound = new RedPermeatedSoundInstance(soundId(wrapper), wrapper.getSound(),
                     wrapper.getSource(), position, volume, wrapper.getPitch(), wrapper.getOriginal(), 1.0f, 1.0f, 1.0f);
             soundPermInstanceMap.put(wrapper.getOriginal(), sound);
             replacement = sound;
         } else {
-            replacement = new RedTickableInstance(wrapper.getLocation(), wrapper.getSound(), wrapper.getSource(),
+            replacement = new RedTickableInstance(soundId(wrapper), wrapper.getSound(), wrapper.getSource(),
                     position, volume, Math.max(0.5f, Math.min(2.0f, wrapper.getPitch())), wrapper.getOriginal(), 1.0f);
             soundInstanceMap.put(wrapper.getOriginal(), replacement);
         }
@@ -1037,7 +1046,7 @@ public final class RaycastingHelper {
             return null; // a line-of-sight instance left over from before permeation was switched on
         }
         RedSoundInstance wrapper = (RedSoundInstance) p.sound;
-        RedPermeatedSoundInstance replacement = new RedPermeatedSoundInstance(wrapper.getLocation(),
+        RedPermeatedSoundInstance replacement = new RedPermeatedSoundInstance(soundId(wrapper),
                 wrapper.getSound(), wrapper.getSource(), position, Math.max(0.01f, volume), wrapper.getPitch(),
                 wrapper.getOriginal(), permeationIndex, permeationIndexHf, p.attenuation);
         soundPermInstanceMap.put(wrapper.getOriginal(), replacement);
@@ -1054,7 +1063,7 @@ public final class RaycastingHelper {
         DebugType debug = Config.getInstance().debug;
         Minecraft client = Minecraft.getInstance();
         if (debug == DebugType.OFF || client.player == null) return;
-        client.player.displayClientMessage(Component.literal(original.getLocation() + detail), debug == DebugType.ACTION_BAR);
+        client.player.displayClientMessage(Component.literal(soundId(original) + detail), debug == DebugType.ACTION_BAR);
     }
 
     private static double db(float gain) {

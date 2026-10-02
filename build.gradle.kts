@@ -73,6 +73,11 @@ stonecutter {
     constants["fabric"] = loader.isFabric
     constants["neoforge"] = loader.isNeoforge
     constants["forge"] = loader.isForge
+
+    // 1.21.11 renamed ResourceLocation to Identifier (Mojang mappings).
+    replacements.string(eval(current.version, ">=1.21.11")) {
+        replace("ResourceLocation", "Identifier")
+    }
 }
 
 blossom {

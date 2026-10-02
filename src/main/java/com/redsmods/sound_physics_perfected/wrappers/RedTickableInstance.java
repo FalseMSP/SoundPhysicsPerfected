@@ -123,6 +123,13 @@ public class RedTickableInstance implements TickableSoundInstance {
      * The original was already resolved when it was intercepted; resolving it again (vanilla does when this plays)
      * would pick another random variant and change its pitch under the playing sound.
      */
+    //? if >=1.21.11 {
+    /*@Override
+    public ResourceLocation getIdentifier() {
+        return location;
+    }
+    *///?}
+
     @Override
     public WeighedSoundEvents resolve(SoundManager soundManager) {
         return soundManager.getSoundEvent(location);

@@ -1,3 +1,7 @@
+## Versions
+
+- **Minecraft 1.21.11 (NeoForge).** Needs NeoForge 21.11.45 or newer and YACL 3.8.1.
+
 ## Sound quality
 
 - **Energy loudness** (new default Attenuation Mode, after Vercidium's raytraced audio). How loud a hidden sound is now follows how much of its energy actually reaches you, per frequency band: around corners, through doorways, off walls, or through them. A sound is at full volume once a tenth of your rays' energy reaches it, and soft surfaces take the treble first. Loudness is applied as a filter, so the sound keeps its vanilla volume, range and distance falloff: a sound in plain view is exactly as loud as without the mod (measured in game: within 0.3 dB at 4, 8 and 14 m).
@@ -130,3 +134,4 @@ From a multi-agent code review, each finding checked before fixing:
 
 - The build no longer needs the fletching-table plugin; translations are plain flat JSON.
 - `./gradlew test` runs offline tests of the ray tracer, reverb model and reverb zones.
+- Architectury Loom 1.17 (1.21.11 needs it; every other version still builds and passes).

@@ -103,7 +103,7 @@ public abstract class SoundSystemMixin {
                 if (soundQueue.size() > Config.getInstance().maxSounds) {
                     return;
                 }
-                soundQueue.offer(new SoundData(new RedSoundInstance(sound), soundPos, sound.getLocation().toString()));
+                soundQueue.offer(new SoundData(new RedSoundInstance(sound), soundPos, RaycastingHelper.soundId(sound).toString()));
                 notProcd.add(sound);
 
                 /*? if >= 1.21.6 {*/ /*cir.setReturnValue(SoundEngine.PlayResult.STARTED); *//*?} else {*/ ci.cancel(); /*?}*/
@@ -190,7 +190,11 @@ public abstract class SoundSystemMixin {
 
     @Unique
     private void spp$frame(Minecraft client, Camera camera) {
+        //? if >=1.21.11 {
+        /*org.joml.Vector3fc left = camera.leftVector(), up = camera.upVector(), look = camera.forwardVector();
+        *///?} else {
         Vector3f left = camera.getLeftVector(), up = camera.getUpVector(), look = camera.getLookVector();
+        //?}
         RaycastingHelper.setListenerBasis(left.x(), left.y(), left.z(), up.x(), up.y(), up.z(), look.x(), look.y(), look.z());
         RaycastingHelper.onFrame(client.level, client.player);
 

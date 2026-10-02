@@ -70,13 +70,18 @@ public final class SoundPhysicsSection {
     }
 
     private void build(OptionsList list) {
+        // Custom is not one of the values to cycle through; a click on Custom goes round to Low.
+        //? if >=1.21.11 {
+        /*qualityButton = CycleButton.builder(SoundPhysicsSection::presetName, QualityPreset.of(Config.getInstance()))
+                .withValues(QualityPreset.PRESETS)
+                .withTooltip(SoundPhysicsSection::presetTooltip)
+        *///?} else {
         qualityButton = CycleButton.builder(SoundPhysicsSection::presetName)
                 .withValues(QualityPreset.PRESETS)
                 .withTooltip(SoundPhysicsSection::presetTooltip)
-                // Custom is not one of the values to cycle through; starting from Ultra's place, a click on
-                // Custom goes round to Low.
                 .withInitialValue(QualityPreset.ULTRA)
                 .withInitialValue(QualityPreset.of(Config.getInstance()))
+        //?}
                 .create(0, 0, FULL_WIDTH, 20, Component.translatable(KEY + "quality"),
                         (button, preset) -> applyPreset(preset));
 
