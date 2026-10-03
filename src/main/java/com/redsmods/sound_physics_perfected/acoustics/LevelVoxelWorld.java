@@ -53,7 +53,10 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
     private final int[] knownKind = new int[KNOWN];
     private final boolean[] knownFull = new boolean[KNOWN];
     private final boolean[] knownWaterlogged = new boolean[KNOWN];
+    private final float[][] knownPass = new float[KNOWN][];
     private boolean loadedWaterlogged;
+    /** The loaded cell's gaps (bass, mid, treble), or null when it is solid. */
+    private float[] loadedPass;
     private int knownNext;
 
     /**
@@ -176,26 +179,30 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
         if (state.isAir()) return EMPTY;
         for (int i = 0; i < KNOWN; i++) {
             if (knownState[i] == state) {
-                return select(state, knownKind[i], knownShape[i], knownFull[i], knownWaterlogged[i]);
+                return select(state, knownKind[i], knownShape[i], knownFull[i], knownWaterlogged[i], knownPass[i]);
             }
         }
-        if (barrierAsAir && state.is(Blocks.BARRIER)) return remember(state, EMPTY, null, false, false);
+        if (barrierAsAir && state.is(Blocks.BARRIER)) return remember(state, EMPTY, null, false, false, null);
 
         pos.set(x, y, z);
-        VoxelShape shape = state.getCollisionShape(level, pos);
+        // What sound meets: usually the collision shape, but some blocks are drawn differently from how they collide
+        // (fences, walls, snow layers, powder snow, lava; see AcousticMaterials).
+        AcousticMaterials.Entry acoustic = AcousticMaterials.of(state);
+        VoxelShape shape = acoustic.shape != null ? acoustic.shape : state.getCollisionShape(level, pos);
         if (shape.isEmpty()) {
             // Water (source, flowing, or filling a block without collision like seagrass) is its own medium.
             if (water && !state.getFluidState().isEmpty() && state.getFluidState().is(FluidTags.WATER)) {
-                return remember(state, WATER, Shapes.block(), true, false);
+                return remember(state, WATER, Shapes.block(), true, false, null);
             }
-            return remember(state, EMPTY, null, false, false);
+            return remember(state, EMPTY, null, false, false, null);
         }
         boolean waterlogged = water && !state.getFluidState().isEmpty() && state.getFluidState().is(FluidTags.WATER);
-        return remember(state, SOLID, shape, shape == Shapes.block() || state.isCollisionShapeFullBlock(level, pos),
-                waterlogged);
+        boolean full = shape == Shapes.block() || (acoustic.shape == null && state.isCollisionShapeFullBlock(level, pos));
+        return remember(state, SOLID, shape, full, waterlogged, acoustic.pass);
     }
 
-    private int remember(BlockState state, int kind, VoxelShape shape, boolean full, boolean waterlogged) {
+    private int remember(BlockState state, int kind, VoxelShape shape, boolean full, boolean waterlogged,
+                         float[] pass) {
         if (!state.getBlock().hasDynamicShape()) { // shapes that depend on the position can't be reused
             int i = knownNext;
             knownNext = (i + 1) % KNOWN;
@@ -204,19 +211,36 @@ public final class LevelVoxelWorld implements VoxelWorld, Shapes.DoubleLineConsu
             knownShape[i] = shape;
             knownFull[i] = full;
             knownWaterlogged[i] = waterlogged;
+            knownPass[i] = pass;
         }
-        return select(state, kind, shape, full, waterlogged);
+        return select(state, kind, shape, full, waterlogged, pass);
     }
 
-    private int select(BlockState state, int kind, VoxelShape shape, boolean full, boolean waterlogged) {
+    private int select(BlockState state, int kind, VoxelShape shape, boolean full, boolean waterlogged, float[] pass) {
         if (kind != EMPTY) {
             loadedState = state;
             loadedShape = shape;
             loadedFull = full;
             loadedWater = kind == WATER;
             loadedWaterlogged = waterlogged;
+            loadedPass = pass;
         }
         return kind;
+    }
+
+    @Override
+    public double loadedPassBass() {
+        return loadedPass == null ? 0.0 : loadedPass[0];
+    }
+
+    @Override
+    public double loadedPassMid() {
+        return loadedPass == null ? 0.0 : loadedPass[1];
+    }
+
+    @Override
+    public double loadedPassTreble() {
+        return loadedPass == null ? 0.0 : loadedPass[2];
     }
 
     @Override

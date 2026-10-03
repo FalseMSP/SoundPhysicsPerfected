@@ -25,6 +25,17 @@ public final class AcousticMaterial {
     public static final AcousticMaterial WATER = new AcousticMaterial("water", 0.01f, 0.01f, 0.02f, 0.05f, 2.0f);
     public static final AcousticMaterial DEFAULT = new AcousticMaterial("default", 0.05f, 0.1f, 0.12f, 0.3f, 2.0f);
 
+    private static final AcousticMaterial[] ALL = {STONE, SMOOTH_STONE, POROUS_STONE, METAL, GLASS, WOOD, BOOKS, CLOTH,
+            SOIL, SAND, GRAVEL, SNOW, FOLIAGE, ORGANIC, GOO, WATER, DEFAULT};
+
+    /** The material with this name ("smooth_stone"), or null. */
+    public static AcousticMaterial byName(String name) {
+        for (AcousticMaterial m : ALL) {
+            if (m.name.equals(name)) return m;
+        }
+        return null;
+    }
+
     public final String name;
     public final float absorptionLow;
     public final float absorptionMid;

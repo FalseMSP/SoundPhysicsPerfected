@@ -17,6 +17,11 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
 
     private final VoxelWorld world;
     private final VoxelTraversal dda = new VoxelTraversal();
+    /** Energy one weighted block of permeation lets through (the Permeation Absorption setting). */
+    private final double absorption;
+    private long seed;
+    private boolean seeded;
+    private double segmentBass = 1.0, segmentTreble = 1.0, hitBass = 1.0, hitTreble = 1.0;
 
     private double hitT;
     private int hitNormalX, hitNormalY, hitNormalZ;
@@ -35,7 +40,93 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
     private double boxLength;
 
     public VoxelRayOps(VoxelWorld world) {
+        this(world, 0.4);
+    }
+
+    /** @param permeationAbsorption energy one weighted block lets through (0..1) */
+    public VoxelRayOps(VoxelWorld world, double permeationAbsorption) {
         this.world = world;
+        this.absorption = Math.min(Math.max(permeationAbsorption, 1.0E-6), 0.999999);
+    }
+
+    @Override
+    public void nextRay(long seed) {
+        this.seed = seed;
+        this.seeded = true;
+    }
+
+    @Override
+    public double segmentBass() {
+        return segmentBass;
+    }
+
+    @Override
+    public double segmentTreble() {
+        return segmentTreble;
+    }
+
+    @Override
+    public double hitBass() {
+        return hitBass;
+    }
+
+    @Override
+    public double hitTreble() {
+        return hitTreble;
+    }
+
+    private static long mix(long z) {
+        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
+        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
+        return z ^ (z >>> 31);
+    }
+
+    /** This walk's random number in [0, 1): from the seed when given, else from where the ray starts and points. */
+    private double walkRandom(double ox, double oy, double oz, double dx, double dy, double dz) {
+        long h;
+        if (seeded) {
+            h = seed;
+            seeded = false;
+        } else {
+            h = VoxelTraversal.floor(ox * 8.0) * 0x9E3779B97F4A7C15L ^ VoxelTraversal.floor(oy * 8.0) * 0xC2B2AE3D27D4EB4FL
+                    ^ VoxelTraversal.floor(oz * 8.0) * 0x165667B19E3779F9L ^ Math.round(dx * 64.0) * 0x27D4EB2F165667C5L
+                    ^ Math.round(dy * 64.0) * 0x94D049BB133111EBL ^ Math.round(dz * 64.0);
+        }
+        return (mix(h ^ 0x632BE59BD9B4E019L) >>> 11) * 0x1.0p-53;
+    }
+
+    // The gaps the current walk went through: the share of rays still going (1 = no gaps met), and its random number.
+    private double survive, walkU;
+
+    /**
+     * At a block with gaps the ray just met: true when it goes on through a gap, false when it hits the block. One
+     * random number per walk decides every block on the way: the walk gets past a block while that number is below
+     * the share of rays that get past every block so far, so each block is passed as often as its gaps say.
+     */
+    private boolean throughGap() {
+        double mid = world.loadedPassMid();
+        if (mid <= 0.0) return false;
+        double bass = world.loadedPassBass(), treble = world.loadedPassTreble();
+        if (walkU < survive * mid) {
+            survive *= mid;
+            segmentBass *= bass / mid;
+            segmentTreble *= treble / mid;
+            return true;
+        }
+        if (mid < 1.0) {
+            hitBass = (1.0 - bass) / (1.0 - mid);
+            hitTreble = (1.0 - treble) / (1.0 - mid);
+        }
+        return false;
+    }
+
+    /**
+     * Weight of crossing a block with gaps, from the weight of crossing it solid: the gaps' share gets straight
+     * through, the rest through the block itself.
+     */
+    private double gapWeight(double gaps, double solidWeight) {
+        double t = gaps + (1.0 - gaps) * Math.pow(absorption, solidWeight);
+        return Math.log(t) / Math.log(absorption);
     }
 
     // Section-emptiness cache for the current walk.
@@ -60,6 +151,9 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
 
     @Override
     public boolean firstHit(double ox, double oy, double oz, double dx, double dy, double dz, double maxDistance) {
+        walkU = walkRandom(ox, oy, oz, dx, dy, dz);
+        survive = 1.0;
+        segmentBass = segmentTreble = hitBass = hitTreble = 1.0;
         int medium = originMedium(ox, oy, oz, dx, dy, dz);
         dda.init(ox, oy, oz, dx, dy, dz, maxDistance);
         while (true) {
@@ -94,6 +188,10 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                         if (dda.tEnter > maxDistance) {
                             return false;
                         }
+                        if (throughGap()) {
+                            if (!dda.advance()) return false;
+                            continue;
+                        }
                         hitT = dda.tEnter;
                         setNormal(dda.enterAxis, dx, dy, dz);
                         hitMaterial = world.loadedMaterial();
@@ -102,7 +200,7 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                 } else {
                     beginBoxes(MODE_FIRST_HIT, ox, oy, oz, dx, dy, dz, 0.0, maxDistance);
                     world.forEachLoadedBox(this);
-                    if (boxBestT <= maxDistance) {
+                    if (boxBestT <= maxDistance && !throughGap()) {
                         hitT = boxBestT;
                         setNormal(boxBestAxis, dx, dy, dz);
                         hitMaterial = world.loadedMaterial();
@@ -160,6 +258,10 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
             return true;
         }
         double inv = 1.0 / distance;
+        // Whether it sees through gaps on the way depends only on the two blocks it connects.
+        nextRay(VoxelTraversal.floor(ax) * 0x9E3779B97F4A7C15L ^ VoxelTraversal.floor(ay) * 0xC2B2AE3D27D4EB4FL
+                ^ VoxelTraversal.floor(az) * 0x165667B19E3779F9L ^ VoxelTraversal.floor(bx) * 0x27D4EB2F165667C5L
+                ^ VoxelTraversal.floor(by) * 0x94D049BB133111EBL ^ VoxelTraversal.floor(bz));
         if (!firstHit(ax, ay, az, dx * inv, dy * inv, dz * inv, distance)) {
             return true;
         }
@@ -230,8 +332,13 @@ public final class VoxelRayOps implements RayOps, VoxelWorld.BoxConsumer {
                 }
                 if (length > 0.0) {
                     double weighted = length * (kind == VoxelWorld.WATER ? WATER_VOLUME_WEIGHT : world.loadedTransmissionWeight());
+                    double weightedHf = weighted * world.loadedMaterial().transmissionHf;
+                    if (kind == VoxelWorld.SOLID && world.loadedPassMid() > 0.0) {
+                        weighted = gapWeight(world.loadedPassBass(), weighted);
+                        weightedHf = gapWeight(world.loadedPassTreble(), weightedHf);
+                    }
                     total += weighted;
-                    totalHf += weighted * world.loadedMaterial().transmissionHf;
+                    totalHf += weightedHf;
                     if (total >= maxWeighted) {
                         break;
                     }

@@ -34,6 +34,24 @@
 - Dense blocks that explode easily (dirt, sand, gravel, glass, snow) now muffle sound properly with Material Based Absorption.
 - Music is no longer given environmental reverb; distant sounds lose some high frequencies to the air (new **Air Absorption** option).
 
+- **Blocks sound like they look.** Each block's collision shape was compared with its model as drawn, for every
+  block state in Minecraft 1.21.11. A prebuilt table now gives every vanilla block what sound meets
+  (`tools/block-acoustics/audit.md` lists them all):
+  - **Gaps let sound through.** Leaves, copper grates, iron and copper bars, ladders, spawners, trial spawners, vaults,
+    mangrove roots, trapdoors and door windows used to be solid walls. Sound now goes through their openings as often as
+    you can see through them, bass more easily than treble (measured in game through a 4-high wall: stone takes 7 dB of
+    bass and 20 dB of treble, copper grates none of the bass and 14 dB of treble, leaves nothing). Leaves follow real
+    foliage: a tree canopy no longer sounds like a roof (reverb decay under a 2-thick canopy 0.36 s, open field 0.23 s,
+    stone roof 0.62 s).
+  - **Shapes as drawn.** Fences and fence gates are their post and rails, not the 1.5-high wall they collide as; walls
+    no longer reach above their block.
+  - **Drawn but not colliding.** Powder snow is a block of snow; snow layers are as high as drawn, so even one layer makes
+    the ground snow; lava reflects like a liquid surface instead of letting sound straight through.
+  - **Materials per block.** Beds are cloth, not wood; dirt, coarse dirt, podzol, farmland and clay are soil, not
+    gravel; cactus and cake are not cloth; concrete, terracotta, bricks and polished stone are smooth; pumpkins, melons,
+    hay and mushrooms are organic; slabs, stairs and walls match their block.
+  - Modded blocks fall back to the rules: leaves, fences, gates and bars by family, the rest by sound type.
+
 ## Performance and latency
 
 - New **Fast Raytracing** (on by default): rays walk the block grid directly instead of using Minecraft's generic ray casting. It switches itself off near Sable sub-levels.

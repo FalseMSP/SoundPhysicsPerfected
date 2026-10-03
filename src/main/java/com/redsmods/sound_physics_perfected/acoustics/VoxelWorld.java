@@ -42,6 +42,22 @@ public interface VoxelWorld {
     /** Visits the loaded cell's boxes in cell-local coordinates (0..1). Only called for non-full cells. */
     void forEachLoadedBox(BoxConsumer consumer);
 
+    /**
+     * Share of sound meeting the loaded SOLID cell's shape that goes straight through its gaps (leaves, grates, bars,
+     * door windows), in the bass, mid and treble bands; 0 for a solid block.
+     */
+    default double loadedPassBass() {
+        return 0.0;
+    }
+
+    default double loadedPassMid() {
+        return 0.0;
+    }
+
+    default double loadedPassTreble() {
+        return 0.0;
+    }
+
     /** Surface absorption of the loaded cell. */
     AcousticMaterial loadedMaterial();
 

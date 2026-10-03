@@ -170,7 +170,7 @@ public final class RaycastingHelper {
         RayOps newOps() {
             if (fast) {
                 return new VoxelRayOps(new LevelVoxelWorld(level, barrierAsAir, useExplosionResistance, maxBlocksPermeated,
-                        water, memo));
+                        water, memo), settings.permeationAbsorption);
             }
             return new ClipRayOps(level, player, barrierAsAir, useExplosionResistance, maxBlocksPermeated, stepSize);
         }
@@ -285,7 +285,7 @@ public final class RaycastingHelper {
 
     /** What the tracer sees in a block: nothing, water, or this block with this shape. */
     private static Object acousticKind(Level level, BlockPos pos, BlockState state) {
-        VoxelShape shape = state.getCollisionShape(level, pos);
+        VoxelShape shape = AcousticMaterials.shape(state, level, pos);
         if (!shape.isEmpty()) return state.getBlock() == Blocks.BARRIER ? Blocks.BARRIER : java.util.List.of(state.getBlock(), shape);
         return state.getFluidState().is(FluidTags.WATER) ? Blocks.WATER : Blocks.AIR;
     }
@@ -1246,7 +1246,8 @@ public final class RaycastingHelper {
     public static double countBlocksBetween(Level world, Vec3 start, Vec3 end, Player player) {
         Config config = Config.getInstance();
         RayOps ops = config.fastRaytracing && !subLevelsNearby
-                ? new VoxelRayOps(new LevelVoxelWorld(world, config.barrierAsAir, config.useExplosionResistance, config.maxBlocksPermeated))
+                ? new VoxelRayOps(new LevelVoxelWorld(world, config.barrierAsAir, config.useExplosionResistance, config.maxBlocksPermeated),
+                        config.permeationAbsorption)
                 : new ClipRayOps(world, player, config.barrierAsAir, config.useExplosionResistance, config.maxBlocksPermeated, config.permeationStepSize);
         return ops.obstruction(start.x, start.y, start.z, end.x, end.y, end.z, config.maxBlocksPermeated);
     }

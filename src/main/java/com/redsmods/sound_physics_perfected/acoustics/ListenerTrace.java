@@ -309,6 +309,7 @@ public final class ListenerTrace {
                 double budget = connecting ? remaining : reverbRemaining;
                 if (budget <= 0.0 || (!connecting && !s.reverb)) break;
                 double segment = Math.min(s.segmentLength, budget);
+                ops.nextRay(mix(((long) ray << 8) ^ bounce ^ 0x3C6EF372FE94F82BL));
                 if (!ops.firstHit(px, py, pz, dx, dy, dz, segment)) {
                     if (connecting && segment < s.segmentLength) {
                         // Out of connecting budget, not out in the open: carry on for the room estimate only.
@@ -327,7 +328,10 @@ public final class ListenerTrace {
                 int nx = ops.hitNormalX(), ny = ops.hitNormalY(), nz = ops.hitNormalZ();
                 AcousticMaterial material = ops.hitMaterial();
                 double cosIncidence = Math.abs(dx * nx + dy * ny + dz * nz);
-                if (echo != null) echo.hit(t, material);
+                // Gaps on the way (leaves, grates, bars) let bass through better than treble.
+                energyLf *= ops.segmentBass();
+                energyHf *= ops.segmentTreble();
+                if (echo != null) echo.hit(t, material, ops.segmentBass() * ops.hitBass(), ops.segmentTreble() * ops.hitTreble());
 
                 pathLength += t;
                 if (connecting) legacyDistance = (legacyDistance + t) / s.bounceAbsorption;
@@ -343,8 +347,8 @@ public final class ListenerTrace {
                 // (bounceAbsorption is an amplitude factor, hence squared).
                 double loss = s.bounceAbsorption * s.bounceAbsorption;
                 double reflection = loss * material.reflectivity();
-                double reflectionLf = loss * (1.0 - material.absorptionLow);
-                double reflectionHf = loss * (1.0 - material.absorptionHigh);
+                double reflectionLf = loss * (1.0 - material.absorptionLow) * ops.hitBass();
+                double reflectionHf = loss * (1.0 - material.absorptionHigh) * ops.hitTreble();
                 chainEnergy *= reflection;
 
                 boolean shortcut = false;
@@ -447,9 +451,11 @@ public final class ListenerTrace {
             escaped = false;
         }
 
-        void hit(double t, AcousticMaterial material) {
+        void hit(double t, AcousticMaterial material, double gapBass, double gapTreble) {
             travelled += t;
             if (hits == hitL.length) return;
+            eLow *= gapBass;
+            eHigh *= gapTreble;
             eLow *= 1.0 - material.absorptionLow;
             eMid *= 1.0 - material.absorptionMid;
             eHigh *= 1.0 - material.absorptionHigh;
@@ -507,6 +513,7 @@ public final class ListenerTrace {
             }
             double energy = 1.0;
             for (int bounce = 0; bounce <= bounces; bounce++) {
+                ops.nextRay(mix(((long) ray << 8) ^ bounce ^ 0x7F4A7C159E3779B9L));
                 if (!ops.firstHit(px, py, pz, dx, dy, dz, s.segmentLength)) {
                     stats.escape(bounce, false);
                     echo.escaped = true;
@@ -517,7 +524,7 @@ public final class ListenerTrace {
                 int nx = ops.hitNormalX(), ny = ops.hitNormalY(), nz = ops.hitNormalZ();
                 AcousticMaterial material = ops.hitMaterial();
                 stats.hit(bounce, t, material, Math.abs(dx * nx + dy * ny + dz * nz), false);
-                echo.hit(t, material);
+                echo.hit(t, material, ops.segmentBass() * ops.hitBass(), ops.segmentTreble() * ops.hitTreble());
                 energy *= s.bounceAbsorption * s.bounceAbsorption * material.reflectivity();
 
                 // Does this reflection reach the listener directly?

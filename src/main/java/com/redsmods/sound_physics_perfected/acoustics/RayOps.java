@@ -39,4 +39,33 @@ public interface RayOps {
      * {@link AcousticMaterial#transmissionHf} factor applied (walls stop treble far better than bass).
      */
     double lastObstructionHf();
+
+    /**
+     * Seeds the next {@link #firstHit}'s choices at blocks with gaps (leaves, grates, bars): which gaps this ray goes
+     * through. Without a seed the choice comes from the ray's own geometry. Either way the same ray chooses the same.
+     */
+    default void nextRay(long seed) {
+    }
+
+    /**
+     * How much of its bass and treble the last {@link #firstHit}'s ray keeps relative to its mid band from the gaps it
+     * went through on the way (bass gets through small gaps better than mid, treble worse). 1 when it met none.
+     * Kept per ray so each band's energy averages out right.
+     */
+    default double segmentBass() {
+        return 1.0;
+    }
+
+    default double segmentTreble() {
+        return 1.0;
+    }
+
+    /** The same for the reflection at the hit: a block with gaps reflects less bass (it lets it through). */
+    default double hitBass() {
+        return 1.0;
+    }
+
+    default double hitTreble() {
+        return 1.0;
+    }
 }

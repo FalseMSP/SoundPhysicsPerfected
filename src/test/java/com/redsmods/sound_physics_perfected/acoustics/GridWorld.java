@@ -12,8 +12,10 @@ final class GridWorld implements VoxelWorld {
     /** Number of occupied cells per 16^3 section, for {@link #sectionEmpty}. */
     private final Map<Long, Integer> sectionCounts = new HashMap<>();
     boolean reportSections = true;
+    private final Map<Long, double[]> gaps = new HashMap<>();
     private AcousticMaterial loaded;
     private double[] loadedBox;
+    private double[] loadedGaps;
 
     private static long key(int x, int y, int z) {
         return ((long) (x & 0x1FFFFF) << 42) | ((long) (y & 0x1FFFFF) << 21) | (z & 0x1FFFFF);
@@ -22,6 +24,23 @@ final class GridWorld implements VoxelWorld {
     GridWorld set(int x, int y, int z, AcousticMaterial material) {
         if (cells.put(key(x, y, z), material) == null) sectionCounts.merge(key(x >> 4, y >> 4, z >> 4), 1, Integer::sum);
         boxes.remove(key(x, y, z));
+        gaps.remove(key(x, y, z));
+        return this;
+    }
+
+    /** A full block with gaps: the share of sound through them in the bass, mid and treble bands. */
+    GridWorld setGaps(int x, int y, int z, AcousticMaterial material, double bass, double mid, double treble) {
+        set(x, y, z, material);
+        gaps.put(key(x, y, z), new double[]{bass, mid, treble});
+        return this;
+    }
+
+    GridWorld fillGaps(int x0, int y0, int z0, int x1, int y1, int z1, AcousticMaterial material, double bass,
+                       double mid, double treble) {
+        for (int x = x0; x <= x1; x++)
+            for (int y = y0; y <= y1; y++)
+                for (int z = z0; z <= z1; z++)
+                    setGaps(x, y, z, material, bass, mid, treble);
         return this;
     }
 
@@ -41,6 +60,7 @@ final class GridWorld implements VoxelWorld {
     GridWorld clear(int x, int y, int z) {
         if (cells.remove(key(x, y, z)) != null) sectionCounts.merge(key(x >> 4, y >> 4, z >> 4), -1, Integer::sum);
         boxes.remove(key(x, y, z));
+        gaps.remove(key(x, y, z));
         return this;
     }
 
@@ -72,6 +92,7 @@ final class GridWorld implements VoxelWorld {
         long k = key(x, y, z);
         loaded = cells.get(k);
         loadedBox = loaded == null ? null : boxes.get(k);
+        loadedGaps = loaded == null ? null : gaps.get(k);
         loadedWaterlogged = waterlogged.contains(k);
         loadedSectionEmpty = sectionEmpty(x, y, z);
         if (loaded == null) return EMPTY;
@@ -103,6 +124,21 @@ final class GridWorld implements VoxelWorld {
     @Override
     public void forEachLoadedBox(BoxConsumer consumer) {
         consumer.accept(loadedBox[0], loadedBox[1], loadedBox[2], loadedBox[3], loadedBox[4], loadedBox[5]);
+    }
+
+    @Override
+    public double loadedPassBass() {
+        return loadedGaps == null ? 0.0 : loadedGaps[0];
+    }
+
+    @Override
+    public double loadedPassMid() {
+        return loadedGaps == null ? 0.0 : loadedGaps[1];
+    }
+
+    @Override
+    public double loadedPassTreble() {
+        return loadedGaps == null ? 0.0 : loadedGaps[2];
     }
 
     @Override
