@@ -4,9 +4,7 @@ import com.mojang.blaze3d.audio.Channel;
 import com.redsmods.sound_physics_perfected.OpenALEffectsHandler;
 import com.redsmods.sound_physics_perfected.RaycastingHelper;
 import com.redsmods.sound_physics_perfected.RedSoundInstance;
-import com.redsmods.sound_physics_perfected.ReverbHelpers.EnhancedReverbData;
 import com.redsmods.sound_physics_perfected.ReverbHelpers.LegacyReverb;
-import com.redsmods.sound_physics_perfected.ReverbHelpers.ReverbConstants;
 import com.redsmods.sound_physics_perfected.config.Config;
 import com.redsmods.sound_physics_perfected.config.DebugType;
 import com.redsmods.sound_physics_perfected.storageclasses.SoundData;
@@ -14,38 +12,28 @@ import com.redsmods.sound_physics_perfected.wrappers.RedPermeatedSoundInstance;
 import com.redsmods.sound_physics_perfected.wrappers.RedPositionedSoundInstance;
 import com.redsmods.sound_physics_perfected.wrappers.RedTickableInstance;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
-import net.minecraft.client.resources.sounds.TickableSoundInstance;
 import net.minecraft.client.sounds.ChannelAccess;
 import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
-import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.openal.AL10;
-import org.lwjgl.openal.AL11;
 import org.lwjgl.openal.ALC10;
-import org.lwjgl.openal.EXTEfx;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static com.redsmods.sound_physics_perfected.OpenALEffectsHandler.*;
 import static com.redsmods.sound_physics_perfected.RaycastingHelper.*;
-import static org.joml.Math.lerp;
 import static org.lwjgl.openal.EXTEfx.*;
 
 @Mixin(value = SoundEngine.class, priority = 9001) // its over 9000!!!!
@@ -84,7 +72,7 @@ public abstract class SoundSystemMixin {
         try {
             //? if >=26.3 {
             /*WeighedSoundEvents weightedSoundSet = sound.getOrResolve(soundManager); // load pitches and whatnot into the sound data
-            *///?} else {
+             *///?} else {
             WeighedSoundEvents weightedSoundSet = sound.resolve(soundManager); // load pitches and whatnot into the sound data
             //?}
             if (!(sound instanceof RedPositionedSoundInstance || sound instanceof RedTickableInstance) && sound.getAttenuation() != SoundInstance.Attenuation.NONE) { // !replayList.contains(redSoundData)
@@ -130,8 +118,7 @@ public abstract class SoundSystemMixin {
             method = "tick(Z)V",
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/client/sounds/SoundEngine;tickInGameSound()V",
-                    shift = At.Shift.AFTER),
-            locals = LocalCapture.CAPTURE_FAILHARD
+                    shift = At.Shift.AFTER)
     )
     private void onSoundTick(boolean paused, CallbackInfo ci) {
         // Cast rays from player and detect entities
@@ -256,7 +243,33 @@ public abstract class SoundSystemMixin {
 
     @Inject(method = "destroy()V", at = @At("HEAD"))
     private void onAudioEngineStop(CallbackInfo ci) {
-        fxHandler.cleanupEFXResources();
+        try {
+            fxHandler.cleanupEFXResources();
+        } catch (Throwable t) {
+            System.err.println("[SoundPhysicsPerfected] Error during EFX cleanup on destroy(): " + t);
+        }
+        // Critical: shut down the leaked non-daemon thread pools in
+        // RaycastingHelper. Without this, 17 non-daemon threads stay parked
+        // and the JVM cannot exit — triggering the post-main watchdog.
+        try {
+            RaycastingHelper.shutdown();
+        } catch (Throwable t) {
+            System.err.println("[SoundPhysicsPerfected] Error during RaycastingHelper.shutdown() on destroy(): " + t);
+        }
+    }
+
+    @Inject(method = "emergencyShutdown()V", at = @At("HEAD"))
+    private void onAudioEmergencyShutdown(CallbackInfo ci) {
+        try {
+            fxHandler.cleanupEFXResources();
+        } catch (Throwable t) {
+            System.err.println("[SoundPhysicsPerfected] Error during EFX cleanup on emergencyShutdown(): " + t);
+        }
+        try {
+            RaycastingHelper.shutdown();
+        } catch (Throwable t) {
+            System.err.println("[SoundPhysicsPerfected] Error during RaycastingHelper.shutdown() on emergencyShutdown(): " + t);
+        }
     }
 
     @Inject(method = "loadLibrary()V", at = @At("TAIL"))
