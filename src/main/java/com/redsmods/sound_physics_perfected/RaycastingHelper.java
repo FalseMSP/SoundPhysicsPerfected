@@ -100,13 +100,36 @@ public class RaycastingHelper {
 
     // Thread pool for parallel ray processing
     private static final int THREAD_POOL_SIZE = Math.max(2, Runtime.getRuntime().availableProcessors() - 1);
-    private static final ExecutorService raycastExecutor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
-    private static final ExecutorService soundProcessingExecutor = Executors.newFixedThreadPool(2);
+    // Executors are recreated on demand: shutdown() is called whenever the sound engine is destroyed
+    // (reloads, device changes), and a shut-down pool rejects all further tasks.
+    private static volatile ExecutorService raycastExecutor = createExecutor(THREAD_POOL_SIZE, "SPP-Raycast");
+    private static volatile ExecutorService soundProcessingExecutor = createExecutor(2, "SPP-SoundProcessing");
+
+    private static ExecutorService createExecutor(int threads, String name) {
+        java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger();
+        return Executors.newFixedThreadPool(threads, r -> {
+            Thread t = new Thread(r, name + "-" + counter.incrementAndGet());
+            t.setDaemon(true); // never block JVM exit
+            return t;
+        });
+    }
+
+    private static synchronized ExecutorService getRaycastExecutor() {
+        if (raycastExecutor.isShutdown())
+            raycastExecutor = createExecutor(THREAD_POOL_SIZE, "SPP-Raycast");
+        return raycastExecutor;
+    }
+
+    private static synchronized ExecutorService getSoundProcessingExecutor() {
+        if (soundProcessingExecutor.isShutdown())
+            soundProcessingExecutor = createExecutor(2, "SPP-SoundProcessing");
+        return soundProcessingExecutor;
+    }
     private static final AtomicBoolean isRaytracing = new AtomicBoolean(false);
     public static Vec3 playerEyePos = new Vec3(0,0,0);
     private static Vec3[] rayDirections;
     private static int lastRaysCast = -1;
-    private static List<CompletableFuture<Void>> rayTasks;
+    private static volatile List<CompletableFuture<Void>> rayTasks;
 
     static {
         surfaceMaterials.put("default", new ReverbSurfaceData(0.05, 0.7, "medium"));
@@ -140,10 +163,17 @@ public class RaycastingHelper {
 
             rayHitsByEntity.clear(); // clear list after every call
             redRaysToTarget.clear(); // wow, this was the issue? I feel like a real dumbass now D:
+            rayTasks = null;
             isRaytracing.set(false);
 
         } catch (Exception e) {
-            System.err.println("Error in player bouncing ray entity detection: " + e.getMessage());
+            // Reset state so one failure doesn't permanently disable raytracing.
+            rayTasks = null;
+            isRaytracing.set(false);
+            rayHitsByEntity.clear();
+            redRaysToTarget.clear();
+            System.err.println("Error in player bouncing ray entity detection: " + e);
+            e.printStackTrace();
         }
     }
 
@@ -212,7 +242,7 @@ public class RaycastingHelper {
             for (AveragedSoundData avgData : averagedResults.values()) {
                 CompletableFuture<Void> task = CompletableFuture.runAsync(() ->
                                 playAveragedSoundWithAdjustments(client, avgData, playerEyePos, 1.0f, 1.0f),
-                        soundProcessingExecutor);
+                        getSoundProcessingExecutor());
                 soundTasks.add(task);
             }
         }
@@ -221,7 +251,7 @@ public class RaycastingHelper {
             for (AveragedSoundData avgData : muffledAveragedResults.values()) {
                 CompletableFuture<Void> task = CompletableFuture.runAsync(() ->
                                 playMuffled(client, avgData, playerEyePos, 1f, 1f, world, player),
-                        soundProcessingExecutor);
+                        getSoundProcessingExecutor());
                 soundTasks.add(task);
             }
         }
@@ -401,11 +431,23 @@ public class RaycastingHelper {
             tickQueue.clear();
             final ConcurrentLinkedQueue<RedPermeatedSoundInstance> pTQ = new ConcurrentLinkedQueue<>(permeatedTickQueue);
             permeatedTickQueue.clear();
-            rayTasks = createRayTasks(world, player, playerEyePos, rayDirections, sQ, tQ, pTQ, maxTotalDistance);
+            try {
+                rayTasks = createRayTasks(world, player, playerEyePos, rayDirections, sQ, tQ, pTQ, maxTotalDistance);
+            } catch (Throwable t) {
+                rayTasks = null;
+                isRaytracing.set(false);
+                throw t;
+            }
+        }
+
+        List<CompletableFuture<Void>> tasks = rayTasks;
+        if (tasks == null) {
+            isRaytracing.set(false);
+            return -1;
         }
 
         // Wait for all ray casting to complete
-        if (!CompletableFuture.allOf(rayTasks.toArray(new CompletableFuture[0])).isDone())
+        if (!CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0])).isDone())
             return -1;
         return 0;
     }
@@ -446,7 +488,7 @@ public class RaycastingHelper {
                 for (Vec3 direction : rayChunk) {
                     castBouncingRay(world, player, playerEyePos, direction, sq, tQ, pTQ, maxTotalDistance);
                 }
-            }, raycastExecutor);
+            }, getRaycastExecutor());
             rayTasks.add(task);
         }
         return rayTasks;
@@ -1047,7 +1089,9 @@ public class RaycastingHelper {
 
     // I was told that cleanup is neccessary when using threads, but idk where to put this lmao]
     // this is prolly not a good thing... #burnthevibecoder
-    public static void shutdown() {
+    public static synchronized void shutdown() {
+        rayTasks = null;
+        isRaytracing.set(false);
         try {
             raycastExecutor.shutdown();
             soundProcessingExecutor.shutdown();
