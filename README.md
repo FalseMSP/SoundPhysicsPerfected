@@ -10,5 +10,8 @@ minecraft is a voxel based game, how hard can it be to implement (famous last wo
 
 tl;dr cool ray traced audio weooooow.
 
+I'm not fully against AI, but I think generally I won't accept fully vibe-coded prs.
+https://github.com/Djihads80/Eglantine/blob/nx2/docs/policies/AI.md#ai-policy i think this AI policy is good, so im linking it here.
+
 Turkish translation by: vrdons
 Korean translation by: tankplanelaserkoala
